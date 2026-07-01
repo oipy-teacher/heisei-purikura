@@ -72,19 +72,19 @@
     start: 'audio/01_start.mp3',
     selectCurtain: 'audio/02_select_curtain.mp3',
     selectFrame: 'audio/03_select_frame.mp3',
-    shot1: 'audio/04_shot1.mp3',
-    shot2: 'audio/05_shot2.mp3',
-    shot3: 'audio/06_shot3.mp3',
-    shot4: 'audio/07_shot4.mp3',
+    introShot1: 'audio/intro_shot1.mp3',
+    introShot2: 'audio/intro_shot2.mp3',
+    introShot3: 'audio/intro_shot3.mp3',
+    introShot4: 'audio/intro_shot4.mp3',
+    count3: 'audio/count_3.mp3',
+    count2: 'audio/count_2.mp3',
+    count1: 'audio/count_1.mp3',
+    countHai: 'audio/count_hai.mp3',
     decoStart: 'audio/08_deco_start.mp3',
     timeWarning: 'audio/09_time_warning.mp3',
     timeup: 'audio/10_timeup.mp3',
     finish: 'audio/11_finish.mp3',
     save: 'audio/12_save.mp3',
-  };
-  // 各セリフの実測秒数（AIボイスの再生と見た目のカウントダウンをおおまかに同期させるために使用）
-  const SOUND_DURATION = {
-    shot1: 4.2, shot2: 5.3, shot3: 5.3, shot4: 4.3,
   };
 
   const sounds = {};
@@ -101,6 +101,20 @@
     a.play().catch(() => { /* 自動再生がブロックされた場合は無視 */ });
   }
 
+  // 撮影カウントダウン用：セリフの再生が実際に終わるまで待つ（＝見た目とボイスを完全に同期させる）
+  function playSoundAwait(key) {
+    const a = sounds[key];
+    if (!a) return Promise.resolve();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; a.removeEventListener('ended', finish); resolve(); };
+      a.addEventListener('ended', finish);
+      a.currentTime = 0;
+      a.play().catch(finish); // 再生自体に失敗した場合は待たずに進める
+      setTimeout(finish, 3000); // 保険（何らかの理由で ended が発火しない場合）
+    });
+  }
+
   // iOS Safari 対策：最初のユーザー操作のタイミングで全音声を一度ミュート再生し、以降のタイマー発火の再生を許可させる
   function unlockAudio() {
     Object.values(sounds).forEach((a) => {
@@ -113,10 +127,26 @@
     });
   }
 
+  /* ===================== BGM ===================== */
+  const bgmAudio = new Audio('audio/bgm.mp3');
+  bgmAudio.loop = true;
+  bgmAudio.volume = 0.35;
+  bgmAudio.preload = 'auto';
+
+  function startBGM() {
+    bgmAudio.currentTime = 0;
+    bgmAudio.play().catch(() => {});
+  }
+  function stopBGM() {
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
+  }
+
   /* ===================== 0. タイトル ===================== */
   $('#btn-insert-coin').addEventListener('click', () => {
     unlockAudio();
     playSound('start');
+    startBGM();
     showScreen('screen-select');
     playSound('selectCurtain');
     setTimeout(() => {
@@ -330,21 +360,25 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  const COUNTDOWN_STEPS = [
+    { key: 'count3', label: '3' },
+    { key: 'count2', label: '2' },
+    { key: 'count1', label: '1' },
+    { key: 'countHai', label: 'ハイ！' },
+  ];
+
   async function runCountdown(shotIndex) {
-    const shotKey = 'shot' + (shotIndex + 1);
-    playSound(shotKey);
-    // セリフの長さに合わせて「3・2・1・ハイ！」の間隔を調整（AIボイスの尺と見た目をおおまかに同期）
-    const totalMs = (SOUND_DURATION[shotKey] || 4.2) * 1000;
-    const stepMs = Math.max(280, Math.round(totalMs / 4) - 160);
-    for (const n of ['3', '2', '1', 'ハイ！']) {
-      countdownEl.textContent = n;
+    // 前置きのセリフ（「1枚目、いくよー！」等）が話し終わるまで待ってから、数字を1つずつボイスに合わせて表示する
+    await playSoundAwait('introShot' + (shotIndex + 1));
+    for (const step of COUNTDOWN_STEPS) {
+      countdownEl.textContent = step.label;
       countdownEl.style.opacity = '1';
       countdownEl.style.transform = 'scale(1.15)';
-      await sleep(80);
+      await sleep(60);
       countdownEl.style.transform = 'scale(1)';
-      await sleep(stepMs);
+      await playSoundAwait(step.key);
       countdownEl.style.opacity = '0';
-      await sleep(80);
+      await sleep(60);
     }
   }
 
@@ -720,6 +754,7 @@
     if (state.timerId) clearInterval(state.timerId);
     state.shots = [];
     state.history = [];
+    stopBGM();
     showScreen('screen-title');
   });
 
