@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>平成プリクラ機</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ 0. タイトル画面 ============ -->
+  <section id="screen-title" class="screen active">
+    <div class="crt-frame">
+      <div class="sparkle-bg"></div>
+      <h1 class="title-logo">
+        <span class="logo-line1">平成</span>
+        <span class="logo-line2">プリクラ機</span>
+      </h1>
+      <p class="title-sub">～ 撮って・盛って・落書きして ～</p>
+      <div class="coin-slot">
+        <p class="coin-text">100円 &gt;&gt; コイン投入 &gt;&gt;</p>
+        <button id="btn-insert-coin" class="btn-main pulse">▶ タッチしてスタート</button>
+      </div>
+      <p class="title-note">※ iPad推奨・カメラを使用します</p>
+    </div>
+  </section>
+
+  <!-- ============ 1. フレーム/背景選択 ============ -->
+  <section id="screen-select" class="screen">
+    <div class="panel">
+      <h2 class="step-heading">STEP 1. カーテンをえらんでね</h2>
+      <div id="curtain-list" class="choice-grid"></div>
+      <h2 class="step-heading">STEP 2. フレームをえらんでね</h2>
+      <div id="frame-list" class="choice-grid"></div>
+      <button id="btn-to-camera" class="btn-main">この組み合わせでOK！ ▶</button>
+    </div>
+  </section>
+
+  <!-- ============ 2. 撮影画面 ============ -->
+  <section id="screen-camera" class="screen">
+    <div class="camera-stage">
+      <div class="camera-viewport" id="camera-curtain">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="flash-canvas"></canvas>
+        <div id="countdown-num" class="countdown-num"></div>
+        <div id="shot-indicator" class="shot-indicator"></div>
+      </div>
+      <div class="camera-side">
+        <p class="cam-caption">のこり <span id="shots-left">4</span> ポーズ！</p>
+        <p class="cam-caption small">かわいく決めてね💕</p>
+        <button id="btn-start-shooting" class="btn-main">撮影スタート！</button>
+        <div id="cam-error" class="cam-error"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. 落書き画面 ============ -->
+  <section id="screen-deco" class="screen">
+    <div class="deco-wrap">
+      <div class="deco-header">
+        <div class="timer-box">
+          <span class="timer-label">らくがきタイム</span>
+          <span id="timer-display" class="timer-display">3:00</span>
+        </div>
+        <div class="deco-header-buttons">
+          <button id="btn-undo" class="btn-small">↺ もどす</button>
+          <button id="btn-clear" class="btn-small">🗑 ぜんぶ消す</button>
+        </div>
+      </div>
+
+      <div class="deco-main">
+        <div class="deco-canvas-holder">
+          <canvas id="sheet-canvas"></canvas>
+          <canvas id="draw-canvas"></canvas>
+        </div>
+
+        <div class="deco-toolbar">
+          <div class="tool-group">
+            <p class="tool-label">✏️ ペン</p>
+            <div class="color-row" id="color-row"></div>
+            <input type="range" id="pen-size" min="2" max="26" value="8">
+            <div class="mode-row">
+              <button class="tool-btn active" data-mode="pen">ペン</button>
+              <button class="tool-btn" data-mode="eraser">消しゴム</button>
+            </div>
+          </div>
+
+          <div class="tool-group">
+            <p class="tool-label">✨ スタンプ</p>
+            <div class="stamp-row" id="stamp-row"></div>
+          </div>
+
+          <div class="tool-group">
+            <p class="tool-label">🔤 文字スタンプ</p>
+            <div class="text-stamp-row" id="text-stamp-row"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="deco-timeup" class="deco-timeup hidden">
+      <p>⏰ タイムアップ！</p>
+    </div>
+  </section>
+
+  <!-- ============ 4. プリント/保存画面 ============ -->
+  <section id="screen-print" class="screen">
+    <div class="print-stage">
+      <div class="printer-slot">
+        <canvas id="final-canvas"></canvas>
+        <p class="print-caption">ガコンッ！シールができました🖨️</p>
+      </div>
+      <div class="print-actions">
+        <a id="btn-download" class="btn-main" download="purikura.png">📥 端末に保存する</a>
+        <button id="btn-restart" class="btn-sub">🔁 もう一回あそぶ</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
