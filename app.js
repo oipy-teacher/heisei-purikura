@@ -54,6 +54,7 @@
     history: [],
     timerId: null,
     remaining: DECO_SECONDS,
+    warningPlayed: false,
   };
 
   /* ===================== ユーティリティ ===================== */
@@ -66,9 +67,61 @@
     screens[id].classList.add('active');
   }
 
+  /* ===================== 音声アナウンス ===================== */
+  const SOUND_FILES = {
+    start: 'audio/01_start.mp3',
+    selectCurtain: 'audio/02_select_curtain.mp3',
+    selectFrame: 'audio/03_select_frame.mp3',
+    shot1: 'audio/04_shot1.mp3',
+    shot2: 'audio/05_shot2.mp3',
+    shot3: 'audio/06_shot3.mp3',
+    shot4: 'audio/07_shot4.mp3',
+    decoStart: 'audio/08_deco_start.mp3',
+    timeWarning: 'audio/09_time_warning.mp3',
+    timeup: 'audio/10_timeup.mp3',
+    finish: 'audio/11_finish.mp3',
+    save: 'audio/12_save.mp3',
+  };
+  // 各セリフの実測秒数（AIボイスの再生と見た目のカウントダウンをおおまかに同期させるために使用）
+  const SOUND_DURATION = {
+    shot1: 4.2, shot2: 5.3, shot3: 5.3, shot4: 4.3,
+  };
+
+  const sounds = {};
+  Object.entries(SOUND_FILES).forEach(([key, src]) => {
+    const a = new Audio(src);
+    a.preload = 'auto';
+    sounds[key] = a;
+  });
+
+  function playSound(key) {
+    const a = sounds[key];
+    if (!a) return;
+    a.currentTime = 0;
+    a.play().catch(() => { /* 自動再生がブロックされた場合は無視 */ });
+  }
+
+  // iOS Safari 対策：最初のユーザー操作のタイミングで全音声を一度ミュート再生し、以降のタイマー発火の再生を許可させる
+  function unlockAudio() {
+    Object.values(sounds).forEach((a) => {
+      a.muted = true;
+      a.play().then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+      }).catch(() => { a.muted = false; });
+    });
+  }
+
   /* ===================== 0. タイトル ===================== */
   $('#btn-insert-coin').addEventListener('click', () => {
+    unlockAudio();
+    playSound('start');
     showScreen('screen-select');
+    playSound('selectCurtain');
+    setTimeout(() => {
+      if (screens['screen-select'].classList.contains('active')) playSound('selectFrame');
+    }, 2700);
   });
 
   /* ===================== 1. 選択画面 ===================== */
@@ -151,14 +204,19 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  async function runCountdown() {
+  async function runCountdown(shotIndex) {
+    const shotKey = 'shot' + (shotIndex + 1);
+    playSound(shotKey);
+    // セリフの長さに合わせて「3・2・1・ハイ！」の間隔を調整（AIボイスの尺と見た目をおおまかに同期）
+    const totalMs = (SOUND_DURATION[shotKey] || 4.2) * 1000;
+    const stepMs = Math.max(280, Math.round(totalMs / 4) - 160);
     for (const n of ['3', '2', '1', 'ハイ！']) {
       countdownEl.textContent = n;
       countdownEl.style.opacity = '1';
       countdownEl.style.transform = 'scale(1.15)';
       await sleep(80);
       countdownEl.style.transform = 'scale(1)';
-      await sleep(600);
+      await sleep(stepMs);
       countdownEl.style.opacity = '0';
       await sleep(80);
     }
@@ -187,7 +245,7 @@
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
     for (let i = 0; i < NUM_SHOTS; i++) {
-      await runCountdown();
+      await runCountdown(i);
       const shot = captureFrame();
       state.shots.push(shot);
       await flash();
@@ -477,17 +535,25 @@
     document.querySelectorAll('.color-swatch').forEach((s, i) => s.classList.toggle('selected', i === 0));
     state.penColor = PEN_COLORS[0];
     state.remaining = DECO_SECONDS;
+    state.warningPlayed = false;
     $('#deco-timeup').classList.add('hidden');
     $('#confirm-modal').classList.add('hidden');
     drawCanvas.style.pointerEvents = 'auto';
     timerDisplay.textContent = formatTime(state.remaining);
     timerDisplay.classList.remove('warn');
+    playSound('decoStart');
 
     if (state.timerId) clearInterval(state.timerId);
     state.timerId = setInterval(() => {
       state.remaining--;
       timerDisplay.textContent = formatTime(Math.max(0, state.remaining));
-      if (state.remaining <= 10) timerDisplay.classList.add('warn');
+      if (state.remaining <= 10) {
+        timerDisplay.classList.add('warn');
+        if (!state.warningPlayed) {
+          state.warningPlayed = true;
+          playSound('timeWarning');
+        }
+      }
       if (state.remaining <= 0) {
         clearInterval(state.timerId);
         finishDeco('timeup');
@@ -499,10 +565,12 @@
     drawCanvas.style.pointerEvents = 'none';
     $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ できあがり！' : '⏰ タイムアップ！';
     $('#deco-timeup').classList.remove('hidden');
+    playSound(reason === 'manual' ? 'finish' : 'timeup');
     await sleep(1300);
     $('#deco-timeup').classList.add('hidden');
     composeFinal();
     showScreen('screen-print');
+    playSound('save');
   }
 
   /* ===================== 4. プリント画面 ===================== */
