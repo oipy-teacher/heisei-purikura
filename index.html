@@ -67,6 +67,7 @@
         <div class="deco-header-buttons">
           <button id="btn-undo" class="btn-small">↺ もどす</button>
           <button id="btn-clear" class="btn-small">🗑 ぜんぶ消す</button>
+          <button id="btn-finish" class="btn-small finish">✨ できあがり！</button>
         </div>
       </div>
 
@@ -100,19 +101,30 @@
       </div>
     </div>
     <div id="deco-timeup" class="deco-timeup hidden">
-      <p>⏰ タイムアップ！</p>
+      <p id="deco-timeup-text">⏰ タイムアップ！</p>
+    </div>
+
+    <div id="confirm-modal" class="confirm-modal hidden">
+      <div class="confirm-box">
+        <p class="confirm-text">ほんとうに<br>コレで かんせいにする？</p>
+        <div class="confirm-buttons">
+          <button id="btn-confirm-yes" class="btn-main small">うん！これでOK♪</button>
+          <button id="btn-confirm-no" class="btn-sub">まだ かく…</button>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- ============ 4. プリント/保存画面 ============ -->
+  <!-- ============ 4. 保存画面 ============ -->
   <section id="screen-print" class="screen">
     <div class="print-stage">
       <div class="printer-slot">
         <canvas id="final-canvas"></canvas>
-        <p class="print-caption">ガコンッ！シールができました🖨️</p>
+        <p class="print-caption">らくがき かんせーい♪</p>
       </div>
+      <p class="print-instruction">この1まいを保存して、プリントは<br>係(かかり)の人にお願いしてね🙏✨</p>
       <div class="print-actions">
-        <a id="btn-download" class="btn-main" download="purikura.png">📥 端末に保存する</a>
+        <a id="btn-download" class="btn-main" download="purikura.png">📥 しゃしんを保存する</a>
         <button id="btn-restart" class="btn-sub">🔁 もう一回あそぶ</button>
       </div>
     </div>

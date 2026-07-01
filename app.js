@@ -444,6 +444,22 @@
     drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
   });
 
+  /* ===================== できあがり確認 ===================== */
+  const confirmModal = $('#confirm-modal');
+
+  $('#btn-finish').addEventListener('click', () => {
+    if (state.remaining <= 0) return;
+    confirmModal.classList.remove('hidden');
+  });
+  $('#btn-confirm-no').addEventListener('click', () => {
+    confirmModal.classList.add('hidden');
+  });
+  $('#btn-confirm-yes').addEventListener('click', () => {
+    confirmModal.classList.add('hidden');
+    if (state.timerId) clearInterval(state.timerId);
+    finishDeco('manual');
+  });
+
   /* ===================== タイマー ===================== */
   const timerDisplay = $('#timer-display');
 
@@ -462,6 +478,7 @@
     state.penColor = PEN_COLORS[0];
     state.remaining = DECO_SECONDS;
     $('#deco-timeup').classList.add('hidden');
+    $('#confirm-modal').classList.add('hidden');
     drawCanvas.style.pointerEvents = 'auto';
     timerDisplay.textContent = formatTime(state.remaining);
     timerDisplay.classList.remove('warn');
@@ -473,13 +490,14 @@
       if (state.remaining <= 10) timerDisplay.classList.add('warn');
       if (state.remaining <= 0) {
         clearInterval(state.timerId);
-        finishDeco();
+        finishDeco('timeup');
       }
     }, 1000);
   }
 
-  async function finishDeco() {
+  async function finishDeco(reason) {
     drawCanvas.style.pointerEvents = 'none';
+    $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ できあがり！' : '⏰ タイムアップ！';
     $('#deco-timeup').classList.remove('hidden');
     await sleep(1300);
     $('#deco-timeup').classList.add('hidden');
