@@ -43,6 +43,7 @@
     <div class="camera-stage">
       <div class="camera-viewport" id="camera-curtain">
         <video id="video" autoplay playsinline muted></video>
+        <canvas id="preview-canvas"></canvas>
         <canvas id="flash-canvas"></canvas>
         <div id="countdown-num" class="countdown-num"></div>
         <div id="shot-indicator" class="shot-indicator"></div>
@@ -51,6 +52,7 @@
         <p class="cam-caption">のこり <span id="shots-left">4</span> ポーズ！</p>
         <p class="cam-caption small">かわいく決めてね💕</p>
         <button id="btn-start-shooting" class="btn-main">撮影スタート！</button>
+        <p id="segmenter-status" class="segmenter-status">🪄 背景くり抜きを読み込み中…</p>
         <div id="cam-error" class="cam-error"></div>
       </div>
     </div>

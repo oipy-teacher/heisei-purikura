@@ -182,6 +182,16 @@ html, body {
   background: #111;
 }
 #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+#preview-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+#preview-canvas.ready { opacity: 1; }
+#video.masked { opacity: 0; }
 #flash-canvas { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .countdown-num {
   position: absolute; inset: 0;
@@ -201,6 +211,8 @@ html, body {
 .cam-caption { font-size: 20px; font-weight: 800; margin: 6px 0; }
 .cam-caption.small { font-size: 14px; opacity: .85; margin-bottom: 18px; }
 .cam-error { color: #ffd; margin-top: 14px; font-size: 13px; max-width: 260px; }
+.segmenter-status { color: #ffe27a; font-size: 12px; margin-top: 12px; opacity: .9; }
+.segmenter-status.hidden { display: none; }
 
 /* ============ 3. deco ============ */
 #screen-deco { background: linear-gradient(160deg,#ffd9ec,#d9e6ff); align-items: stretch; justify-content: flex-start; }

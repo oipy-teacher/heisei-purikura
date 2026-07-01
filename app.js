@@ -159,6 +159,117 @@
     await startCamera();
   });
 
+  /* ===================== 人物くり抜き（背景をカーテン色に置換） ===================== */
+  const previewCanvas = $('#preview-canvas');
+  const previewCtx = previewCanvas.getContext('2d');
+  const segmenterStatus = $('#segmenter-status');
+  const MASK_W = 640, MASK_H = 480;
+  previewCanvas.width = MASK_W;
+  previewCanvas.height = MASK_H;
+
+  let imageSegmenter = null;
+  let segmenterFailed = false;
+  let previewRunning = false;
+  let maskWorkCanvas = null, maskWorkCtx = null;
+  let personWorkCanvas = null, personWorkCtx = null;
+
+  async function initSegmenter() {
+    try {
+      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+      const fileset = await vision.FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+      );
+      imageSegmenter = await vision.ImageSegmenter.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        outputConfidenceMasks: true,
+      });
+      segmenterStatus.textContent = '✨ 人物くり抜き 準備OK！';
+      setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
+    } catch (err) {
+      console.warn('人物くり抜きモデルの読み込みに失敗しました。通常のカメラ映像で撮影します。', err);
+      segmenterFailed = true;
+      segmenterStatus.textContent = '（背景くり抜きは今回お休み中）';
+      setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+    }
+  }
+  initSegmenter();
+
+  function segmentForVideoAsync(sourceEl, ts) {
+    return new Promise((resolve) => {
+      imageSegmenter.segmentForVideo(sourceEl, ts, (result) => resolve(result));
+    });
+  }
+
+  // Float32の信頼度マスクから、縁をシャープにしたアルファ用キャンバスを作る
+  function buildMaskCanvas(confidenceMask) {
+    const w = confidenceMask.width, h = confidenceMask.height;
+    if (!maskWorkCanvas) { maskWorkCanvas = document.createElement('canvas'); maskWorkCtx = maskWorkCanvas.getContext('2d'); }
+    if (maskWorkCanvas.width !== w || maskWorkCanvas.height !== h) { maskWorkCanvas.width = w; maskWorkCanvas.height = h; }
+    const floatData = confidenceMask.getAsFloat32Array();
+    const imgData = maskWorkCtx.createImageData(w, h);
+    for (let i = 0; i < floatData.length; i++) {
+      let a = (floatData[i] - 0.15) / 0.7; // コントラストを強めて輪郭をシャープに
+      if (a < 0) a = 0; else if (a > 1) a = 1;
+      const o = i * 4;
+      imgData.data[o] = 255;
+      imgData.data[o + 1] = 255;
+      imgData.data[o + 2] = 255;
+      imgData.data[o + 3] = Math.round(a * 255);
+    }
+    maskWorkCtx.putImageData(imgData, 0, 0);
+    return maskWorkCanvas;
+  }
+
+  // 人物を切り出してカーテン色の背景に合成し、previewCtx に描画する
+  async function compositeCurtain(sourceEl) {
+    if (!personWorkCanvas) { personWorkCanvas = document.createElement('canvas'); personWorkCtx = personWorkCanvas.getContext('2d'); }
+    if (personWorkCanvas.width !== MASK_W || personWorkCanvas.height !== MASK_H) {
+      personWorkCanvas.width = MASK_W; personWorkCanvas.height = MASK_H;
+    }
+    personWorkCtx.globalCompositeOperation = 'source-over';
+    personWorkCtx.clearRect(0, 0, MASK_W, MASK_H);
+    personWorkCtx.drawImage(sourceEl, 0, 0, MASK_W, MASK_H);
+
+    let maskCv = null;
+    if (imageSegmenter) {
+      const result = await segmentForVideoAsync(sourceEl, performance.now());
+      const cm = result.confidenceMasks && result.confidenceMasks[0];
+      if (cm) {
+        maskCv = buildMaskCanvas(cm);
+        cm.close();
+      }
+      if (result.close) result.close();
+    }
+
+    previewCtx.clearRect(0, 0, MASK_W, MASK_H);
+    if (maskCv) {
+      personWorkCtx.globalCompositeOperation = 'destination-in';
+      personWorkCtx.drawImage(maskCv, 0, 0, MASK_W, MASK_H);
+      personWorkCtx.globalCompositeOperation = 'source-over';
+
+      previewCtx.fillStyle = state.curtain.color;
+      previewCtx.fillRect(0, 0, MASK_W, MASK_H);
+      previewCtx.drawImage(personWorkCanvas, 0, 0, MASK_W, MASK_H);
+      previewCanvas.classList.add('ready');
+      video.classList.add('masked');
+    } else {
+      // セグメンター未使用時はカメラ映像そのままを描く（フォールバック）
+      previewCtx.drawImage(sourceEl, 0, 0, MASK_W, MASK_H);
+    }
+  }
+
+  async function previewLoop() {
+    if (!previewRunning) return;
+    if (video.readyState >= 2 && video.videoWidth > 0) {
+      await compositeCurtain(video);
+    }
+    if (previewRunning) requestAnimationFrame(previewLoop);
+  }
+
   /* ===================== 2. 撮影画面 ===================== */
   const video = $('#video');
   const flashCanvas = $('#flash-canvas');
@@ -184,18 +295,33 @@
     $('#shots-left').textContent = NUM_SHOTS;
     btnStartShooting.disabled = false;
     btnStartShooting.style.display = 'inline-block';
+    previewCanvas.classList.remove('ready');
+    video.classList.remove('masked');
+    if (imageSegmenter) {
+      segmenterStatus.classList.add('hidden');
+    } else if (segmenterFailed) {
+      segmenterStatus.textContent = '（背景くり抜きは今回お休み中）';
+      segmenterStatus.classList.remove('hidden');
+      setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+    } else {
+      segmenterStatus.textContent = '🪄 背景くり抜きを読み込み中…';
+      segmenterStatus.classList.remove('hidden');
+    }
     try {
       state.stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
         audio: false,
       });
       video.srcObject = state.stream;
+      previewRunning = true;
+      previewLoop();
     } catch (err) {
       camError.textContent = 'カメラを起動できませんでした。ブラウザのカメラ許可設定をご確認ください。(' + err.message + ')';
     }
   }
 
   function stopCamera() {
+    previewRunning = false;
     if (state.stream) {
       state.stream.getTracks().forEach(t => t.stop());
       state.stream = null;
@@ -226,10 +352,10 @@
     const c = document.createElement('canvas');
     c.width = 640; c.height = 480;
     const ctx = c.getContext('2d');
-    // 鏡合わせのプレビューに合わせて左右反転して保存
+    // 鏡合わせのプレビューに合わせて左右反転して保存（すでに人物くり抜き＋カーテン合成済みのpreviewCanvasを使う）
     ctx.translate(c.width, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, c.width, c.height);
+    ctx.drawImage(previewCanvas, 0, 0, c.width, c.height);
     return c;
   }
 
