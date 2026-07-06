@@ -37,12 +37,13 @@
       ],
       defaultPreset: 'shikkari',
       // 平成の「美白」ブーム: 明るさ強め・彩度は下げて白肌に
-      skinTone: { brightPerUnit: 0.20, satPerUnit: -0.18 },
+      skinTone: { brightPerUnit: 0.16, desatPerUnit: 0.16 },
+      // fx: bright=白スクリーン合成 / desat=グレー彩度合成 / colorize=カラー合成 / contrast=自己オーバーレイ / warm=ソフトライト
       filters: [
-        { id: 'none',   label: 'なし',      css: '' },
-        { id: 'bihaku', label: '美白MAX',   css: 'brightness(1.22) saturate(.78)' },
-        { id: 'sepia',  label: 'セピア',    css: 'sepia(.45) brightness(1.05)' },
-        { id: 'vivid',  label: 'ビビッド',  css: 'saturate(1.55) contrast(1.08)' },
+        { id: 'none',   label: 'なし',      fx: {} },
+        { id: 'bihaku', label: '美白MAX',   fx: { bright: 0.30, desat: 0.45 } },
+        { id: 'sepia',  label: 'セピア',    fx: { desat: 0.9, colorize: { color: '#a97e52', amt: 0.5 }, bright: 0.08 } },
+        { id: 'vivid',  label: 'ビビッド',  fx: { contrast: 0.45, bright: 0.05 } },
       ],
       sheet: {
         title: '平成 Print Club',
@@ -87,12 +88,12 @@
       ],
       defaultPreset: 'natural',
       // 令和は血色感を残すナチュラル美肌（さらパフ肌）
-      skinTone: { brightPerUnit: 0.10, satPerUnit: 0.03 },
+      skinTone: { brightPerUnit: 0.10, desatPerUnit: 0 },
       filters: [
-        { id: 'none',   label: 'なし',     css: '' },
-        { id: 'film',   label: 'フィルム', css: 'contrast(.92) brightness(1.05) sepia(.18) saturate(.85)' },
-        { id: 'kusumi', label: 'くすみ',   css: 'saturate(.72) brightness(1.06)' },
-        { id: 'mono',   label: 'モノクロ', css: 'grayscale(1) contrast(1.05)' },
+        { id: 'none',   label: 'なし',     fx: {} },
+        { id: 'film',   label: 'フィルム', fx: { desat: 0.25, warm: { color: '#d9a06a', amt: 0.20 }, bright: 0.06 } },
+        { id: 'kusumi', label: 'くすみ',   fx: { desat: 0.35, bright: 0.08 } },
+        { id: 'mono',   label: 'モノクロ', fx: { desat: 1, contrast: 0.15 } },
       ],
       sheet: {
         title: 'my memories ♡',
@@ -439,8 +440,6 @@
     }
 
     previewCtx.clearRect(0, 0, SHOT_W, SHOT_H);
-    // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現）
-    previewCtx.filter = 'brightness(1.06) saturate(1.02)';
 
     if (maskCv) {
       if (!personWorkCanvas) { personWorkCanvas = document.createElement('canvas'); personWorkCtx = personWorkCanvas.getContext('2d'); }
@@ -454,16 +453,14 @@
       personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H);
       personWorkCtx.globalCompositeOperation = 'source-over';
 
-      previewCtx.save();
-      previewCtx.filter = 'none';
       previewCtx.fillStyle = state.curtain.color;
       previewCtx.fillRect(0, 0, SHOT_W, SHOT_H);
-      previewCtx.restore();
       previewCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
     } else {
       previewCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
     }
-    previewCtx.filter = 'none';
+    // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現・Safari対応のためスクリーン合成）
+    applyToneFx(previewCtx, SHOT_W, SHOT_H, { bright: 0.07 });
     previewCanvas.classList.add('ready');
     video.classList.add('masked');
   }
@@ -686,19 +683,17 @@
   // ランドマーク（正規化座標）→ピクセル座標
   function lmToPx(lm, w, h) { return { x: lm.x * w, y: lm.y * h }; }
 
-  // 1枚のショットに 盛り（ワープ＋美肌＋フィルター）を適用して新しいキャンバスを返す
-  function applyBeauty(srcCanvas, faces, params) {
-    const conf = modeConf();
-    const w = srcCanvas.width, h = srcCanvas.height;
+  /* --- 以下の盛り処理はすべて iPad Safari 対応のため ctx.filter を使わず、
+         ブレンドモード（globalCompositeOperation）と縮小→拡大ぼかしで実装している --- */
 
-    // 1) ワープ（デカ目・小顔）
+  // ワープ（デカ目・小顔）のみを適用したキャンバスを返す
+  function warpShot(srcCanvas, faces, eyeS, faceS) {
+    const w = srcCanvas.width, h = srcCanvas.height;
     const work = document.createElement('canvas');
     work.width = w; work.height = h;
-    const workCtx = work.getContext('2d');
+    const workCtx = work.getContext('2d', { willReadFrequently: true });
     workCtx.drawImage(srcCanvas, 0, 0);
 
-    const eyeS = params.eye / 100;
-    const faceS = params.face / 100;
     if (faces && faces.length && (eyeS > 0 || faceS > 0)) {
       faces.forEach((lm) => {
         if (!lm || lm.length < 478) return; // 虹彩ランドマーク(468-477)が無い場合はスキップ
@@ -723,29 +718,105 @@
         }
       });
     }
+    return work;
+  }
 
-    // 2) 美肌（ソフトフォーカス：ぼかしレイヤーを重ねてなめらかに）
-    const skinS = params.skin / 100;
-    if (skinS > 0) {
-      workCtx.save();
-      workCtx.filter = `blur(${(1.5 + skinS * 2.5).toFixed(1)}px)`;
-      workCtx.globalAlpha = skinS * 0.55;
-      workCtx.drawImage(work, 0, 0);
-      workCtx.restore();
+  // 縮小→拡大でぼかしを作る（ctx.filter='blur()' の Safari 非対応対策）
+  let blurTmpA = null, blurTmpB = null;
+  function makeBlurred(srcCanvas, radiusPx) {
+    const w = srcCanvas.width, h = srcCanvas.height;
+    const scale = Math.max(3, Math.min(10, Math.round(radiusPx * 2)));
+    if (!blurTmpA) { blurTmpA = document.createElement('canvas'); blurTmpB = document.createElement('canvas'); }
+    const sw = Math.max(8, Math.round(w / scale)), sh = Math.max(8, Math.round(h / scale));
+    blurTmpA.width = sw; blurTmpA.height = sh;
+    const aCtx = blurTmpA.getContext('2d');
+    aCtx.imageSmoothingEnabled = true;
+    aCtx.clearRect(0, 0, sw, sh);
+    aCtx.drawImage(srcCanvas, 0, 0, sw, sh);
+    // 2回目の縮小コピーでさらに滑らかに
+    const sw2 = Math.max(6, Math.round(sw * 0.6)), sh2 = Math.max(6, Math.round(sh * 0.6));
+    blurTmpB.width = sw2; blurTmpB.height = sh2;
+    const bCtx = blurTmpB.getContext('2d');
+    bCtx.imageSmoothingEnabled = true;
+    bCtx.clearRect(0, 0, sw2, sh2);
+    bCtx.drawImage(blurTmpA, 0, 0, sw2, sh2);
+    return blurTmpB;
+  }
+
+  // 色調エフェクトをブレンドモードで適用（Safari対応）
+  function applyToneFx(ctx, w, h, fx) {
+    ctx.save();
+    if (fx.contrast) {
+      // 自己オーバーレイでコントラスト/彩度感アップ（ビビッド用）
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = Math.min(1, fx.contrast);
+      ctx.drawImage(ctx.canvas, 0, 0);
     }
+    if (fx.desat) {
+      // グレーを彩度ブレンド→彩度が下がる
+      ctx.globalCompositeOperation = 'saturation';
+      ctx.globalAlpha = Math.min(1, fx.desat);
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (fx.colorize) {
+      // 指定色をカラーブレンド（セピア等）
+      ctx.globalCompositeOperation = 'color';
+      ctx.globalAlpha = Math.min(1, fx.colorize.amt);
+      ctx.fillStyle = fx.colorize.color;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (fx.warm) {
+      // ソフトライトで暖色を乗せる（フィルム風）
+      ctx.globalCompositeOperation = 'soft-light';
+      ctx.globalAlpha = Math.min(1, fx.warm.amt);
+      ctx.fillStyle = fx.warm.color;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (fx.bright) {
+      // 白をスクリーン合成→明るく
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = Math.min(1, fx.bright);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
 
-    // 3) 肌トーン（モード別）＋選択フィルター
+  // 1枚のショットに 盛り（ワープ＋美肌＋フィルター）を適用して新しいキャンバスを返す
+  function applyBeauty(srcCanvas, faces, params, preWarped) {
+    const conf = modeConf();
+    const w = srcCanvas.width, h = srcCanvas.height;
+    const work = preWarped || warpShot(srcCanvas, faces, params.eye / 100, params.face / 100);
+
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
     const outCtx = out.getContext('2d');
-    const tone = conf.skinTone;
-    const bright = 1 + skinS * tone.brightPerUnit;
-    const sat = Math.max(0.3, 1 + skinS * tone.satPerUnit);
-    const selFilter = conf.filters.find(f => f.id === params.filter);
-    const filterCss = `brightness(${bright.toFixed(3)}) saturate(${sat.toFixed(3)})` + (selFilter && selFilter.css ? ' ' + selFilter.css : '');
-    outCtx.filter = filterCss;
     outCtx.drawImage(work, 0, 0);
-    outCtx.filter = 'none';
+
+    // 美肌（ソフトフォーカス）: ぼかしレイヤーを重ね、白スクリーンで明るく
+    const skinS = params.skin / 100;
+    if (skinS > 0) {
+      const blurred = makeBlurred(work, 1.5 + skinS * 2.5);
+      outCtx.save();
+      outCtx.globalAlpha = skinS * 0.5;
+      outCtx.imageSmoothingEnabled = true;
+      outCtx.drawImage(blurred, 0, 0, w, h);
+      outCtx.restore();
+      const tone = conf.skinTone;
+      applyToneFx(outCtx, w, h, {
+        bright: skinS * tone.brightPerUnit,
+        desat: skinS * tone.desatPerUnit,
+      });
+    }
+
+    // 選択フィルター
+    const selFilter = conf.filters.find(f => f.id === params.filter);
+    if (selFilter && selFilter.fx && Object.keys(selFilter.fx).length) {
+      applyToneFx(outCtx, w, h, selFilter.fx);
+    }
     return out;
   }
 
@@ -772,12 +843,22 @@
     });
   }
 
+  // デカ目/小顔のワープ結果をキャッシュ（美肌・フィルターのみの変更時はワープ再計算を省いて即応答）
+  const warpCache = { idx: -1, eye: -1, face: -1, facesRef: null, canvas: null };
+
   function renderBeautyPreview() {
     const idx = state.beautySelected;
     const src = state.shots[idx];
     if (!src) return;
     const faces = state.faceData[idx];
-    const result = applyBeauty(src, faces, state.beauty);
+    if (warpCache.idx !== idx || warpCache.eye !== state.beauty.eye || warpCache.face !== state.beauty.face || warpCache.facesRef !== faces) {
+      warpCache.canvas = warpShot(src, faces, state.beauty.eye / 100, state.beauty.face / 100);
+      warpCache.idx = idx;
+      warpCache.eye = state.beauty.eye;
+      warpCache.face = state.beauty.face;
+      warpCache.facesRef = faces;
+    }
+    const result = applyBeauty(src, faces, state.beauty, warpCache.canvas);
     beautyCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     beautyCtx.drawImage(result, 0, 0);
   }
