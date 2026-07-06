@@ -1,33 +1,117 @@
 (() => {
   'use strict';
 
-  /* ===================== 定数データ ===================== */
-  const CURTAINS = [
-    { id: 'pink',     label: 'ピンク',     color: '#ff8fc7' },
-    { id: 'blue',     label: 'ブルー',     color: '#7fd1ff' },
-    { id: 'yellow',   label: 'イエロー',   color: '#ffe066' },
-    { id: 'purple',   label: 'パープル',   color: '#c79bff' },
-    { id: 'mint',     label: 'ミント',     color: '#8de8c3' },
-    { id: 'white',    label: 'ホワイト',   color: '#ffffff' },
-    { id: 'lavender', label: 'ラベンダー', color: '#e0c3ff' },
-    { id: 'peach',    label: 'ピーチ',     color: '#ffc9a8' },
-  ];
-
-  const FRAMES = [
-    { id: 'heart',  label: 'ハート',   emoji: '💗' },
-    { id: 'star',   label: 'スター',   emoji: '⭐' },
-    { id: 'flower', label: 'フラワー', emoji: '🌸' },
-    { id: 'ribbon', label: 'リボン',   emoji: '🎀' },
-  ];
-
-  const PEN_COLORS = ['#ff2fa0', '#ff8fc7', '#ffef5c', '#5cff8f', '#5cc8ff', '#a06bff', '#ffffff', '#000000'];
-
-  const STAMPS = ['💖', '⭐', '✨', '🎀', '🌸', '🐰', '💫', '👑', '🍓', '🎵', '😳', '👍'];
-
-  const TEXT_STAMPS = ['LOVE♡', '友情の証', 'また遊ぼうね', '親友', 'だいすき', 'ケバ盛れ'];
+  /* ===================== モード定義 =====================
+     平成モード: 2000年代のプリ機を再現。白肌・デカ目（2007年頃に代名詞化）・
+                 ハデ盛り落書き・ギャル文化の文字スタンプ。
+     令和モード: 現行プリ機のトレンドを再現。ナチュラル盛れ・盛れ感選択
+                 （無加工風/ナチュ盛れ/プリ盛れ）・くすみカラー・シンプル志向。 */
+  const MODES = {
+    heisei: {
+      label: '平成モード',
+      curtains: [
+        { id: 'pink',     label: 'ピンク',     color: '#ff8fc7' },
+        { id: 'blue',     label: 'ブルー',     color: '#7fd1ff' },
+        { id: 'yellow',   label: 'イエロー',   color: '#ffe066' },
+        { id: 'purple',   label: 'パープル',   color: '#c79bff' },
+        { id: 'mint',     label: 'ミント',     color: '#8de8c3' },
+        { id: 'white',    label: 'ホワイト',   color: '#ffffff' },
+        { id: 'lavender', label: 'ラベンダー', color: '#e0c3ff' },
+        { id: 'peach',    label: 'ピーチ',     color: '#ffc9a8' },
+      ],
+      frames: [
+        { id: 'heart',  label: 'ハート',   emoji: '💗' },
+        { id: 'star',   label: 'スター',   emoji: '⭐' },
+        { id: 'flower', label: 'フラワー', emoji: '🌸' },
+        { id: 'ribbon', label: 'リボン',   emoji: '🎀' },
+      ],
+      penColors: ['#ff2fa0', '#ff8fc7', '#ffef5c', '#5cff8f', '#5cc8ff', '#a06bff', '#ffffff', '#000000'],
+      stamps: ['💖', '⭐', '✨', '🎀', '🌸', '🐰', '💫', '👑', '🍓', '🎵', '😳', '👍'],
+      textStamps: ['LOVE♡', '友情の証', 'また遊ぼうね', '親友', 'だいすき', 'ケバ盛れ', 'LOVE注入♡', 'プリ帳いき'],
+      textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
+      // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
+      presets: [
+        { id: 'usu',     label: 'うす盛れ',     skin: 25, eye: 20, face: 10 },
+        { id: 'shikkari', label: 'しっかり盛れ', skin: 55, eye: 50, face: 30 },
+        { id: 'keba',    label: 'ケバ盛れ',     skin: 85, eye: 80, face: 50 },
+      ],
+      defaultPreset: 'shikkari',
+      // 平成の「美白」ブーム: 明るさ強め・彩度は下げて白肌に
+      skinTone: { brightPerUnit: 0.20, satPerUnit: -0.18 },
+      filters: [
+        { id: 'none',   label: 'なし',      css: '' },
+        { id: 'bihaku', label: '美白MAX',   css: 'brightness(1.22) saturate(.78)' },
+        { id: 'sepia',  label: 'セピア',    css: 'sepia(.45) brightness(1.05)' },
+        { id: 'vivid',  label: 'ビビッド',  css: 'saturate(1.55) contrast(1.08)' },
+      ],
+      sheet: {
+        title: '平成 Print Club',
+        titleFont: '900 34px -apple-system, sans-serif',
+        titleColor: '#ffffff',
+        titleGlow: 'rgba(255,47,160,.8)',
+        footerColor: '#a03cae',
+        footerName: 'Heisei Purikura-ki',
+        bgTop: '#ffffff', bgMid: null /* curtain色 */, bgBottom: '#ffffff',
+        cellRadius: 10,
+        cornerDeco: 'frameEmoji',
+      },
+      bgm: 'audio/bgm.mp3',
+    },
+    reiwa: {
+      label: '令和モード',
+      curtains: [
+        { id: 'dustypink', label: 'くすみピンク', color: '#e8c7c8' },
+        { id: 'sage',      label: 'セージ',       color: '#c9d4c5' },
+        { id: 'cream',     label: 'クリーム',     color: '#f2e8d5' },
+        { id: 'greige',    label: 'グレージュ',   color: '#d5ccc3' },
+        { id: 'dustyblue', label: 'くすみブルー', color: '#bccad6' },
+        { id: 'white',     label: 'ホワイト',     color: '#fafafa' },
+        { id: 'mauve',     label: 'モーブ',       color: '#c9b7c4' },
+        { id: 'terracotta', label: 'テラコッタ',  color: '#d9a58f' },
+      ],
+      frames: [
+        { id: 'white-heart', label: 'ハート', emoji: '🤍' },
+        { id: 'sparkle',     label: 'キラ',   emoji: '✦' },
+        { id: 'ribbon',      label: 'リボン', emoji: '🎀' },
+        { id: 'cloud',       label: 'くも',   emoji: '☁️' },
+      ],
+      penColors: ['#b98a8a', '#8a9b8a', '#c0b283', '#8a9bb0', '#7d6b7d', '#e6ccb3', '#ffffff', '#3d3733'],
+      stamps: ['🤍', '🫶', '✨', '🌷', '🧸', '☁️', '🍓', '🥐', '📷', '🎧', '🪞', '🎀'],
+      textStamps: ['#今日のプリ', '推し活', 'エモい', 'それな', 'BFF♡', 'ｼﾝﾌﾟﾙ盛れ', 'ｶﾜｲｲは正義', 'memories'],
+      textStampStyle: { font: 'italic 600 18px Georgia, serif', fill: '#a8917d', stroke: null, strokeWidth: 0, rotate: 4 },
+      // 盛れ感プリセット（現行機 Hyper shot の「無加工風/ナチュ盛れ/プリ盛れ」選択を再現）
+      presets: [
+        { id: 'mukakou', label: '無加工風',   skin: 15, eye: 5,  face: 5 },
+        { id: 'natural', label: 'ナチュ盛れ', skin: 40, eye: 25, face: 15 },
+        { id: 'puri',    label: 'プリ盛れ',   skin: 65, eye: 45, face: 30 },
+      ],
+      defaultPreset: 'natural',
+      // 令和は血色感を残すナチュラル美肌（さらパフ肌）
+      skinTone: { brightPerUnit: 0.10, satPerUnit: 0.03 },
+      filters: [
+        { id: 'none',   label: 'なし',     css: '' },
+        { id: 'film',   label: 'フィルム', css: 'contrast(.92) brightness(1.05) sepia(.18) saturate(.85)' },
+        { id: 'kusumi', label: 'くすみ',   css: 'saturate(.72) brightness(1.06)' },
+        { id: 'mono',   label: 'モノクロ', css: 'grayscale(1) contrast(1.05)' },
+      ],
+      sheet: {
+        title: 'my memories ♡',
+        titleFont: 'italic 600 26px Georgia, serif',
+        titleColor: '#a8917d',
+        titleGlow: null,
+        footerColor: '#b3a495',
+        footerName: 'purikura',
+        bgTop: '#faf6f0', bgMid: null, bgBottom: '#f4ede4',
+        cellRadius: 4,
+        cornerDeco: 'none',
+      },
+      bgm: 'audio/bgm_reiwa.mp3',
+    },
+  };
 
   const NUM_SHOTS = 4;
-  const DECO_SECONDS = 180; // 3分（実機の落書き制限時間 約200秒に準拠）
+  const DECO_SECONDS = 180;   // 落書き3分（実機の落書き制限時間 約200秒に準拠）
+  const BEAUTY_SECONDS = 60;  // 盛り調整1分（実機の盛り調整時間に準拠）
 
   const SHEET_W = 680;
   const SHEET_H = 900;
@@ -37,15 +121,26 @@
   const CELL_W = (SHEET_W - MARGIN * 3) / 2;
   const CELL_H = (SHEET_H - HEADER_H - FOOTER_H - MARGIN * 3) / 2;
 
+  const SHOT_W = 640, SHOT_H = 480;
+
   /* ===================== 状態 ===================== */
   const state = {
-    curtain: CURTAINS[0],
-    frame: FRAMES[0],
+    mode: 'heisei',
+    curtain: MODES.heisei.curtains[0],
+    frame: MODES.heisei.frames[0],
+    chromaOn: false,
     stream: null,
-    shots: [],
-    penColor: PEN_COLORS[0],
+    shots: [],           // 撮影した生の4枚
+    processedShots: [],  // 盛り加工後の4枚
+    faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
+    beauty: { skin: 55, eye: 50, face: 30, filter: 'none' },
+    beautySelected: 0,
+    beautyTimerId: null,
+    beautyRemaining: BEAUTY_SECONDS,
+    beautyWarned: false,
+    penColor: MODES.heisei.penColors[0],
     penSize: 8,
-    tool: 'pen', // pen | eraser | stamp | textstamp
+    tool: 'pen',
     stampChar: null,
     textStampStr: null,
     isDrawing: false,
@@ -57,6 +152,8 @@
     warningPlayed: false,
   };
 
+  const modeConf = () => MODES[state.mode];
+
   /* ===================== ユーティリティ ===================== */
   const $ = (sel) => document.querySelector(sel);
   const screens = {};
@@ -65,6 +162,19 @@
   function showScreen(id) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[id].classList.add('active');
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function dist(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   /* ===================== 音声アナウンス ===================== */
@@ -80,6 +190,7 @@
     count2: 'audio/count_2.mp3',
     count1: 'audio/count_1.mp3',
     countHai: 'audio/count_hai.mp3',
+    beauty: 'audio/13_beauty.mp3',
     decoStart: 'audio/08_deco_start.mp3',
     timeWarning: 'audio/09_time_warning.mp3',
     timeup: 'audio/10_timeup.mp3',
@@ -110,14 +221,31 @@
       const finish = () => { if (done) return; done = true; a.removeEventListener('ended', finish); resolve(); };
       a.addEventListener('ended', finish);
       a.currentTime = 0;
-      a.play().catch(finish); // 再生自体に失敗した場合は待たずに進める
-      setTimeout(finish, 3000); // 保険（何らかの理由で ended が発火しない場合）
+      a.play().catch(finish);
+      setTimeout(finish, 4000); // 保険
     });
+  }
+
+  /* ===================== BGM（モード別） ===================== */
+  const bgmAudio = new Audio(MODES.heisei.bgm);
+  bgmAudio.loop = true;
+  bgmAudio.volume = 0.32;
+  bgmAudio.preload = 'auto';
+
+  function startBGM() {
+    const src = modeConf().bgm;
+    if (!bgmAudio.src.endsWith(src)) bgmAudio.src = src;
+    bgmAudio.currentTime = 0;
+    bgmAudio.play().catch(() => {});
+  }
+  function stopBGM() {
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
   }
 
   // iOS Safari 対策：最初のユーザー操作のタイミングで全音声を一度ミュート再生し、以降のタイマー発火の再生を許可させる
   function unlockAudio() {
-    Object.values(sounds).forEach((a) => {
+    [...Object.values(sounds), bgmAudio].forEach((a) => {
       a.muted = true;
       a.play().then(() => {
         a.pause();
@@ -127,23 +255,17 @@
     });
   }
 
-  /* ===================== BGM ===================== */
-  const bgmAudio = new Audio('audio/bgm.mp3');
-  bgmAudio.loop = true;
-  bgmAudio.volume = 0.35;
-  bgmAudio.preload = 'auto';
-
-  function startBGM() {
-    bgmAudio.currentTime = 0;
-    bgmAudio.play().catch(() => {});
-  }
-  function stopBGM() {
-    bgmAudio.pause();
-    bgmAudio.currentTime = 0;
-  }
-
-  /* ===================== 0. タイトル ===================== */
-  $('#btn-insert-coin').addEventListener('click', () => {
+  /* ===================== 0. タイトル（モード選択） ===================== */
+  function enterMode(mode) {
+    state.mode = mode;
+    document.body.dataset.mode = mode;
+    const conf = modeConf();
+    state.curtain = conf.curtains[0];
+    state.frame = conf.frames[0];
+    const preset = conf.presets.find(p => p.id === conf.defaultPreset);
+    state.beauty = { skin: preset.skin, eye: preset.eye, face: preset.face, filter: 'none' };
+    buildSelectGrids();
+    buildDecoTools();
     unlockAudio();
     playSound('start');
     startBGM();
@@ -152,24 +274,34 @@
     setTimeout(() => {
       if (screens['screen-select'].classList.contains('active')) playSound('selectFrame');
     }, 2700);
-  });
+  }
+
+  $('#btn-mode-heisei').addEventListener('click', () => enterMode('heisei'));
+  $('#btn-mode-reiwa').addEventListener('click', () => enterMode('reiwa'));
 
   /* ===================== 1. 選択画面 ===================== */
-  function buildChoiceGrid(container, items, colorKey, onSelect) {
+  function buildChoiceGrid(container, items, kind, onSelect) {
     container.innerHTML = '';
     items.forEach((item, i) => {
       const el = document.createElement('div');
       el.className = 'choice-item' + (i === 0 ? ' selected' : '');
-      if (colorKey === 'curtain') {
+      if (kind === 'curtain') {
         el.style.background = item.color;
         el.textContent = item.label;
         el.style.fontSize = '13px';
-        el.style.color = (item.id === 'white' || item.id === 'yellow') ? '#a03cae' : '#fff';
+        // 明るい色は文字を濃く
+        const c = item.color;
+        const rgb = [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+        const lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+        el.style.color = lum > 190 ? (state.mode === 'reiwa' ? '#8a7568' : '#a03cae') : '#fff';
       } else {
-        el.style.background = 'linear-gradient(160deg,#fff,#ffe1f3)';
+        el.style.background = state.mode === 'reiwa'
+          ? 'linear-gradient(160deg,#fff,#f2e8d5)'
+          : 'linear-gradient(160deg,#fff,#ffe1f3)';
+        const labelColor = state.mode === 'reiwa' ? '#8a7568' : '#a03cae';
         el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
           <span style="font-size:26px;">${item.emoji}</span>
-          <span style="font-size:11px;color:#a03cae;font-weight:800;">${item.label}</span>
+          <span style="font-size:11px;color:${labelColor};font-weight:800;">${item.label}</span>
         </div>`;
       }
       el.addEventListener('click', () => {
@@ -181,34 +313,68 @@
     });
   }
 
-  buildChoiceGrid($('#curtain-list'), CURTAINS, 'curtain', (item) => { state.curtain = item; });
-  buildChoiceGrid($('#frame-list'), FRAMES, 'frame', (item) => { state.frame = item; });
+  function buildSelectGrids() {
+    const conf = modeConf();
+    buildChoiceGrid($('#curtain-list'), conf.curtains, 'curtain', (item) => { state.curtain = item; });
+    buildChoiceGrid($('#frame-list'), conf.frames, 'frame', (item) => { state.frame = item; });
+  }
+
+  // 背景くりぬきトグル（文化祭ではアナログのカーテン背景を使うため、デフォルトOFF）
+  const chromaToggle = $('#btn-chroma-toggle');
+  chromaToggle.addEventListener('click', () => {
+    state.chromaOn = !state.chromaOn;
+    chromaToggle.dataset.on = String(state.chromaOn);
+    chromaToggle.textContent = state.chromaOn ? 'ON' : 'OFF';
+    if (state.chromaOn && !imageSegmenter && !segmenterLoading) initSegmenter();
+  });
 
   $('#btn-to-camera').addEventListener('click', async () => {
     showScreen('screen-camera');
     await startCamera();
   });
 
-  /* ===================== 人物くり抜き（背景をカーテン色に置換） ===================== */
+  /* ===================== MediaPipe 共通 ===================== */
+  const MP_VERSION = '0.10.14';
+  let visionModulePromise = null;
+  let filesetPromise = null;
+
+  function loadVision() {
+    if (!visionModulePromise) {
+      visionModulePromise = import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`);
+    }
+    return visionModulePromise;
+  }
+  async function loadFileset() {
+    if (!filesetPromise) {
+      filesetPromise = (async () => {
+        const vision = await loadVision();
+        return vision.FilesetResolver.forVisionTasks(
+          `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
+        );
+      })();
+    }
+    return filesetPromise;
+  }
+
+  /* ===================== 人物くり抜き（選択式） ===================== */
   const previewCanvas = $('#preview-canvas');
   const previewCtx = previewCanvas.getContext('2d');
   const segmenterStatus = $('#segmenter-status');
-  const MASK_W = 640, MASK_H = 480;
-  previewCanvas.width = MASK_W;
-  previewCanvas.height = MASK_H;
+  previewCanvas.width = SHOT_W;
+  previewCanvas.height = SHOT_H;
 
   let imageSegmenter = null;
+  let segmenterLoading = false;
   let segmenterFailed = false;
   let previewRunning = false;
   let maskWorkCanvas = null, maskWorkCtx = null;
   let personWorkCanvas = null, personWorkCtx = null;
 
   async function initSegmenter() {
+    segmenterLoading = true;
     try {
-      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
-      const fileset = await vision.FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
-      );
+      const vision = await loadVision();
+      const fileset = await loadFileset();
       imageSegmenter = await vision.ImageSegmenter.createFromOptions(fileset, {
         baseOptions: {
           modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
@@ -217,16 +383,22 @@
         runningMode: 'VIDEO',
         outputConfidenceMasks: true,
       });
-      segmenterStatus.textContent = '✨ 人物くり抜き 準備OK！';
-      setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
+      if (state.chromaOn) {
+        segmenterStatus.textContent = '✨ 背景くりぬき 準備OK！';
+        segmenterStatus.classList.remove('hidden');
+        setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
+      }
     } catch (err) {
       console.warn('人物くり抜きモデルの読み込みに失敗しました。通常のカメラ映像で撮影します。', err);
       segmenterFailed = true;
-      segmenterStatus.textContent = '（背景くり抜きは今回お休み中）';
-      setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+      if (state.chromaOn) {
+        segmenterStatus.textContent = '（背景くりぬきは今回お休み中）';
+        segmenterStatus.classList.remove('hidden');
+        setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+      }
     }
+    segmenterLoading = false;
   }
-  initSegmenter();
 
   function segmentForVideoAsync(sourceEl, ts) {
     return new Promise((resolve) => {
@@ -234,7 +406,6 @@
     });
   }
 
-  // Float32の信頼度マスクから、縁をシャープにしたアルファ用キャンバスを作る
   function buildMaskCanvas(confidenceMask) {
     const w = confidenceMask.width, h = confidenceMask.height;
     if (!maskWorkCanvas) { maskWorkCanvas = document.createElement('canvas'); maskWorkCtx = maskWorkCanvas.getContext('2d'); }
@@ -242,7 +413,7 @@
     const floatData = confidenceMask.getAsFloat32Array();
     const imgData = maskWorkCtx.createImageData(w, h);
     for (let i = 0; i < floatData.length; i++) {
-      let a = (floatData[i] - 0.15) / 0.7; // コントラストを強めて輪郭をシャープに
+      let a = (floatData[i] - 0.15) / 0.7;
       if (a < 0) a = 0; else if (a > 1) a = 1;
       const o = i * 4;
       imgData.data[o] = 255;
@@ -254,18 +425,10 @@
     return maskWorkCanvas;
   }
 
-  // 人物を切り出してカーテン色の背景に合成し、previewCtx に描画する
-  async function compositeCurtain(sourceEl) {
-    if (!personWorkCanvas) { personWorkCanvas = document.createElement('canvas'); personWorkCtx = personWorkCanvas.getContext('2d'); }
-    if (personWorkCanvas.width !== MASK_W || personWorkCanvas.height !== MASK_H) {
-      personWorkCanvas.width = MASK_W; personWorkCanvas.height = MASK_H;
-    }
-    personWorkCtx.globalCompositeOperation = 'source-over';
-    personWorkCtx.clearRect(0, 0, MASK_W, MASK_H);
-    personWorkCtx.drawImage(sourceEl, 0, 0, MASK_W, MASK_H);
-
+  // ライブプレビュー1フレーム分の合成。くりぬきOFF時は素通し＋軽い美肌ライト
+  async function renderPreviewFrame(sourceEl) {
     let maskCv = null;
-    if (imageSegmenter) {
+    if (state.chromaOn && imageSegmenter) {
       const result = await segmentForVideoAsync(sourceEl, performance.now());
       const cm = result.confidenceMasks && result.confidenceMasks[0];
       if (cm) {
@@ -275,29 +438,68 @@
       if (result.close) result.close();
     }
 
-    previewCtx.clearRect(0, 0, MASK_W, MASK_H);
+    previewCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現）
+    previewCtx.filter = 'brightness(1.06) saturate(1.02)';
+
     if (maskCv) {
+      if (!personWorkCanvas) { personWorkCanvas = document.createElement('canvas'); personWorkCtx = personWorkCanvas.getContext('2d'); }
+      if (personWorkCanvas.width !== SHOT_W || personWorkCanvas.height !== SHOT_H) {
+        personWorkCanvas.width = SHOT_W; personWorkCanvas.height = SHOT_H;
+      }
+      personWorkCtx.globalCompositeOperation = 'source-over';
+      personWorkCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+      personWorkCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
       personWorkCtx.globalCompositeOperation = 'destination-in';
-      personWorkCtx.drawImage(maskCv, 0, 0, MASK_W, MASK_H);
+      personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H);
       personWorkCtx.globalCompositeOperation = 'source-over';
 
+      previewCtx.save();
+      previewCtx.filter = 'none';
       previewCtx.fillStyle = state.curtain.color;
-      previewCtx.fillRect(0, 0, MASK_W, MASK_H);
-      previewCtx.drawImage(personWorkCanvas, 0, 0, MASK_W, MASK_H);
-      previewCanvas.classList.add('ready');
-      video.classList.add('masked');
+      previewCtx.fillRect(0, 0, SHOT_W, SHOT_H);
+      previewCtx.restore();
+      previewCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
     } else {
-      // セグメンター未使用時はカメラ映像そのままを描く（フォールバック）
-      previewCtx.drawImage(sourceEl, 0, 0, MASK_W, MASK_H);
+      previewCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
     }
+    previewCtx.filter = 'none';
+    previewCanvas.classList.add('ready');
+    video.classList.add('masked');
   }
 
   async function previewLoop() {
     if (!previewRunning) return;
     if (video.readyState >= 2 && video.videoWidth > 0) {
-      await compositeCurtain(video);
+      await renderPreviewFrame(video);
     }
     if (previewRunning) requestAnimationFrame(previewLoop);
+  }
+
+  /* ===================== 顔ランドマーク（盛り機能用） ===================== */
+  let faceLandmarker = null;
+  let landmarkerLoading = false;
+  let landmarkerFailed = false;
+
+  async function initFaceLandmarker() {
+    if (faceLandmarker || landmarkerLoading || landmarkerFailed) return;
+    landmarkerLoading = true;
+    try {
+      const vision = await loadVision();
+      const fileset = await loadFileset();
+      faceLandmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'GPU',
+        },
+        runningMode: 'IMAGE',
+        numFaces: 4, // プリクラは複数人で撮るので最大4人まで対応
+      });
+    } catch (err) {
+      console.warn('顔ランドマークモデルの読み込みに失敗しました。デカ目・小顔はスキップされます。', err);
+      landmarkerFailed = true;
+    }
+    landmarkerLoading = false;
   }
 
   /* ===================== 2. 撮影画面 ===================== */
@@ -321,22 +523,34 @@
   async function startCamera() {
     camError.textContent = '';
     state.shots = [];
+    state.processedShots = [];
+    state.faceData = [];
     buildShotIndicator();
     $('#shots-left').textContent = NUM_SHOTS;
     btnStartShooting.disabled = false;
     btnStartShooting.style.display = 'inline-block';
     previewCanvas.classList.remove('ready');
     video.classList.remove('masked');
-    if (imageSegmenter) {
-      segmenterStatus.classList.add('hidden');
-    } else if (segmenterFailed) {
-      segmenterStatus.textContent = '（背景くり抜きは今回お休み中）';
-      segmenterStatus.classList.remove('hidden');
-      setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+
+    // 盛り機能用の顔検出モデルを裏で読み込み開始（盛り画面までに間に合わせる）
+    initFaceLandmarker();
+
+    if (state.chromaOn) {
+      if (imageSegmenter) {
+        segmenterStatus.classList.add('hidden');
+      } else if (segmenterFailed) {
+        segmenterStatus.textContent = '（背景くりぬきは今回お休み中）';
+        segmenterStatus.classList.remove('hidden');
+        setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+      } else {
+        segmenterStatus.textContent = '🪄 背景くりぬきを読み込み中…';
+        segmenterStatus.classList.remove('hidden');
+        if (!segmenterLoading) initSegmenter();
+      }
     } else {
-      segmenterStatus.textContent = '🪄 背景くり抜きを読み込み中…';
-      segmenterStatus.classList.remove('hidden');
+      segmenterStatus.classList.add('hidden');
     }
+
     try {
       state.stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
@@ -358,8 +572,6 @@
     }
   }
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
   const COUNTDOWN_STEPS = [
     { key: 'count3', label: '3' },
     { key: 'count2', label: '2' },
@@ -368,7 +580,6 @@
   ];
 
   async function runCountdown(shotIndex) {
-    // 前置きのセリフ（「1枚目、いくよー！」等）が話し終わるまで待ってから、数字を1つずつボイスに合わせて表示する
     await playSoundAwait('introShot' + (shotIndex + 1));
     for (const step of COUNTDOWN_STEPS) {
       countdownEl.textContent = step.label;
@@ -377,6 +588,7 @@
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
       await playSoundAwait(step.key);
+      await sleep(240); // 無音カット済みクリップは短いので、テンポが速くなりすぎないよう間を取る
       countdownEl.style.opacity = '0';
       await sleep(60);
     }
@@ -384,9 +596,9 @@
 
   function captureFrame() {
     const c = document.createElement('canvas');
-    c.width = 640; c.height = 480;
+    c.width = SHOT_W; c.height = SHOT_H;
     const ctx = c.getContext('2d');
-    // 鏡合わせのプレビューに合わせて左右反転して保存（すでに人物くり抜き＋カーテン合成済みのpreviewCanvasを使う）
+    // 鏡合わせのプレビューに合わせて左右反転して保存
     ctx.translate(c.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(previewCanvas, 0, 0, c.width, c.height);
@@ -414,11 +626,313 @@
       await sleep(400);
     }
     stopCamera();
-    composeSheet();
-    startDecoScreen();
+    startBeautyScreen();
   });
 
-  /* ===================== シート合成 ===================== */
+  /* ===================== 盛り加工エンジン ===================== */
+
+  // 放射状ワープ。strength > 0 で中心を拡大（デカ目）、< 0 で収縮（小顔）
+  function radialWarp(canvas, cx, cy, R, strength) {
+    if (Math.abs(strength) < 0.005 || R < 4) return;
+    const ctx = canvas.getContext('2d');
+    const x0 = Math.max(0, Math.floor(cx - R));
+    const y0 = Math.max(0, Math.floor(cy - R));
+    const x1 = Math.min(canvas.width, Math.ceil(cx + R));
+    const y1 = Math.min(canvas.height, Math.ceil(cy + R));
+    const bw = x1 - x0, bh = y1 - y0;
+    if (bw <= 0 || bh <= 0) return;
+    const src = ctx.getImageData(x0, y0, bw, bh);
+    const dst = ctx.createImageData(bw, bh);
+    const sd = src.data, dd = dst.data;
+    const R2 = R * R;
+    for (let y = 0; y < bh; y++) {
+      const py = y + y0;
+      for (let x = 0; x < bw; x++) {
+        const px = x + x0;
+        const dx = px - cx, dy = py - cy;
+        const d2 = dx * dx + dy * dy;
+        const o = (y * bw + x) * 4;
+        if (d2 >= R2) {
+          const so = o;
+          dd[o] = sd[so]; dd[o + 1] = sd[so + 1]; dd[o + 2] = sd[so + 2]; dd[o + 3] = sd[so + 3];
+          continue;
+        }
+        const r2n = d2 / R2;
+        const falloff = (1 - r2n) * (1 - r2n);
+        const t = 1 - strength * falloff;
+        let sx = cx + dx * t - x0;
+        let sy = cy + dy * t - y0;
+        if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
+        if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
+        // バイリニア補間
+        const ix = Math.floor(sx), iy = Math.floor(sy);
+        const fx = sx - ix, fy = sy - iy;
+        const o00 = (iy * bw + ix) * 4;
+        const o10 = o00 + 4;
+        const o01 = o00 + bw * 4;
+        const o11 = o01 + 4;
+        for (let ch = 0; ch < 4; ch++) {
+          const v = sd[o00 + ch] * (1 - fx) * (1 - fy)
+                  + sd[o10 + ch] * fx * (1 - fy)
+                  + sd[o01 + ch] * (1 - fx) * fy
+                  + sd[o11 + ch] * fx * fy;
+          dd[o + ch] = v;
+        }
+      }
+    }
+    ctx.putImageData(dst, x0, y0);
+  }
+
+  // ランドマーク（正規化座標）→ピクセル座標
+  function lmToPx(lm, w, h) { return { x: lm.x * w, y: lm.y * h }; }
+
+  // 1枚のショットに 盛り（ワープ＋美肌＋フィルター）を適用して新しいキャンバスを返す
+  function applyBeauty(srcCanvas, faces, params) {
+    const conf = modeConf();
+    const w = srcCanvas.width, h = srcCanvas.height;
+
+    // 1) ワープ（デカ目・小顔）
+    const work = document.createElement('canvas');
+    work.width = w; work.height = h;
+    const workCtx = work.getContext('2d');
+    workCtx.drawImage(srcCanvas, 0, 0);
+
+    const eyeS = params.eye / 100;
+    const faceS = params.face / 100;
+    if (faces && faces.length && (eyeS > 0 || faceS > 0)) {
+      faces.forEach((lm) => {
+        if (!lm || lm.length < 478) return; // 虹彩ランドマーク(468-477)が無い場合はスキップ
+        if (eyeS > 0) {
+          // デカ目：虹彩中心（468/473）を中心に目幅ベースの半径で拡大
+          const li = lmToPx(lm[468], w, h);
+          const ri = lmToPx(lm[473], w, h);
+          const lw = dist(lmToPx(lm[33], w, h), lmToPx(lm[133], w, h));
+          const rw = dist(lmToPx(lm[362], w, h), lmToPx(lm[263], w, h));
+          radialWarp(work, li.x, li.y, lw * 1.5, eyeS * 0.28);
+          radialWarp(work, ri.x, ri.y, rw * 1.5, eyeS * 0.28);
+        }
+        if (faceS > 0) {
+          // 小顔：あご周辺3点を収縮して輪郭を内側へ
+          const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
+          const jl = lmToPx(lm[136], w, h);
+          const jr = lmToPx(lm[365], w, h);
+          const ch = lmToPx(lm[152], w, h);
+          radialWarp(work, jl.x, jl.y, fw * 0.42, -faceS * 0.14);
+          radialWarp(work, jr.x, jr.y, fw * 0.42, -faceS * 0.14);
+          radialWarp(work, ch.x, ch.y, fw * 0.36, -faceS * 0.10);
+        }
+      });
+    }
+
+    // 2) 美肌（ソフトフォーカス：ぼかしレイヤーを重ねてなめらかに）
+    const skinS = params.skin / 100;
+    if (skinS > 0) {
+      workCtx.save();
+      workCtx.filter = `blur(${(1.5 + skinS * 2.5).toFixed(1)}px)`;
+      workCtx.globalAlpha = skinS * 0.55;
+      workCtx.drawImage(work, 0, 0);
+      workCtx.restore();
+    }
+
+    // 3) 肌トーン（モード別）＋選択フィルター
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const outCtx = out.getContext('2d');
+    const tone = conf.skinTone;
+    const bright = 1 + skinS * tone.brightPerUnit;
+    const sat = Math.max(0.3, 1 + skinS * tone.satPerUnit);
+    const selFilter = conf.filters.find(f => f.id === params.filter);
+    const filterCss = `brightness(${bright.toFixed(3)}) saturate(${sat.toFixed(3)})` + (selFilter && selFilter.css ? ' ' + selFilter.css : '');
+    outCtx.filter = filterCss;
+    outCtx.drawImage(work, 0, 0);
+    outCtx.filter = 'none';
+    return out;
+  }
+
+  /* ===================== 2.5 盛り調整画面 ===================== */
+  const beautyCanvas = $('#beauty-canvas');
+  beautyCanvas.width = SHOT_W;
+  beautyCanvas.height = SHOT_H;
+  const beautyCtx = beautyCanvas.getContext('2d');
+  const beautyTimerDisplay = $('#beauty-timer-display');
+  const beautyFaceNote = $('#beauty-face-note');
+
+  const sliderSkin = $('#slider-skin');
+  const sliderEye = $('#slider-eye');
+  const sliderFace = $('#slider-face');
+
+  let beautyRenderQueued = false;
+
+  function queueBeautyRender() {
+    if (beautyRenderQueued) return;
+    beautyRenderQueued = true;
+    requestAnimationFrame(() => {
+      beautyRenderQueued = false;
+      renderBeautyPreview();
+    });
+  }
+
+  function renderBeautyPreview() {
+    const idx = state.beautySelected;
+    const src = state.shots[idx];
+    if (!src) return;
+    const faces = state.faceData[idx];
+    const result = applyBeauty(src, faces, state.beauty);
+    beautyCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    beautyCtx.drawImage(result, 0, 0);
+  }
+
+  function syncSliders() {
+    sliderSkin.value = state.beauty.skin;
+    sliderEye.value = state.beauty.eye;
+    sliderFace.value = state.beauty.face;
+    $('#val-skin').textContent = state.beauty.skin;
+    $('#val-eye').textContent = state.beauty.eye;
+    $('#val-face').textContent = state.beauty.face;
+  }
+
+  function markPresetActive(presetId) {
+    document.querySelectorAll('#beauty-preset-row .preset-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.preset === presetId);
+    });
+  }
+
+  function buildBeautyControls() {
+    const conf = modeConf();
+    // 盛れ感プリセット
+    const presetRow = $('#beauty-preset-row');
+    presetRow.innerHTML = '';
+    conf.presets.forEach(p => {
+      const b = document.createElement('button');
+      b.className = 'preset-btn' + (p.id === conf.defaultPreset ? ' active' : '');
+      b.dataset.preset = p.id;
+      b.textContent = p.label;
+      b.addEventListener('click', () => {
+        state.beauty.skin = p.skin;
+        state.beauty.eye = p.eye;
+        state.beauty.face = p.face;
+        syncSliders();
+        markPresetActive(p.id);
+        queueBeautyRender();
+      });
+      presetRow.appendChild(b);
+    });
+    // フィルター
+    const filterRow = $('#filter-row');
+    filterRow.innerHTML = '';
+    conf.filters.forEach(f => {
+      const b = document.createElement('button');
+      b.className = 'preset-btn' + (f.id === state.beauty.filter ? ' active' : '');
+      b.dataset.filter = f.id;
+      b.textContent = f.label;
+      b.addEventListener('click', () => {
+        state.beauty.filter = f.id;
+        filterRow.querySelectorAll('.preset-btn').forEach(x => x.classList.toggle('active', x.dataset.filter === f.id));
+        queueBeautyRender();
+      });
+      filterRow.appendChild(b);
+    });
+    // ショット切り替えタブ
+    const tabs = $('#beauty-shot-tabs');
+    tabs.innerHTML = '';
+    for (let i = 0; i < NUM_SHOTS; i++) {
+      const b = document.createElement('button');
+      b.className = 'beauty-shot-tab' + (i === 0 ? ' active' : '');
+      b.textContent = String(i + 1);
+      b.addEventListener('click', () => {
+        state.beautySelected = i;
+        tabs.querySelectorAll('.beauty-shot-tab').forEach((t, ti) => t.classList.toggle('active', ti === i));
+        queueBeautyRender();
+      });
+      tabs.appendChild(b);
+    }
+  }
+
+  [[sliderSkin, 'skin'], [sliderEye, 'eye'], [sliderFace, 'face']].forEach(([el, key]) => {
+    el.addEventListener('input', () => {
+      state.beauty[key] = Number(el.value);
+      $('#val-' + key).textContent = el.value;
+      markPresetActive(''); // 手動調整したらプリセット選択を解除
+      queueBeautyRender();
+    });
+  });
+
+  async function detectFacesForShots() {
+    await initFaceLandmarker();
+    if (!faceLandmarker) {
+      beautyFaceNote.textContent = '顔検出が使えないため、美肌とフィルターのみ反映されます';
+      beautyFaceNote.classList.remove('hidden');
+      return;
+    }
+    let anyFace = false;
+    for (let i = 0; i < state.shots.length; i++) {
+      try {
+        const res = faceLandmarker.detect(state.shots[i]);
+        state.faceData[i] = (res.faceLandmarks && res.faceLandmarks.length) ? res.faceLandmarks : null;
+        if (state.faceData[i]) anyFace = true;
+      } catch (err) {
+        state.faceData[i] = null;
+      }
+    }
+    if (!anyFace) {
+      beautyFaceNote.textContent = '顔が見つからなかったよ…美肌とフィルターだけ反映されます';
+      beautyFaceNote.classList.remove('hidden');
+    } else {
+      beautyFaceNote.classList.add('hidden');
+    }
+    queueBeautyRender();
+  }
+
+  function startBeautyScreen() {
+    showScreen('screen-beauty');
+    playSound('beauty');
+    state.beautySelected = 0;
+    state.beautyRemaining = BEAUTY_SECONDS;
+    state.beautyWarned = false;
+    beautyFaceNote.textContent = '👀 顔を検出中…';
+    beautyFaceNote.classList.remove('hidden');
+    buildBeautyControls();
+    syncSliders();
+    beautyTimerDisplay.textContent = formatTime(state.beautyRemaining);
+    beautyTimerDisplay.classList.remove('warn');
+    queueBeautyRender(); // まずは美肌+フィルターのみで即表示
+
+    detectFacesForShots(); // 顔検出は非同期で追いかける
+
+    if (state.beautyTimerId) clearInterval(state.beautyTimerId);
+    state.beautyTimerId = setInterval(() => {
+      state.beautyRemaining--;
+      beautyTimerDisplay.textContent = formatTime(Math.max(0, state.beautyRemaining));
+      if (state.beautyRemaining <= 10) {
+        beautyTimerDisplay.classList.add('warn');
+        if (!state.beautyWarned) {
+          state.beautyWarned = true;
+          playSound('timeWarning');
+        }
+      }
+      if (state.beautyRemaining <= 0) {
+        clearInterval(state.beautyTimerId);
+        finishBeauty();
+      }
+    }, 1000);
+  }
+
+  let beautyFinished = false;
+  function finishBeauty() {
+    if (screens['screen-beauty'].classList.contains('active') === false) return;
+    if (beautyFinished) return;
+    beautyFinished = true;
+    if (state.beautyTimerId) clearInterval(state.beautyTimerId);
+    // 全ショットに現在のパラメータを適用
+    state.processedShots = state.shots.map((shot, i) => applyBeauty(shot, state.faceData[i], state.beauty));
+    composeSheet();
+    startDecoScreen();
+    beautyFinished = false;
+  }
+
+  $('#btn-beauty-done').addEventListener('click', finishBeauty);
+
+  /* ===================== シート合成（モード別デザイン） ===================== */
   const sheetCanvas = $('#sheet-canvas');
   sheetCanvas.width = SHEET_W;
   sheetCanvas.height = SHEET_H;
@@ -434,73 +948,102 @@
   }
 
   function composeSheet() {
+    const conf = modeConf();
+    const sheet = conf.sheet;
     const ctx = sheetCanvas.getContext('2d');
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
 
-    // 背景（カーテンカラー基調のグラデーション）
-    const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
-    grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(0.15, state.curtain.color);
-    grad.addColorStop(1, '#ffffff');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+    // 背景
+    if (state.mode === 'heisei') {
+      const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
+      grad.addColorStop(0, sheet.bgTop);
+      grad.addColorStop(0.15, state.curtain.color);
+      grad.addColorStop(1, sheet.bgBottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+    } else {
+      const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
+      grad.addColorStop(0, sheet.bgTop);
+      grad.addColorStop(1, sheet.bgBottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+      // 令和：シールカラーの細いラインをアクセントに
+      ctx.fillStyle = state.curtain.color;
+      ctx.fillRect(0, 62, SHEET_W, 3);
+    }
 
     // タイトル
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 34px -apple-system, sans-serif';
+    ctx.font = sheet.titleFont;
     ctx.save();
-    ctx.shadowColor = 'rgba(255,47,160,.8)';
-    ctx.shadowBlur = 6;
-    ctx.fillText('平成 Print Club', SHEET_W / 2, 46);
+    if (sheet.titleGlow) {
+      ctx.shadowColor = sheet.titleGlow;
+      ctx.shadowBlur = 6;
+    }
+    ctx.fillStyle = sheet.titleColor;
+    ctx.fillText(sheet.title, SHEET_W / 2, 46);
     ctx.restore();
 
-    // 写真4枚
-    state.shots.forEach((shotCanvas, i) => {
+    // 写真4枚（盛り加工済みを優先）
+    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    shots.forEach((shotCanvas, i) => {
       const col = i % 2, row = Math.floor(i / 2);
       const x = MARGIN + col * (CELL_W + MARGIN);
       const y = HEADER_H + MARGIN + row * (CELL_H + MARGIN);
 
       ctx.save();
-      roundRect(ctx, x - 6, y - 6, CELL_W + 12, CELL_H + 12, 14);
+      roundRect(ctx, x - 6, y - 6, CELL_W + 12, CELL_H + 12, sheet.cellRadius + 4);
       ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0,0,0,.25)';
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(0,0,0,.22)';
+      ctx.shadowBlur = state.mode === 'reiwa' ? 5 : 8;
       ctx.fill();
       ctx.restore();
 
       ctx.save();
-      roundRect(ctx, x, y, CELL_W, CELL_H, 10);
+      roundRect(ctx, x, y, CELL_W, CELL_H, sheet.cellRadius);
       ctx.clip();
       ctx.drawImage(shotCanvas, x, y, CELL_W, CELL_H);
       ctx.restore();
 
       ctx.save();
-      roundRect(ctx, x, y, CELL_W, CELL_H, 10);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = state.curtain.color === '#ffffff' ? '#ffb6de' : state.curtain.color;
+      roundRect(ctx, x, y, CELL_W, CELL_H, sheet.cellRadius);
+      ctx.lineWidth = state.mode === 'reiwa' ? 1.5 : 3;
+      if (state.mode === 'reiwa') {
+        ctx.strokeStyle = '#e0d5c8';
+      } else {
+        ctx.strokeStyle = state.curtain.color === '#ffffff' ? '#ffb6de' : state.curtain.color;
+      }
       ctx.stroke();
       ctx.restore();
     });
 
-    // フレーム装飾（角の絵文字）
-    ctx.font = '30px sans-serif';
+    // フレーム装飾
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const corners = [
-      [26, HEADER_H + 10],
-      [SHEET_W - 26, HEADER_H + 10],
-      [26, SHEET_H - FOOTER_H - 10],
-      [SHEET_W - 26, SHEET_H - FOOTER_H - 10],
-    ];
-    corners.forEach(([cx, cy]) => ctx.fillText(state.frame.emoji, cx, cy));
+    if (sheet.cornerDeco === 'frameEmoji') {
+      ctx.font = '30px sans-serif';
+      const corners = [
+        [26, HEADER_H + 10],
+        [SHEET_W - 26, HEADER_H + 10],
+        [26, SHEET_H - FOOTER_H - 10],
+        [SHEET_W - 26, SHEET_H - FOOTER_H - 10],
+      ];
+      corners.forEach(([cx, cy]) => ctx.fillText(state.frame.emoji, cx, cy));
+    } else {
+      // 令和：フレーム絵文字を小さく上品に散らす
+      ctx.font = '18px sans-serif';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(state.frame.emoji, 30, HEADER_H + 6);
+      ctx.fillText(state.frame.emoji, SHEET_W - 30, SHEET_H - FOOTER_H - 6);
+      ctx.globalAlpha = 1;
+    }
 
-    // フッター（日付風スタンプ）
+    // フッター（日付）
     const d = new Date();
     const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-    ctx.font = '700 14px sans-serif';
-    ctx.fillStyle = '#a03cae';
-    ctx.fillText(dateStr + '　Heisei Purikura-ki', SHEET_W / 2, SHEET_H - FOOTER_H / 2);
+    ctx.font = state.mode === 'reiwa' ? 'italic 500 13px Georgia, serif' : '700 14px sans-serif';
+    ctx.fillStyle = sheet.footerColor;
+    ctx.fillText(`${dateStr}　${sheet.footerName}`, SHEET_W / 2, SHEET_H - FOOTER_H / 2);
   }
 
   /* ===================== 3. 落書き画面 ===================== */
@@ -510,9 +1053,10 @@
   const drawCtx = drawCanvas.getContext('2d');
 
   function buildColorRow() {
+    const conf = modeConf();
     const row = $('#color-row');
     row.innerHTML = '';
-    PEN_COLORS.forEach((c, i) => {
+    conf.penColors.forEach((c, i) => {
       const sw = document.createElement('div');
       sw.className = 'color-swatch' + (i === 0 ? ' selected' : '');
       sw.style.background = c;
@@ -526,7 +1070,40 @@
       row.appendChild(sw);
     });
   }
-  buildColorRow();
+
+  function buildStampRow() {
+    const conf = modeConf();
+    const row = $('#stamp-row');
+    row.innerHTML = '';
+    conf.stamps.forEach(s => {
+      const b = document.createElement('button');
+      b.className = 'stamp-btn';
+      b.textContent = s;
+      b.addEventListener('click', () => setTool('stamp', s));
+      row.appendChild(b);
+    });
+  }
+
+  function buildTextStampRow() {
+    const conf = modeConf();
+    const row = $('#text-stamp-row');
+    row.innerHTML = '';
+    conf.textStamps.forEach(s => {
+      const b = document.createElement('button');
+      b.className = 'text-stamp-btn';
+      b.textContent = s;
+      b.addEventListener('click', () => setTool('textstamp', s));
+      row.appendChild(b);
+    });
+  }
+
+  function buildDecoTools() {
+    buildColorRow();
+    buildStampRow();
+    buildTextStampRow();
+    state.penColor = modeConf().penColors[0];
+  }
+  buildDecoTools();
 
   $('#pen-size').addEventListener('input', (e) => { state.penSize = Number(e.target.value); });
 
@@ -542,32 +1119,6 @@
   document.querySelectorAll('.tool-btn').forEach(btn => {
     btn.addEventListener('click', () => setTool(btn.dataset.mode));
   });
-
-  function buildStampRow() {
-    const row = $('#stamp-row');
-    row.innerHTML = '';
-    STAMPS.forEach(s => {
-      const b = document.createElement('button');
-      b.className = 'stamp-btn';
-      b.textContent = s;
-      b.addEventListener('click', () => setTool('stamp', s));
-      row.appendChild(b);
-    });
-  }
-  buildStampRow();
-
-  function buildTextStampRow() {
-    const row = $('#text-stamp-row');
-    row.innerHTML = '';
-    TEXT_STAMPS.forEach(s => {
-      const b = document.createElement('button');
-      b.className = 'text-stamp-btn';
-      b.textContent = s;
-      b.addEventListener('click', () => setTool('textstamp', s));
-      row.appendChild(b);
-    });
-  }
-  buildTextStampRow();
 
   function getCanvasPos(evt) {
     const rect = drawCanvas.getBoundingClientRect();
@@ -610,16 +1161,19 @@
     }
     if (state.tool === 'textstamp' && state.textStampStr) {
       pushHistory();
+      const style = modeConf().textStampStyle;
       drawCtx.save();
-      drawCtx.font = '900 20px sans-serif';
+      drawCtx.font = style.font;
       drawCtx.textAlign = 'center';
       drawCtx.textBaseline = 'middle';
       drawCtx.translate(x, y);
-      drawCtx.rotate((Math.random() * 16 - 8) * Math.PI / 180);
-      drawCtx.lineWidth = 4;
-      drawCtx.strokeStyle = '#ffffff';
-      drawCtx.strokeText(state.textStampStr, 0, 0);
-      drawCtx.fillStyle = '#ff2fa0';
+      drawCtx.rotate((Math.random() * style.rotate * 2 - style.rotate) * Math.PI / 180);
+      if (style.stroke) {
+        drawCtx.lineWidth = style.strokeWidth;
+        drawCtx.strokeStyle = style.stroke;
+        drawCtx.strokeText(state.textStampStr, 0, 0);
+      }
+      drawCtx.fillStyle = style.fill;
       drawCtx.fillText(state.textStampStr, 0, 0);
       drawCtx.restore();
       return;
@@ -678,22 +1232,15 @@
     finishDeco('manual');
   });
 
-  /* ===================== タイマー ===================== */
+  /* ===================== 落書きタイマー ===================== */
   const timerDisplay = $('#timer-display');
-
-  function formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-  }
 
   function startDecoScreen() {
     showScreen('screen-deco');
     drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
     state.history = [];
+    buildDecoTools();
     setTool('pen');
-    document.querySelectorAll('.color-swatch').forEach((s, i) => s.classList.toggle('selected', i === 0));
-    state.penColor = PEN_COLORS[0];
     state.remaining = DECO_SECONDS;
     state.warningPlayed = false;
     $('#deco-timeup').classList.add('hidden');
@@ -747,12 +1294,15 @@
     const link = $('#btn-download');
     link.href = dataUrl;
     const d = new Date();
-    link.download = `purikura_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
+    link.download = `purikura_${state.mode}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
   }
 
   $('#btn-restart').addEventListener('click', () => {
     if (state.timerId) clearInterval(state.timerId);
+    if (state.beautyTimerId) clearInterval(state.beautyTimerId);
     state.shots = [];
+    state.processedShots = [];
+    state.faceData = [];
     state.history = [];
     stopBGM();
     showScreen('screen-title');

@@ -3,37 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>平成プリクラ機</title>
+<title>プリクラ機 〜平成 & 令和〜</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-mode="heisei">
 
 <div id="app">
 
-  <!-- ============ 0. タイトル画面 ============ -->
+  <!-- ============ 0. タイトル画面（モード選択） ============ -->
   <section id="screen-title" class="screen active">
     <div class="crt-frame">
       <div class="sparkle-bg"></div>
       <h1 class="title-logo">
-        <span class="logo-line1">平成</span>
+        <span class="logo-line1">文化祭スペシャル</span>
         <span class="logo-line2">プリクラ機</span>
       </h1>
       <p class="title-sub">～ 撮って・盛って・落書きして ～</p>
       <div class="coin-slot">
-        <p class="coin-text">100円 &gt;&gt; コイン投入 &gt;&gt;</p>
-        <button id="btn-insert-coin" class="btn-main pulse">▶ タッチしてスタート</button>
+        <p class="coin-text">100円 &gt;&gt; コイン投入 &gt;&gt; モードをえらんでね</p>
+        <div class="mode-buttons">
+          <button id="btn-mode-heisei" class="mode-btn heisei pulse">
+            <span class="mode-name">平成モード</span>
+            <span class="mode-desc">白肌×デカ目×ケバ盛れ♡<br>懐かしのギャルプリ</span>
+          </button>
+          <button id="btn-mode-reiwa" class="mode-btn reiwa pulse">
+            <span class="mode-name">令和モード</span>
+            <span class="mode-desc">ナチュラル盛れ×くすみカラー<br>今っぽエモプリ</span>
+          </button>
+        </div>
       </div>
       <p class="title-note">※ iPad推奨・カメラを使用します</p>
     </div>
   </section>
 
-  <!-- ============ 1. フレーム/背景選択 ============ -->
+  <!-- ============ 1. シールデザイン選択 ============ -->
   <section id="screen-select" class="screen">
     <div class="panel">
-      <h2 class="step-heading">STEP 1. カーテンをえらんでね</h2>
+      <h2 class="step-heading">STEP 1. シールのカラーをえらんでね</h2>
       <div id="curtain-list" class="choice-grid"></div>
       <h2 class="step-heading">STEP 2. フレームをえらんでね</h2>
       <div id="frame-list" class="choice-grid"></div>
+      <div class="chroma-row">
+        <div class="chroma-label">
+          <p class="chroma-title">🪄 背景くりぬき</p>
+          <p class="chroma-note">会場のカーテン背景をそのまま写すなら OFF のまま！</p>
+        </div>
+        <button id="btn-chroma-toggle" class="chroma-toggle" data-on="false">OFF</button>
+      </div>
       <button id="btn-to-camera" class="btn-main">この組み合わせでOK！ ▶</button>
     </div>
   </section>
@@ -52,8 +68,53 @@
         <p class="cam-caption">のこり <span id="shots-left">4</span> ポーズ！</p>
         <p class="cam-caption small">かわいく決めてね💕</p>
         <button id="btn-start-shooting" class="btn-main">撮影スタート！</button>
-        <p id="segmenter-status" class="segmenter-status">🪄 背景くり抜きを読み込み中…</p>
+        <p id="segmenter-status" class="segmenter-status hidden"></p>
         <div id="cam-error" class="cam-error"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2.5 盛り調整画面 ============ -->
+  <section id="screen-beauty" class="screen">
+    <div class="beauty-wrap">
+      <div class="beauty-header">
+        <div class="timer-box">
+          <span class="timer-label">盛りタイム</span>
+          <span id="beauty-timer-display" class="timer-display">1:00</span>
+        </div>
+        <p class="beauty-heading">✨ 盛りチェック！ ✨</p>
+      </div>
+      <div class="beauty-main">
+        <div class="beauty-preview-holder">
+          <canvas id="beauty-canvas"></canvas>
+          <div id="beauty-shot-tabs" class="beauty-shot-tabs"></div>
+          <p id="beauty-face-note" class="beauty-face-note hidden"></p>
+        </div>
+        <div class="beauty-controls">
+          <div class="beauty-presets">
+            <p class="tool-label">盛れ感をえらぶ</p>
+            <div id="beauty-preset-row" class="preset-row"></div>
+          </div>
+          <div class="beauty-sliders">
+            <div class="slider-group">
+              <label>🧴 美肌 <span id="val-skin" class="slider-val">0</span></label>
+              <input type="range" id="slider-skin" min="0" max="100" value="0">
+            </div>
+            <div class="slider-group">
+              <label>👁️ デカ目 <span id="val-eye" class="slider-val">0</span></label>
+              <input type="range" id="slider-eye" min="0" max="100" value="0">
+            </div>
+            <div class="slider-group">
+              <label>🫥 小顔 <span id="val-face" class="slider-val">0</span></label>
+              <input type="range" id="slider-face" min="0" max="100" value="0">
+            </div>
+          </div>
+          <div class="beauty-filters">
+            <p class="tool-label">フィルター</p>
+            <div id="filter-row" class="preset-row"></div>
+          </div>
+          <button id="btn-beauty-done" class="btn-main">これでOK♪ らくがきへ ▶</button>
+        </div>
       </div>
     </div>
   </section>
