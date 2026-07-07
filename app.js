@@ -681,6 +681,55 @@
     ctx.putImageData(dst, x0, y0);
   }
 
+  // 方向性ワープ（リフトアップ用）。中心付近のコンテンツを (dxAmt, dyAmt) 方向へずらす
+  function directionalWarp(canvas, cx, cy, R, dxAmt, dyAmt) {
+    if ((Math.abs(dxAmt) < 0.3 && Math.abs(dyAmt) < 0.3) || R < 4) return;
+    const ctx = canvas.getContext('2d');
+    const pad = Math.ceil(Math.max(Math.abs(dxAmt), Math.abs(dyAmt))) + 2;
+    const x0 = Math.max(0, Math.floor(cx - R - pad));
+    const y0 = Math.max(0, Math.floor(cy - R - pad));
+    const x1 = Math.min(canvas.width, Math.ceil(cx + R + pad));
+    const y1 = Math.min(canvas.height, Math.ceil(cy + R + pad));
+    const bw = x1 - x0, bh = y1 - y0;
+    if (bw <= 0 || bh <= 0) return;
+    const src = ctx.getImageData(x0, y0, bw, bh);
+    const dst = ctx.createImageData(bw, bh);
+    const sd = src.data, dd = dst.data;
+    const R2 = R * R;
+    for (let y = 0; y < bh; y++) {
+      const py = y + y0;
+      for (let x = 0; x < bw; x++) {
+        const px = x + x0;
+        const dx = px - cx, dy = py - cy;
+        const d2 = dx * dx + dy * dy;
+        const o = (y * bw + x) * 4;
+        if (d2 >= R2) {
+          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
+          continue;
+        }
+        const r2n = d2 / R2;
+        const falloff = (1 - r2n) * (1 - r2n);
+        let sx = px - dxAmt * falloff - x0;
+        let sy = py - dyAmt * falloff - y0;
+        if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
+        if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
+        const ix = Math.floor(sx), iy = Math.floor(sy);
+        const fx = sx - ix, fy = sy - iy;
+        const o00 = (iy * bw + ix) * 4;
+        const o10 = o00 + 4;
+        const o01 = o00 + bw * 4;
+        const o11 = o01 + 4;
+        for (let ch = 0; ch < 4; ch++) {
+          dd[o + ch] = sd[o00 + ch] * (1 - fx) * (1 - fy)
+                     + sd[o10 + ch] * fx * (1 - fy)
+                     + sd[o01 + ch] * (1 - fx) * fy
+                     + sd[o11 + ch] * fx * fy;
+        }
+      }
+    }
+    ctx.putImageData(dst, x0, y0);
+  }
+
   // ランドマーク（正規化座標）→ピクセル座標
   function lmToPx(lm, w, h) { return { x: lm.x * w, y: lm.y * h }; }
 
@@ -716,6 +765,11 @@
           radialWarp(work, jl.x, jl.y, fw * 0.42, -faceS * 0.14);
           radialWarp(work, jr.x, jr.y, fw * 0.42, -faceS * 0.14);
           radialWarp(work, ch.x, ch.y, fw * 0.36, -faceS * 0.10);
+          // リフトアップ（タルミ対策）：頬〜フェイスラインを斜め上・内側へ引き上げる
+          const cl = lmToPx(lm[205], w, h);
+          const cr = lmToPx(lm[425], w, h);
+          directionalWarp(work, cl.x, cl.y + fw * 0.12, fw * 0.4, faceS * fw * 0.018, -faceS * fw * 0.04);
+          directionalWarp(work, cr.x, cr.y + fw * 0.12, fw * 0.4, -faceS * fw * 0.018, -faceS * fw * 0.04);
         }
       });
     }
@@ -945,6 +999,115 @@
     return hits < 20;
   }
 
+  /* ---------- ヒーリングエンジン（シミ・シワ・ほうれい線・クマ・日焼けムラ除去） ----------
+     プロのレタッチで使われる周波数分離の考え方を応用：
+     - 肌領域内で「周囲の平均より暗いピクセル」＝シミ・シワ・ほうれい線・クマの影 だけを周囲の肌色へ引き上げる
+     - 明るさ（Y）はそのままに色味（CbCr）だけを周囲へ均す → 赤み・日焼けムラを解消しつつ立体感は残す
+     - ハイライトはほぼ触らないので、のっぺりしない */
+
+  let healMeanR = null, healMeanG = null, healMeanB = null, healTmp = null;
+
+  // 分離型移動平均によるボックスブラー（1チャンネル、O(n)）
+  function boxBlurChannel(src, dst, tmp, w, h, radius) {
+    const win = radius * 2 + 1;
+    // 横方向
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      let acc = 0;
+      for (let x = -radius; x <= radius; x++) {
+        acc += src[row + Math.min(w - 1, Math.max(0, x))];
+      }
+      for (let x = 0; x < w; x++) {
+        tmp[row + x] = acc / win;
+        const xAdd = Math.min(w - 1, x + radius + 1);
+        const xSub = Math.max(0, x - radius);
+        acc += src[row + xAdd] - src[row + xSub];
+      }
+    }
+    // 縦方向
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let y = -radius; y <= radius; y++) {
+        acc += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+      }
+      for (let y = 0; y < h; y++) {
+        dst[y * w + x] = acc / win;
+        const yAdd = Math.min(h - 1, y + radius + 1);
+        const ySub = Math.max(0, y - radius);
+        acc += tmp[yAdd * w + x] - tmp[ySub * w + x];
+      }
+    }
+  }
+
+  function healSkin(canvas, mask, skinS) {
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    const maskCtx = mask.getContext('2d', { willReadFrequently: true });
+    const md = maskCtx.getImageData(0, 0, w, h).data;
+
+    const n = w * h;
+    if (!healMeanR || healMeanR.length !== n) {
+      healMeanR = new Float32Array(n);
+      healMeanG = new Float32Array(n);
+      healMeanB = new Float32Array(n);
+      healTmp = new Float32Array(n);
+    }
+    // 周囲平均（半径9px）を計算
+    const chR = new Float32Array(n), chG = new Float32Array(n), chB = new Float32Array(n);
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      chR[i] = d[p]; chG[i] = d[p + 1]; chB[i] = d[p + 2];
+    }
+    boxBlurChannel(chR, healMeanR, healTmp, w, h, 9);
+    boxBlurChannel(chG, healMeanG, healTmp, w, h, 9);
+    boxBlurChannel(chB, healMeanB, healTmp, w, h, 9);
+
+    const healAmt = skinS * 0.95;    // 暗部（シミ・シワ・ほうれい線）の引き上げ量
+    const chromaAmt = skinS * 0.45;  // 色ムラ（赤み・日焼け）の均一化量
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      const a = md[p + 3] / 255;
+      if (a < 0.04) continue;
+      const r = d[p], g = d[p + 1], b = d[p + 2];
+      const mr = healMeanR[i], mg = healMeanG[i], mb = healMeanB[i];
+      const lumaP = 0.299 * r + 0.587 * g + 0.114 * b;
+      const lumaM = 0.299 * mr + 0.587 * mg + 0.114 * mb;
+      const diff = lumaP - lumaM;
+      let nr = r, ng = g, nb = b;
+      if (diff < -2) {
+        // 暗部＝シミ・シワ・影 → 周囲の肌色へ引き上げ（深いほど強く、上限あり）
+        const t = Math.min(1, (-diff) / 42) * healAmt * a;
+        nr = r + (mr - r) * t;
+        ng = g + (mg - g) * t;
+        nb = b + (mb - b) * t;
+      } else {
+        // 明部はわずかに整えるだけ（ハイライト・立体感を維持）
+        const t = Math.min(1, diff / 70) * skinS * 0.12 * a;
+        nr = r + (mr - r) * t;
+        ng = g + (mg - g) * t;
+        nb = b + (mb - b) * t;
+      }
+      // 色ムラ補正：明るさは保ち、色味だけ周囲平均へ寄せる（赤み・日焼けムラ）
+      const ca = chromaAmt * a;
+      if (ca > 0.01) {
+        const yP = 0.299 * nr + 0.587 * ng + 0.114 * nb;
+        const cbP = 128 - 0.168736 * nr - 0.331264 * ng + 0.5 * nb;
+        const crP = 128 + 0.5 * nr - 0.418688 * ng - 0.081312 * nb;
+        const cbM = 128 - 0.168736 * mr - 0.331264 * mg + 0.5 * mb;
+        const crM = 128 + 0.5 * mr - 0.418688 * mg - 0.081312 * mb;
+        const cb = cbP + (cbM - cbP) * ca;
+        const cr = crP + (crM - crP) * ca;
+        nr = yP + 1.402 * (cr - 128);
+        ng = yP - 0.344136 * (cb - 128) - 0.714136 * (cr - 128);
+        nb = yP + 1.772 * (cb - 128);
+      }
+      d[p] = nr < 0 ? 0 : nr > 255 ? 255 : nr;
+      d[p + 1] = ng < 0 ? 0 : ng > 255 ? 255 : ng;
+      d[p + 2] = nb < 0 ? 0 : nb > 255 ? 255 : nb;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
   let skinLayerCanvas = null, skinLayerCtx = null;
   function getSkinLayer(w, h) {
     if (!skinLayerCanvas) {
@@ -976,11 +1139,16 @@
       const useMask = mask && !maskIsEmpty(mask);
 
       if (useMask) {
-        /* --- 肌ピンポイント処理: マスク内だけに強めの平滑化＋美白 --- */
-        const layerCtx = getSkinLayer(w, h);
-        const blurred = makeBlurred(work, 2 + skinS * 3);
+        /* --- 肌ピンポイント処理 ---
+           1) ヒーリング（シミ・シワ・ほうれい線・クマ・色ムラを周囲の肌へ均す）
+           2) 平滑化（陶器肌）
+           3) 美白（白スクリーン＋彩度調整） */
+        healSkin(out, mask, skinS);
 
-        // なめらか肌: ぼかしをマスク越しに重ねる（肌だけ陶器肌に）
+        const layerCtx = getSkinLayer(w, h);
+        const blurred = makeBlurred(out, 2 + skinS * 2.5);
+
+        // なめらか肌: ぼかしをマスク越しに重ねる（ヒーリング済みの肌をさらに滑らかに）
         layerCtx.globalCompositeOperation = 'source-over';
         layerCtx.clearRect(0, 0, w, h);
         layerCtx.imageSmoothingEnabled = true;
@@ -988,7 +1156,7 @@
         layerCtx.globalCompositeOperation = 'destination-in';
         layerCtx.drawImage(mask, 0, 0);
         layerCtx.globalCompositeOperation = 'source-over';
-        outCtx.globalAlpha = skinS * 0.85;
+        outCtx.globalAlpha = skinS * 0.55;
         outCtx.drawImage(skinLayerCanvas, 0, 0);
         outCtx.globalAlpha = 1;
 
