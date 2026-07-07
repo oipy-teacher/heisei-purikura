@@ -1,0 +1,15 @@
+{
+  "name": "プリクラ機 〜平成 & 令和〜",
+  "short_name": "プリクラ機",
+  "description": "撮って・盛って・落書きして。文化祭スペシャルプリクラ機",
+  "start_url": ".",
+  "scope": ".",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#a06bff",
+  "theme_color": "#ff8fc7",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

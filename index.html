@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>プリクラ機 〜平成 & 令和〜</title>
+<meta name="theme-color" content="#ff8fc7">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-mode="heisei">
@@ -39,9 +44,11 @@
   <!-- ============ 1. シールデザイン選択 ============ -->
   <section id="screen-select" class="screen">
     <div class="panel">
-      <h2 class="step-heading">STEP 1. シールのカラーをえらんでね</h2>
+      <h2 class="step-heading">STEP 1. ぶんかつ（レイアウト）をえらんでね</h2>
+      <div id="layout-list" class="layout-grid"></div>
+      <h2 class="step-heading">STEP 2. シールのカラーをえらんでね</h2>
       <div id="curtain-list" class="choice-grid"></div>
-      <h2 class="step-heading">STEP 2. フレームをえらんでね</h2>
+      <h2 class="step-heading">STEP 3. フレームをえらんでね</h2>
       <div id="frame-list" class="choice-grid"></div>
       <div class="chroma-row">
         <div class="chroma-label">
@@ -66,7 +73,7 @@
       </div>
       <div class="camera-side">
         <p class="cam-caption">のこり <span id="shots-left">4</span> ポーズ！</p>
-        <p class="cam-caption small">かわいく決めてね💕</p>
+        <p class="cam-caption small" id="pose-guide">かわいく決めてね💕</p>
         <button id="btn-start-shooting" class="btn-main">撮影スタート！</button>
         <p id="segmenter-status" class="segmenter-status hidden"></p>
         <div id="cam-error" class="cam-error"></div>
@@ -108,6 +115,14 @@
               <label>🫥 小顔 <span id="val-face" class="slider-val">0</span></label>
               <input type="range" id="slider-face" min="0" max="100" value="0">
             </div>
+            <div class="slider-group">
+              <label>🍑 チーク <span id="val-cheek" class="slider-val">0</span></label>
+              <input type="range" id="slider-cheek" min="0" max="100" value="0">
+            </div>
+            <div class="slider-group">
+              <label>💋 リップ <span id="val-lip" class="slider-val">0</span></label>
+              <input type="range" id="slider-lip" min="0" max="100" value="0">
+            </div>
           </div>
           <div class="beauty-filters">
             <p class="tool-label">フィルター</p>
@@ -138,11 +153,18 @@
         <div class="deco-canvas-holder">
           <canvas id="sheet-canvas"></canvas>
           <canvas id="draw-canvas"></canvas>
+          <canvas id="stroke-canvas"></canvas>
         </div>
 
         <div class="deco-toolbar">
           <div class="tool-group">
             <p class="tool-label">✏️ ペン</p>
+            <div class="pen-type-row" id="pen-type-row">
+              <button class="pen-type-btn active" data-pentype="normal">ふつう</button>
+              <button class="pen-type-btn" data-pentype="neon">ネオン</button>
+              <button class="pen-type-btn" data-pentype="fuchi">白フチ</button>
+              <button class="pen-type-btn" data-pentype="kira">キラキラ</button>
+            </div>
             <div class="color-row" id="color-row"></div>
             <input type="range" id="pen-size" min="2" max="26" value="8">
             <div class="mode-row">
@@ -153,6 +175,11 @@
 
           <div class="tool-group">
             <p class="tool-label">✨ スタンプ</p>
+            <div class="size-row" id="stamp-size-row">
+              <button class="size-btn" data-stampsize="32">小</button>
+              <button class="size-btn active" data-stampsize="48">中</button>
+              <button class="size-btn" data-stampsize="72">大</button>
+            </div>
             <div class="stamp-row" id="stamp-row"></div>
           </div>
 

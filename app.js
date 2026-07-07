@@ -31,11 +31,12 @@
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
       presets: [
-        { id: 'usu',     label: 'うす盛れ',     skin: 25, eye: 20, face: 10 },
-        { id: 'shikkari', label: 'しっかり盛れ', skin: 55, eye: 50, face: 30 },
-        { id: 'keba',    label: 'ケバ盛れ',     skin: 85, eye: 80, face: 50 },
+        { id: 'usu',      label: 'うす盛れ',     skin: 25, eye: 20, face: 10, cheek: 20, lip: 15 },
+        { id: 'shikkari', label: 'しっかり盛れ', skin: 55, eye: 50, face: 30, cheek: 45, lip: 40 },
+        { id: 'keba',     label: 'ケバ盛れ',     skin: 85, eye: 80, face: 50, cheek: 75, lip: 65 },
       ],
       defaultPreset: 'shikkari',
+      makeup: { cheek: '#ff5f8f', lip: '#ff2f6e' },
       // 平成の「美白」ブーム: 明るさ強め・彩度は下げて白肌に
       skinTone: { brightPerUnit: 0.16, desatPerUnit: 0.16 },
       // fx: bright=白スクリーン合成 / desat=グレー彩度合成 / colorize=カラー合成 / contrast=自己オーバーレイ / warm=ソフトライト
@@ -82,11 +83,12 @@
       textStampStyle: { font: 'italic 600 18px Georgia, serif', fill: '#a8917d', stroke: null, strokeWidth: 0, rotate: 4 },
       // 盛れ感プリセット（現行機 Hyper shot の「無加工風/ナチュ盛れ/プリ盛れ」選択を再現）
       presets: [
-        { id: 'mukakou', label: '無加工風',   skin: 15, eye: 5,  face: 5 },
-        { id: 'natural', label: 'ナチュ盛れ', skin: 40, eye: 25, face: 15 },
-        { id: 'puri',    label: 'プリ盛れ',   skin: 65, eye: 45, face: 30 },
+        { id: 'mukakou', label: '無加工風',   skin: 15, eye: 5,  face: 5,  cheek: 10, lip: 10 },
+        { id: 'natural', label: 'ナチュ盛れ', skin: 40, eye: 25, face: 15, cheek: 30, lip: 25 },
+        { id: 'puri',    label: 'プリ盛れ',   skin: 65, eye: 45, face: 30, cheek: 55, lip: 45 },
       ],
       defaultPreset: 'natural',
+      makeup: { cheek: '#e2917d', lip: '#c96a5f' },
       // 令和は血色感を残すナチュラル美肌（さらパフ肌）
       skinTone: { brightPerUnit: 0.10, desatPerUnit: 0 },
       filters: [
@@ -119,28 +121,62 @@
   const MARGIN = 26;
   const HEADER_H = 84;
   const FOOTER_H = 40;
-  const CELL_W = (SHEET_W - MARGIN * 3) / 2;
-  const CELL_H = (SHEET_H - HEADER_H - FOOTER_H - MARGIN * 3) / 2;
 
   const SHOT_W = 640, SHOT_H = 480;
+
+  // シートレイアウト（分割）。16分割は平成プリの定番！
+  const LAYOUTS = [
+    { id: 'quad',    label: '4分割',     cols: 2, rows: 2, gap: 26, radius: 10 },
+    { id: 'wide2',   label: '2枚ワイド', cols: 1, rows: 2, gap: 26, radius: 12 },
+    { id: 'six',     label: '6分割',     cols: 2, rows: 3, gap: 18, radius: 8 },
+    { id: 'sixteen', label: '16分割',    cols: 4, rows: 4, gap: 12, radius: 6 },
+  ];
+
+  function layoutCells(layout) {
+    const cells = [];
+    const availW = SHEET_W - layout.gap * (layout.cols + 1);
+    const availH = SHEET_H - HEADER_H - FOOTER_H - layout.gap * (layout.rows + 1);
+    const cw = availW / layout.cols, ch = availH / layout.rows;
+    for (let r = 0; r < layout.rows; r++) {
+      for (let c = 0; c < layout.cols; c++) {
+        cells.push({
+          x: layout.gap + c * (cw + layout.gap),
+          y: HEADER_H + layout.gap + r * (ch + layout.gap),
+          w: cw, h: ch,
+        });
+      }
+    }
+    return cells;
+  }
+
+  // 撮影ポーズガイド（実機の「次は◯◯で！」を再現）
+  const POSE_GUIDES = [
+    'まずはにっこり笑顔で💕',
+    'つぎはアップでかわいく！',
+    'おちゃめなポーズいっちゃお！',
+    'ラストはさいこうの決めポーズ！',
+  ];
 
   /* ===================== 状態 ===================== */
   const state = {
     mode: 'heisei',
     curtain: MODES.heisei.curtains[0],
     frame: MODES.heisei.frames[0],
+    layout: LAYOUTS[0],
     chromaOn: false,
     stream: null,
     shots: [],           // 撮影した生の4枚
     processedShots: [],  // 盛り加工後の4枚
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
-    beauty: { skin: 55, eye: 50, face: 30, filter: 'none' },
+    beauty: { skin: 55, eye: 50, face: 30, cheek: 45, lip: 40, filter: 'none' },
     beautySelected: 0,
     beautyTimerId: null,
     beautyRemaining: BEAUTY_SECONDS,
     beautyWarned: false,
     penColor: MODES.heisei.penColors[0],
     penSize: 8,
+    penType: 'normal', // normal | neon | fuchi | kira
+    stampSize: 48,
     tool: 'pen',
     stampChar: null,
     textStampStr: null,
@@ -197,6 +233,9 @@
     timeup: 'audio/10_timeup.mp3',
     finish: 'audio/11_finish.mp3',
     save: 'audio/12_save.mp3',
+    seTap: 'audio/se_tap.mp3',
+    seDecide: 'audio/se_decide.mp3',
+    seShutter: 'audio/se_shutter.mp3',
   };
 
   const sounds = {};
@@ -264,7 +303,7 @@
     state.curtain = conf.curtains[0];
     state.frame = conf.frames[0];
     const preset = conf.presets.find(p => p.id === conf.defaultPreset);
-    state.beauty = { skin: preset.skin, eye: preset.eye, face: preset.face, filter: 'none' };
+    state.beauty = { skin: preset.skin, eye: preset.eye, face: preset.face, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
     buildSelectGrids();
     buildDecoTools();
     unlockAudio();
@@ -314,8 +353,41 @@
     });
   }
 
+  // レイアウトのミニプレビューSVGを生成
+  function layoutIconSVG(layout) {
+    const W = 52, H = 68, pad = 3;
+    const availW = W - pad * (layout.cols + 1);
+    const availH = H - pad * (layout.rows + 1);
+    const cw = availW / layout.cols, ch = availH / layout.rows;
+    let rects = '';
+    for (let r = 0; r < layout.rows; r++) {
+      for (let c = 0; c < layout.cols; c++) {
+        const x = pad + c * (cw + pad), y = pad + r * (ch + pad);
+        rects += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#e3a8c9"/>`;
+      }
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${W}" height="${H}" rx="4" fill="#fff" stroke="#e8cede"/>${rects}</svg>`;
+  }
+
+  function buildLayoutList() {
+    const container = $('#layout-list');
+    container.innerHTML = '';
+    LAYOUTS.forEach((layout, i) => {
+      const el = document.createElement('div');
+      el.className = 'layout-item' + (layout.id === state.layout.id ? ' selected' : '');
+      el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>`;
+      el.addEventListener('click', () => {
+        container.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        state.layout = layout;
+      });
+      container.appendChild(el);
+    });
+  }
+
   function buildSelectGrids() {
     const conf = modeConf();
+    buildLayoutList();
     buildChoiceGrid($('#curtain-list'), conf.curtains, 'curtain', (item) => { state.curtain = item; });
     buildChoiceGrid($('#frame-list'), conf.frames, 'frame', (item) => { state.frame = item; });
   }
@@ -614,15 +686,32 @@
   btnStartShooting.addEventListener('click', async () => {
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
+    const poseGuideEl = $('#pose-guide');
     for (let i = 0; i < NUM_SHOTS; i++) {
+      poseGuideEl.textContent = POSE_GUIDES[i] || 'かわいく決めてね💕';
       await runCountdown(i);
       const shot = captureFrame();
       state.shots.push(shot);
+      playSound('seShutter');
       await flash();
       shotIndicator.children[i].classList.add('done');
       $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
-      await sleep(400);
+
+      // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）
+      previewRunning = false;
+      previewCtx.save();
+      previewCtx.translate(SHOT_W, 0);
+      previewCtx.scale(-1, 1); // 画面表示はCSSで左右反転されるため、撮影済み画像は事前に反転して相殺
+      previewCtx.drawImage(shot, 0, 0);
+      previewCtx.restore();
+      await sleep(900);
+      if (i < NUM_SHOTS - 1) {
+        previewRunning = true;
+        previewLoop();
+        await sleep(300);
+      }
     }
+    poseGuideEl.textContent = 'かわいく決めてね💕';
     stopCamera();
     startBeautyScreen();
   });
@@ -1202,6 +1291,51 @@
       }
     }
 
+    // チーク＆リップ（顔ランドマークベースのメイク）
+    const cheekS = (params.cheek || 0) / 100;
+    const lipS = (params.lip || 0) / 100;
+    if (faces && faces.length && (cheekS > 0 || lipS > 0)) {
+      faces.forEach((lm) => {
+        if (!lm || lm.length < 468) return;
+        const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
+        if (cheekS > 0) {
+          // 頬の中心（205/425）にふんわり円形グラデーション
+          [lm[205], lm[425]].forEach((pt) => {
+            const c = lmToPx(pt, w, h);
+            const r = fw * 0.17;
+            const grad = outCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+            grad.addColorStop(0, conf.makeup.cheek);
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            outCtx.save();
+            outCtx.globalAlpha = cheekS * 0.32;
+            outCtx.fillStyle = grad;
+            outCtx.beginPath();
+            outCtx.arc(c.x, c.y, r, 0, Math.PI * 2);
+            outCtx.fill();
+            outCtx.restore();
+          });
+        }
+        if (lipS > 0) {
+          // 唇の外周ポリゴンに「color」ブレンドで色味だけ乗せる（質感・明るさは維持）
+          outCtx.save();
+          outCtx.globalCompositeOperation = 'color';
+          outCtx.globalAlpha = Math.min(1, lipS * 0.7);
+          outCtx.fillStyle = conf.makeup.lip;
+          drawLandmarkPolygon(outCtx, lm, LIPS_OUTER, w, h);
+          outCtx.restore();
+          // わずかに彩度と血色を足す（ソフトライト）
+          outCtx.save();
+          outCtx.globalCompositeOperation = 'soft-light';
+          outCtx.globalAlpha = Math.min(1, lipS * 0.5);
+          outCtx.fillStyle = conf.makeup.lip;
+          drawLandmarkPolygon(outCtx, lm, LIPS_OUTER, w, h);
+          outCtx.restore();
+          outCtx.globalCompositeOperation = 'source-over';
+          outCtx.globalAlpha = 1;
+        }
+      });
+    }
+
     // 選択フィルター
     const selFilter = conf.filters.find(f => f.id === params.filter);
     if (selFilter && selFilter.fx && Object.keys(selFilter.fx).length) {
@@ -1221,6 +1355,8 @@
   const sliderSkin = $('#slider-skin');
   const sliderEye = $('#slider-eye');
   const sliderFace = $('#slider-face');
+  const sliderCheek = $('#slider-cheek');
+  const sliderLip = $('#slider-lip');
 
   let beautyRenderQueued = false;
 
@@ -1257,9 +1393,13 @@
     sliderSkin.value = state.beauty.skin;
     sliderEye.value = state.beauty.eye;
     sliderFace.value = state.beauty.face;
+    sliderCheek.value = state.beauty.cheek || 0;
+    sliderLip.value = state.beauty.lip || 0;
     $('#val-skin').textContent = state.beauty.skin;
     $('#val-eye').textContent = state.beauty.eye;
     $('#val-face').textContent = state.beauty.face;
+    $('#val-cheek').textContent = state.beauty.cheek || 0;
+    $('#val-lip').textContent = state.beauty.lip || 0;
   }
 
   function markPresetActive(presetId) {
@@ -1282,6 +1422,8 @@
         state.beauty.skin = p.skin;
         state.beauty.eye = p.eye;
         state.beauty.face = p.face;
+        state.beauty.cheek = p.cheek;
+        state.beauty.lip = p.lip;
         syncSliders();
         markPresetActive(p.id);
         queueBeautyRender();
@@ -1319,7 +1461,7 @@
     }
   }
 
-  [[sliderSkin, 'skin'], [sliderEye, 'eye'], [sliderFace, 'face']].forEach(([el, key]) => {
+  [[sliderSkin, 'skin'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
     el.addEventListener('input', () => {
       state.beauty[key] = Number(el.value);
       $('#val-' + key).textContent = el.value;
@@ -1418,6 +1560,15 @@
     ctx.closePath();
   }
 
+  // アスペクト比を保ったままセルいっぱいに描画（中央クロップ）
+  function drawCover(ctx, img, x, y, w, h) {
+    const sw = img.width, sh = img.height;
+    const scale = Math.max(w / sw, h / sh);
+    const cw = w / scale, ch = h / scale;
+    const sx = (sw - cw) / 2, sy = (sh - ch) / 2;
+    ctx.drawImage(img, sx, sy, cw, ch, x, y, w, h);
+  }
+
   function composeSheet() {
     const conf = modeConf();
     const sheet = conf.sheet;
@@ -1455,15 +1606,18 @@
     ctx.fillText(sheet.title, SHEET_W / 2, 46);
     ctx.restore();
 
-    // 写真4枚（盛り加工済みを優先）
+    // 写真をレイアウトに合わせて配置（盛り加工済みを優先。セル数が写真より多い場合は繰り返し=16分割の再現）
     const shots = state.processedShots.length ? state.processedShots : state.shots;
-    shots.forEach((shotCanvas, i) => {
-      const col = i % 2, row = Math.floor(i / 2);
-      const x = MARGIN + col * (CELL_W + MARGIN);
-      const y = HEADER_H + MARGIN + row * (CELL_H + MARGIN);
+    const cells = layoutCells(state.layout);
+    const radius = state.layout.radius;
+    const pad = Math.min(6, state.layout.gap * 0.3);
+    cells.forEach((cell, i) => {
+      const shotCanvas = shots[i % shots.length];
+      if (!shotCanvas) return;
+      const { x, y, w: cw, h: chh } = cell;
 
       ctx.save();
-      roundRect(ctx, x - 6, y - 6, CELL_W + 12, CELL_H + 12, sheet.cellRadius + 4);
+      roundRect(ctx, x - pad, y - pad, cw + pad * 2, chh + pad * 2, radius + 4);
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0,0,0,.22)';
       ctx.shadowBlur = state.mode === 'reiwa' ? 5 : 8;
@@ -1471,13 +1625,13 @@
       ctx.restore();
 
       ctx.save();
-      roundRect(ctx, x, y, CELL_W, CELL_H, sheet.cellRadius);
+      roundRect(ctx, x, y, cw, chh, radius);
       ctx.clip();
-      ctx.drawImage(shotCanvas, x, y, CELL_W, CELL_H);
+      drawCover(ctx, shotCanvas, x, y, cw, chh);
       ctx.restore();
 
       ctx.save();
-      roundRect(ctx, x, y, CELL_W, CELL_H, sheet.cellRadius);
+      roundRect(ctx, x, y, cw, chh, radius);
       ctx.lineWidth = state.mode === 'reiwa' ? 1.5 : 3;
       if (state.mode === 'reiwa') {
         ctx.strokeStyle = '#e0d5c8';
@@ -1522,6 +1676,12 @@
   drawCanvas.width = SHEET_W;
   drawCanvas.height = SHEET_H;
   const drawCtx = drawCanvas.getContext('2d');
+  // ストローク描画中のプレビュー用レイヤー（白フチ・ネオンのつなぎ目を出さないため、
+  // 描画中は毎フレーム線全体を描き直し、指を離した時に本レイヤーへ合成する）
+  const strokeCanvas = $('#stroke-canvas');
+  strokeCanvas.width = SHEET_W;
+  strokeCanvas.height = SHEET_H;
+  const strokeCtx = strokeCanvas.getContext('2d');
 
   function buildColorRow() {
     const conf = modeConf();
@@ -1617,6 +1777,74 @@
     img.src = last;
   }
 
+  /* --- ペン種別ごとのストローク描画 --- */
+  const SPARKLE_CHARS = ['✨', '⭐', '💫', '✦'];
+  let strokePts = [];
+  let lastSparkleX = 0, lastSparkleY = 0;
+
+  function drawStrokePolyline(ctx, pts, type, color, size) {
+    if (pts.length < 2) {
+      // 1点だけならドットを打つ
+      const p = pts[0];
+      ctx.save();
+      if (type === 'fuchi') {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(p.x, p.y, (size + 6) / 2, 0, Math.PI * 2); ctx.fill();
+      }
+      if (type === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = size * 1.6; }
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    };
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (type === 'fuchi') {
+      // 白フチ: 太い白 → 上に色
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = size + 7;
+      path(); ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+    } else if (type === 'neon') {
+      // ネオン: 色のグロー + 白コア
+      ctx.shadowColor = color;
+      ctx.shadowBlur = Math.max(8, size * 1.8);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+      path(); ctx.stroke(); // 2度描きでグローを濃く
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = Math.max(1.5, size * 0.35);
+      path(); ctx.stroke();
+    } else {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function stampSparkle(x, y) {
+    const size = state.penSize * (1.6 + Math.random() * 1.6);
+    drawCtx.save();
+    drawCtx.font = `${Math.round(size + 10)}px sans-serif`;
+    drawCtx.textAlign = 'center';
+    drawCtx.textBaseline = 'middle';
+    drawCtx.translate(x + (Math.random() * 8 - 4), y + (Math.random() * 8 - 4));
+    drawCtx.rotate(Math.random() * Math.PI * 2);
+    drawCtx.fillText(SPARKLE_CHARS[Math.floor(Math.random() * SPARKLE_CHARS.length)], 0, 0);
+    drawCtx.restore();
+  }
+
   drawCanvas.addEventListener('pointerdown', (e) => {
     if (state.remaining <= 0) return;
     try { drawCanvas.setPointerCapture(e.pointerId); } catch (err) { /* 一部環境では無視して続行 */ }
@@ -1624,7 +1852,7 @@
 
     if (state.tool === 'stamp' && state.stampChar) {
       pushHistory();
-      drawCtx.font = '48px sans-serif';
+      drawCtx.font = `${state.stampSize}px sans-serif`;
       drawCtx.textAlign = 'center';
       drawCtx.textBaseline = 'middle';
       drawCtx.fillText(state.stampChar, x, y);
@@ -1633,14 +1861,15 @@
     if (state.tool === 'textstamp' && state.textStampStr) {
       pushHistory();
       const style = modeConf().textStampStyle;
+      const sizeScale = state.stampSize / 48;
       drawCtx.save();
-      drawCtx.font = style.font;
+      drawCtx.font = style.font.replace(/(\d+)px/, (m, n) => Math.round(Number(n) * sizeScale) + 'px');
       drawCtx.textAlign = 'center';
       drawCtx.textBaseline = 'middle';
       drawCtx.translate(x, y);
       drawCtx.rotate((Math.random() * style.rotate * 2 - style.rotate) * Math.PI / 180);
       if (style.stroke) {
-        drawCtx.lineWidth = style.strokeWidth;
+        drawCtx.lineWidth = style.strokeWidth * sizeScale;
         drawCtx.strokeStyle = style.stroke;
         drawCtx.strokeText(state.textStampStr, 0, 0);
       }
@@ -1654,32 +1883,83 @@
     pushHistory();
     state.isDrawing = true;
     state.lastX = x; state.lastY = y;
-    drawCtx.beginPath();
-    drawCtx.moveTo(x, y);
+
+    if (state.tool === 'eraser') {
+      drawCtx.beginPath();
+      drawCtx.moveTo(x, y);
+      return;
+    }
+    if (state.penType === 'kira') {
+      lastSparkleX = x; lastSparkleY = y;
+      stampSparkle(x, y);
+      return;
+    }
+    // 通常/ネオン/白フチ: ストロークレイヤーでプレビュー
+    strokePts = [{ x, y }];
+    drawStrokePolyline(strokeCtx, strokePts, state.penType, state.penColor, state.penSize);
   });
 
   drawCanvas.addEventListener('pointermove', (e) => {
     if (!state.isDrawing || state.remaining <= 0) return;
     const { x, y } = getCanvasPos(e);
-    drawCtx.lineCap = 'round';
-    drawCtx.lineJoin = 'round';
+
     if (state.tool === 'eraser') {
+      drawCtx.save();
+      drawCtx.lineCap = 'round';
+      drawCtx.lineJoin = 'round';
       drawCtx.globalCompositeOperation = 'destination-out';
       drawCtx.lineWidth = state.penSize * 2.2;
-    } else {
+      drawCtx.lineTo(x, y);
+      drawCtx.stroke();
+      drawCtx.restore();
       drawCtx.globalCompositeOperation = 'source-over';
-      drawCtx.strokeStyle = state.penColor;
-      drawCtx.lineWidth = state.penSize;
+      state.lastX = x; state.lastY = y;
+      return;
     }
-    drawCtx.lineTo(x, y);
-    drawCtx.stroke();
+    if (state.penType === 'kira') {
+      const dx = x - lastSparkleX, dy = y - lastSparkleY;
+      if (dx * dx + dy * dy > (state.penSize * 2.4) ** 2) {
+        stampSparkle(x, y);
+        lastSparkleX = x; lastSparkleY = y;
+      }
+      state.lastX = x; state.lastY = y;
+      return;
+    }
+    strokePts.push({ x, y });
+    strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+    drawStrokePolyline(strokeCtx, strokePts, state.penType, state.penColor, state.penSize);
     state.lastX = x; state.lastY = y;
   });
 
-  function endStroke() { state.isDrawing = false; }
+  function endStroke() {
+    if (!state.isDrawing) return;
+    state.isDrawing = false;
+    if (state.tool === 'eraser' || state.penType === 'kira') return;
+    // ストロークを本レイヤーへ確定
+    if (strokePts.length) {
+      drawCtx.drawImage(strokeCanvas, 0, 0);
+      strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+      strokePts = [];
+    }
+  }
   drawCanvas.addEventListener('pointerup', endStroke);
   drawCanvas.addEventListener('pointercancel', endStroke);
   drawCanvas.addEventListener('pointerleave', endStroke);
+
+  // ペン種別・スタンプサイズの切り替え
+  document.querySelectorAll('.pen-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.penType = btn.dataset.pentype;
+      document.querySelectorAll('.pen-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+      setTool('pen');
+    });
+  });
+  document.querySelectorAll('.size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.stampSize = Number(btn.dataset.stampsize);
+      document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
 
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-clear').addEventListener('click', () => {
@@ -1778,6 +2058,37 @@
     stopBGM();
     showScreen('screen-title');
   });
+
+  /* ===================== 効果音（タッチ/決定） ===================== */
+  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish'];
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('button, .choice-item, .layout-item, .color-swatch');
+    if (!el) return;
+    const isDecide = DECIDE_IDS.some(id => el.id === id);
+    playSound(isDecide ? 'seDecide' : 'seTap');
+  }, true);
+
+  /* ===================== 画面スリープ防止（Wake Lock） ===================== */
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+    } catch (err) { /* 非対応・省電力モードでは無視 */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && wakeLock) requestWakeLock();
+  });
+  document.addEventListener('click', function once() {
+    requestWakeLock();
+    document.removeEventListener('click', once);
+  });
+
+  /* ===================== Service Worker（オフライン対応） ===================== */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* file://等では失敗するが動作に影響なし */ });
+    });
+  }
 
   // 動作検証用フック（アプリの動作には影響しない）
   window.__puriDebug = { buildSkinMask, applyBeauty };
