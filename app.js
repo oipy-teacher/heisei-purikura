@@ -440,23 +440,47 @@
   let imageSegmenter = null;
   let segmenterLoading = false;
   let segmenterFailed = false;
+  let segmenterIsMulticlass = false;
   let previewRunning = false;
-  let maskWorkCanvas = null, maskWorkCtx = null;
   let personWorkCanvas = null, personWorkCtx = null;
+
+  // 推論は縮小プロキシに対して行う（高速化 + マスク後処理の解像度を固定）
+  const SEG_W = 320, SEG_H = 240;
+  const segProxy = document.createElement('canvas');
+  segProxy.width = SEG_W; segProxy.height = SEG_H;
+  const segProxyCtx = segProxy.getContext('2d');
+  const segMaskSmall = document.createElement('canvas');
+  const segMaskSmallCtx = segMaskSmall.getContext('2d');
+  let segEMA = null; // フレーム間の指数移動平均（チラつき防止）
 
   async function initSegmenter() {
     segmenterLoading = true;
     try {
       const vision = await loadVision();
       const fileset = await loadFileset();
-      imageSegmenter = await vision.ImageSegmenter.createFromOptions(fileset, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
-          delegate: 'GPU',
-        },
-        runningMode: 'VIDEO',
-        outputConfidenceMasks: true,
-      });
+      // 高精度な多クラスモデル（髪まで人物として正確に分類）を最優先で使用
+      try {
+        imageSegmenter = await vision.ImageSegmenter.createFromOptions(fileset, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          outputConfidenceMasks: true,
+        });
+        segmenterIsMulticlass = true;
+      } catch (errMulti) {
+        console.warn('多クラスモデルの読み込みに失敗。旧セルフィーモデルにフォールバックします。', errMulti);
+        imageSegmenter = await vision.ImageSegmenter.createFromOptions(fileset, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          outputConfidenceMasks: true,
+        });
+        segmenterIsMulticlass = false;
+      }
       if (state.chromaOn) {
         segmenterStatus.textContent = '✨ 背景くりぬき 準備OK！';
         segmenterStatus.classList.remove('hidden');
@@ -480,36 +504,75 @@
     });
   }
 
-  function buildMaskCanvas(confidenceMask) {
-    const w = confidenceMask.width, h = confidenceMask.height;
-    if (!maskWorkCanvas) { maskWorkCanvas = document.createElement('canvas'); maskWorkCtx = maskWorkCanvas.getContext('2d'); }
-    if (maskWorkCanvas.width !== w || maskWorkCanvas.height !== h) { maskWorkCanvas.width = w; maskWorkCanvas.height = h; }
-    const floatData = confidenceMask.getAsFloat32Array();
-    const imgData = maskWorkCtx.createImageData(w, h);
-    for (let i = 0; i < floatData.length; i++) {
-      let a = (floatData[i] - 0.15) / 0.7;
-      if (a < 0) a = 0; else if (a > 1) a = 1;
-      const o = i * 4;
-      imgData.data[o] = 255;
-      imgData.data[o + 1] = 255;
-      imgData.data[o + 2] = 255;
-      imgData.data[o + 3] = Math.round(a * 255);
+  function smoothstep(lo, hi, v) {
+    const t = Math.min(1, Math.max(0, (v - lo) / (hi - lo)));
+    return t * t * (3 - 2 * t);
+  }
+
+  // 人物信頼度マスク → 時間平滑化(EMA) + スムーズステップ + チョークで高品質なアルファマスクを作る
+  function buildPersonMask(result) {
+    const masks = result.confidenceMasks;
+    if (!masks || !masks.length) return null;
+    // 多クラス: 人物 = 1 - 背景[0] / 旧モデル: 人物 = [0]
+    const conf = masks[0].getAsFloat32Array();
+    const mw = masks[0].width, mh = masks[0].height;
+    const len = conf.length;
+    if (!segEMA || segEMA.length !== len) segEMA = new Float32Array(len);
+
+    if (segMaskSmall.width !== mw || segMaskSmall.height !== mh) {
+      segMaskSmall.width = mw; segMaskSmall.height = mh;
     }
-    maskWorkCtx.putImageData(imgData, 0, 0);
-    return maskWorkCanvas;
+    const md = segMaskSmallCtx.createImageData(mw, mh);
+    const d = md.data;
+    for (let i = 0; i < len; i++) {
+      const person = segmenterIsMulticlass ? (1 - conf[i]) : conf[i];
+      // フレーム間EMAでチラつきを抑える
+      const ema = segEMA[i] = segEMA[i] * 0.35 + person * 0.65;
+      // スムーズステップ（下限0.45=チョーク: 縁の背景色フリンジを削る）
+      const a = smoothstep(0.45, 0.75, ema);
+      const o = i * 4;
+      d[o] = 255; d[o + 1] = 255; d[o + 2] = 255;
+      d[o + 3] = (a * 255) | 0;
+    }
+    segMaskSmallCtx.putImageData(md, 0, 0);
+    masks.forEach(m => m.close && m.close());
+    if (result.close) result.close();
+    return segMaskSmall;
+  }
+
+  // カラーユーティリティ（背景グラデーション用）
+  function shadeColor(hex, amt) {
+    const r = Math.min(255, Math.max(0, parseInt(hex.slice(1, 3), 16) + amt));
+    const g = Math.min(255, Math.max(0, parseInt(hex.slice(3, 5), 16) + amt));
+    const b = Math.min(255, Math.max(0, parseInt(hex.slice(5, 7), 16) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // デジタル背景（ベタ塗りではなく、スタジオ照明風のグラデーション）
+  function drawCurtainBg(ctx) {
+    const c = state.curtain.color;
+    const grad = ctx.createLinearGradient(0, 0, 0, SHOT_H);
+    grad.addColorStop(0, shadeColor(c, 30));
+    grad.addColorStop(0.55, c);
+    grad.addColorStop(1, shadeColor(c, -18));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
+    // 中央上にやわらかいライト
+    const light = ctx.createRadialGradient(SHOT_W / 2, SHOT_H * 0.3, 0, SHOT_W / 2, SHOT_H * 0.3, SHOT_W * 0.65);
+    light.addColorStop(0, 'rgba(255,255,255,.22)');
+    light.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = light;
+    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
   }
 
   // ライブプレビュー1フレーム分の合成。くりぬきOFF時は素通し＋軽い美肌ライト
   async function renderPreviewFrame(sourceEl) {
     let maskCv = null;
     if (state.chromaOn && imageSegmenter) {
-      const result = await segmentForVideoAsync(sourceEl, performance.now());
-      const cm = result.confidenceMasks && result.confidenceMasks[0];
-      if (cm) {
-        maskCv = buildMaskCanvas(cm);
-        cm.close();
-      }
-      if (result.close) result.close();
+      // 縮小プロキシへ描いてから推論（等倍より数倍高速）
+      segProxyCtx.drawImage(sourceEl, 0, 0, SEG_W, SEG_H);
+      const result = await segmentForVideoAsync(segProxy, performance.now());
+      maskCv = buildPersonMask(result);
     }
 
     previewCtx.clearRect(0, 0, SHOT_W, SHOT_H);
@@ -523,11 +586,11 @@
       personWorkCtx.clearRect(0, 0, SHOT_W, SHOT_H);
       personWorkCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
       personWorkCtx.globalCompositeOperation = 'destination-in';
-      personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H);
+      personWorkCtx.imageSmoothingEnabled = true;
+      personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H); // 拡大時のバイリニアがフェザーになる
       personWorkCtx.globalCompositeOperation = 'source-over';
 
-      previewCtx.fillStyle = state.curtain.color;
-      previewCtx.fillRect(0, 0, SHOT_W, SHOT_H);
+      drawCurtainBg(previewCtx);
       previewCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
     } else {
       previewCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
@@ -661,6 +724,7 @@
     state.faceData = [];
     state.skinConf = [];
     skinMaskCache.clear();
+    segEMA = null; // 前回セッションのマスク残像を消す
     buildShotIndicator();
     $('#shots-left').textContent = NUM_SHOTS;
     btnStartShooting.disabled = false;
@@ -2309,6 +2373,54 @@
       let covered = 0, total = 0;
       for (let i = 3; i < mdata.length; i += 40) { total++; if (mdata[i] > 100) covered++; }
       return { faceCount: faces ? faces.length : 0, mlConfUsed: !!mlConf, maskCoveragePct: Math.round(covered / total * 100), processingMs: ms };
+    },
+    // 背景くりぬきのエンドツーエンド検証: URL→人物マスク→カーテン背景合成
+    async testChroma(url) {
+      await initSegmenter();
+      if (!imageSegmenter) return { error: 'segmenter not available' };
+      const img = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = url;
+      });
+      const src = document.createElement('canvas');
+      src.width = SHOT_W; src.height = SHOT_H;
+      drawCover(src.getContext('2d'), img, 0, 0, SHOT_W, SHOT_H);
+      segEMA = null;
+      segProxyCtx.drawImage(src, 0, 0, SEG_W, SEG_H);
+      const t0 = performance.now();
+      // EMAを収束させるため3フレームぶん回す
+      let maskCv = null;
+      for (let f = 0; f < 3; f++) {
+        const result = await segmentForVideoAsync(segProxy, performance.now());
+        maskCv = buildPersonMask(result);
+      }
+      const ms = Math.round((performance.now() - t0) / 3);
+      // renderPreviewFrame と同じ合成
+      const out = document.createElement('canvas');
+      out.width = SHOT_W; out.height = SHOT_H;
+      const octx = out.getContext('2d');
+      const person = document.createElement('canvas');
+      person.width = SHOT_W; person.height = SHOT_H;
+      const pctx = person.getContext('2d');
+      pctx.drawImage(src, 0, 0, SHOT_W, SHOT_H);
+      pctx.globalCompositeOperation = 'destination-in';
+      pctx.imageSmoothingEnabled = true;
+      pctx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H);
+      drawCurtainBg(octx);
+      octx.drawImage(person, 0, 0);
+      document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
+      [src, maskCv, out].forEach((cv, i) => {
+        const show = document.createElement('canvas');
+        show.width = cv.width; show.height = cv.height;
+        show.getContext('2d').drawImage(cv, 0, 0);
+        show.className = 'debug-canvas';
+        show.style.cssText = `position:fixed;z-index:9999;left:${i * 33.5}vw;bottom:0;width:33vw;border:2px solid #0ff;background:#333;`;
+        document.body.appendChild(show);
+      });
+      return { multiclass: segmenterIsMulticlass, msPerFrame: ms };
     },
   };
 
