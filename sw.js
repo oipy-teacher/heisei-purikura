@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v1';
+const CACHE_NAME = 'purikura-v2';
 
 const PRECACHE = [
   '.',

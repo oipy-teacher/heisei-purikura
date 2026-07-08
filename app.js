@@ -168,6 +168,7 @@
     shots: [],           // 撮影した生の4枚
     processedShots: [],  // 盛り加工後の4枚
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
+    skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
     beauty: { skin: 55, eye: 50, face: 30, cheek: 45, lip: 40, filter: 'none' },
     beautySelected: 0,
     beautyTimerId: null,
@@ -571,6 +572,70 @@
     landmarkerLoading = false;
   }
 
+  /* ===================== 多クラス肌セグメンテーション（美肌の検知エンジン） =====================
+     selfie_multiclass モデルは 背景/髪/体の肌/顔の肌/服/その他 をピクセル単位でML分類する。
+     色ベースの肌検出と違い、髪・服・背景の誤検出が原理的に起きない。 */
+  let skinSegmenter = null;
+  let skinSegmenterLoading = false;
+  let skinSegmenterFailed = false;
+
+  async function initSkinSegmenter() {
+    if (skinSegmenter || skinSegmenterLoading || skinSegmenterFailed) return;
+    skinSegmenterLoading = true;
+    try {
+      const vision = await loadVision();
+      const fileset = await loadFileset();
+      skinSegmenter = await vision.ImageSegmenter.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite',
+          delegate: 'GPU',
+        },
+        runningMode: 'IMAGE',
+        outputConfidenceMasks: true,
+      });
+    } catch (err) {
+      console.warn('肌セグメンテーションモデルの読み込みに失敗しました。色ベースの肌検出にフォールバックします。', err);
+      skinSegmenterFailed = true;
+    }
+    skinSegmenterLoading = false;
+  }
+
+  // 1ショット分のML肌信頼度マスク（顔の肌[3]+体の肌[2]）をキャンバスとして返す
+  function computeSkinConf(srcCanvas) {
+    if (!skinSegmenter) return null;
+    try {
+      const result = skinSegmenter.segment(srcCanvas);
+      const masks = result.confidenceMasks;
+      if (!masks || masks.length < 4) { if (result.close) result.close(); return null; }
+      const bodySkin = masks[2].getAsFloat32Array();
+      const faceSkin = masks[3].getAsFloat32Array();
+      const mw = masks[2].width, mh = masks[2].height;
+      const small = document.createElement('canvas');
+      small.width = mw; small.height = mh;
+      const sctx = small.getContext('2d');
+      const md = sctx.createImageData(mw, mh);
+      for (let i = 0; i < faceSkin.length; i++) {
+        const conf = Math.min(1, faceSkin[i] + bodySkin[i]);
+        const o = i * 4;
+        md.data[o] = 255; md.data[o + 1] = 255; md.data[o + 2] = 255;
+        md.data[o + 3] = Math.round(conf * 255);
+      }
+      sctx.putImageData(md, 0, 0);
+      masks.forEach(m => m.close && m.close());
+      if (result.close) result.close();
+      // 撮影解像度へスムーズ拡大（バイリニア拡大がそのまま縁のフェザーになる）
+      const full = document.createElement('canvas');
+      full.width = srcCanvas.width; full.height = srcCanvas.height;
+      const fctx = full.getContext('2d');
+      fctx.imageSmoothingEnabled = true;
+      fctx.drawImage(small, 0, 0, full.width, full.height);
+      return full;
+    } catch (err) {
+      console.warn('肌セグメンテーションに失敗しました', err);
+      return null;
+    }
+  }
+
   /* ===================== 2. 撮影画面 ===================== */
   const video = $('#video');
   const flashCanvas = $('#flash-canvas');
@@ -594,6 +659,7 @@
     state.shots = [];
     state.processedShots = [];
     state.faceData = [];
+    state.skinConf = [];
     skinMaskCache.clear();
     buildShotIndicator();
     $('#shots-left').textContent = NUM_SHOTS;
@@ -602,8 +668,9 @@
     previewCanvas.classList.remove('ready');
     video.classList.remove('masked');
 
-    // 盛り機能用の顔検出モデルを裏で読み込み開始（盛り画面までに間に合わせる）
+    // 盛り機能用のモデルを裏で読み込み開始（盛り画面までに間に合わせる）
     initFaceLandmarker();
+    initSkinSegmenter();
 
     if (state.chromaOn) {
       if (imageSegmenter) {
@@ -938,6 +1005,9 @@
   const LEFT_EYE_RING = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
   const RIGHT_EYE_RING = [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466];
   const LIPS_OUTER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185];
+  // 眉毛（上端→下端のループ）: 美肌でボケないように除外する
+  const LEFT_BROW = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46];
+  const RIGHT_BROW = [300, 293, 334, 296, 336, 285, 295, 282, 283, 276];
   // 肌色サンプリング位置（頬・額・鼻・あご）
   const SKIN_SAMPLE_POINTS = [50, 280, 10, 151, 4, 152, 205, 425];
 
@@ -984,13 +1054,60 @@
     return maskCanvas;
   }
 
-  // 肌マスクを生成（白=肌）。eyeS はデカ目ワープに合わせて目の除外穴を広げるために使う
-  function buildSkinMask(srcCanvas, faces, eyeS) {
+  // 目・眉・唇の除外穴をマスクへ開ける（くっきり残すべきパーツ）
+  function cutFaceHoles(mCtx, faces, w, h, eyeS) {
+    if (!faces || !faces.length) return;
+    mCtx.save();
+    mCtx.globalCompositeOperation = 'destination-out';
+    mCtx.fillStyle = '#ffffff';
+    mCtx.strokeStyle = '#ffffff';
+    mCtx.lineJoin = 'round';
+    const holeScale = 1.15 + (eyeS || 0) * 0.35;
+    faces.forEach((lm) => {
+      if (!lm || lm.length < 468) return;
+      const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
+      // 目（デカ目ワープぶん穴を拡大）
+      const le = lmToPx(lm[468] || lm[159], w, h);
+      const re = lmToPx(lm[473] || lm[386], w, h);
+      drawLandmarkPolygon(mCtx, lm, LEFT_EYE_RING, w, h, le.x, le.y, holeScale);
+      drawLandmarkPolygon(mCtx, lm, RIGHT_EYE_RING, w, h, re.x, re.y, holeScale);
+      // 眉（ポリゴン+太いストロークで確実にカバー）
+      mCtx.lineWidth = Math.max(3, fw * 0.035);
+      [LEFT_BROW, RIGHT_BROW].forEach((ring) => {
+        drawLandmarkPolygon(mCtx, lm, ring, w, h);
+        mCtx.beginPath();
+        ring.forEach((idx, i) => {
+          const p = lmToPx(lm[idx], w, h);
+          if (i === 0) mCtx.moveTo(p.x, p.y); else mCtx.lineTo(p.x, p.y);
+        });
+        mCtx.closePath();
+        mCtx.stroke();
+      });
+      // 唇
+      const mc = lmToPx(lm[13], w, h);
+      drawLandmarkPolygon(mCtx, lm, LIPS_OUTER, w, h, mc.x, mc.y, 1.1);
+    });
+    mCtx.restore();
+  }
+
+  // 肌マスクを生成（白=肌）。
+  // mlConf（多クラスMLセグメンテーションの肌信頼度）があればそれを最優先で使い、
+  // 無い場合のみ 色検出+顔輪郭ポリゴン にフォールバックする。
+  function buildSkinMask(srcCanvas, faces, eyeS, mlConf) {
     const w = srcCanvas.width, h = srcCanvas.height;
     const mask = document.createElement('canvas');
     mask.width = w; mask.height = h;
     const mCtx = mask.getContext('2d', { willReadFrequently: true });
 
+    if (mlConf) {
+      /* --- MLパス: selfie_multiclass の「顔の肌+体の肌」信頼度をそのまま使う ---
+         髪・服・背景は分類レベルで除外済み。眉・目・唇だけ穴を開ければ完成。 */
+      mCtx.drawImage(mlConf, 0, 0, w, h);
+      cutFaceHoles(mCtx, faces, w, h, eyeS);
+      return featherMask(mask);
+    }
+
+    /* --- フォールバック: 色検出 + 顔輪郭ポリゴン --- */
     const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
     let imgData = null;
     try {
@@ -1044,21 +1161,8 @@
         if (!lm || lm.length < 468) return;
         drawLandmarkPolygon(mCtx, lm, FACE_OVAL, w, h);
       });
-      // 4) 目と唇はくっきり残すため除外（デカ目ワープぶん穴を拡大）
-      mCtx.save();
-      mCtx.globalCompositeOperation = 'destination-out';
-      mCtx.fillStyle = '#ffffff';
-      const holeScale = 1.15 + (eyeS || 0) * 0.35;
-      faces.forEach((lm) => {
-        if (!lm || lm.length < 468) return;
-        const le = lmToPx(lm[468] || lm[159], w, h);
-        const re = lmToPx(lm[473] || lm[386], w, h);
-        drawLandmarkPolygon(mCtx, lm, LEFT_EYE_RING, w, h, le.x, le.y, holeScale);
-        drawLandmarkPolygon(mCtx, lm, RIGHT_EYE_RING, w, h, re.x, re.y, holeScale);
-        const mc = lmToPx(lm[13], w, h);
-        drawLandmarkPolygon(mCtx, lm, LIPS_OUTER, w, h, mc.x, mc.y, 1.1);
-      });
-      mCtx.restore();
+      // 4) 目・眉・唇はくっきり残すため除外
+      cutFaceHoles(mCtx, faces, w, h, eyeS);
     }
 
     // 5) 縁をぼかして自然に馴染ませる
@@ -1071,7 +1175,8 @@
     const eyeKey = Math.round((eyeS || 0) * 10);
     const hit = skinMaskCache.get(idx);
     if (hit && hit.facesRef === faces && hit.eyeKey === eyeKey) return hit.canvas;
-    const canvas = buildSkinMask(srcCanvas, faces, eyeS);
+    const mlConf = (idx >= 0 && state.skinConf && state.skinConf[idx]) || null;
+    const canvas = buildSkinMask(srcCanvas, faces, eyeS, mlConf);
     skinMaskCache.set(idx, { facesRef: faces, eyeKey, canvas });
     return canvas;
   }
@@ -1093,8 +1198,6 @@
      - 肌領域内で「周囲の平均より暗いピクセル」＝シミ・シワ・ほうれい線・クマの影 だけを周囲の肌色へ引き上げる
      - 明るさ（Y）はそのままに色味（CbCr）だけを周囲へ均す → 赤み・日焼けムラを解消しつつ立体感は残す
      - ハイライトはほぼ触らないので、のっぺりしない */
-
-  let healMeanR = null, healMeanG = null, healMeanB = null, healTmp = null;
 
   // 分離型移動平均によるボックスブラー（1チャンネル、O(n)）
   function boxBlurChannel(src, dst, tmp, w, h, radius) {
@@ -1128,7 +1231,10 @@
     }
   }
 
-  function healSkin(canvas, mask, skinS) {
+  // 2スケール・ヒーリング（常にフル強度で適用し、効き具合は後段の合成率で調整する）
+  //  - 小半径(6px): シミ・毛穴・細かいシワ
+  //  - 大半径(18px): ほうれい線・クマ・大きな影
+  function healSkinFull(canvas, mask) {
     const w = canvas.width, h = canvas.height;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const img = ctx.getImageData(0, 0, w, h);
@@ -1137,48 +1243,48 @@
     const md = maskCtx.getImageData(0, 0, w, h).data;
 
     const n = w * h;
-    if (!healMeanR || healMeanR.length !== n) {
-      healMeanR = new Float32Array(n);
-      healMeanG = new Float32Array(n);
-      healMeanB = new Float32Array(n);
-      healTmp = new Float32Array(n);
-    }
-    // 周囲平均（半径9px）を計算
     const chR = new Float32Array(n), chG = new Float32Array(n), chB = new Float32Array(n);
     for (let i = 0, p = 0; i < n; i++, p += 4) {
       chR[i] = d[p]; chG[i] = d[p + 1]; chB[i] = d[p + 2];
     }
-    boxBlurChannel(chR, healMeanR, healTmp, w, h, 9);
-    boxBlurChannel(chG, healMeanG, healTmp, w, h, 9);
-    boxBlurChannel(chB, healMeanB, healTmp, w, h, 9);
+    const tmp = new Float32Array(n);
+    const m1R = new Float32Array(n), m1G = new Float32Array(n), m1B = new Float32Array(n);
+    const m2R = new Float32Array(n), m2G = new Float32Array(n), m2B = new Float32Array(n);
+    boxBlurChannel(chR, m1R, tmp, w, h, 6);
+    boxBlurChannel(chG, m1G, tmp, w, h, 6);
+    boxBlurChannel(chB, m1B, tmp, w, h, 6);
+    boxBlurChannel(chR, m2R, tmp, w, h, 18);
+    boxBlurChannel(chG, m2G, tmp, w, h, 18);
+    boxBlurChannel(chB, m2B, tmp, w, h, 18);
 
-    const healAmt = skinS * 0.95;    // 暗部（シミ・シワ・ほうれい線）の引き上げ量
-    const chromaAmt = skinS * 0.45;  // 色ムラ（赤み・日焼け）の均一化量
     for (let i = 0, p = 0; i < n; i++, p += 4) {
       const a = md[p + 3] / 255;
       if (a < 0.04) continue;
-      const r = d[p], g = d[p + 1], b = d[p + 2];
-      const mr = healMeanR[i], mg = healMeanG[i], mb = healMeanB[i];
-      const lumaP = 0.299 * r + 0.587 * g + 0.114 * b;
-      const lumaM = 0.299 * mr + 0.587 * mg + 0.114 * mb;
-      const diff = lumaP - lumaM;
-      let nr = r, ng = g, nb = b;
-      if (diff < -2) {
-        // 暗部＝シミ・シワ・影 → 周囲の肌色へ引き上げ（深いほど強く、上限あり）
-        const t = Math.min(1, (-diff) / 42) * healAmt * a;
-        nr = r + (mr - r) * t;
-        ng = g + (mg - g) * t;
-        nb = b + (mb - b) * t;
-      } else {
-        // 明部はわずかに整えるだけ（ハイライト・立体感を維持）
-        const t = Math.min(1, diff / 70) * skinS * 0.12 * a;
-        nr = r + (mr - r) * t;
-        ng = g + (mg - g) * t;
-        nb = b + (mb - b) * t;
+      let nr = d[p], ng = d[p + 1], nb = d[p + 2];
+
+      // パス1: 小スケールの暗部（シミ・毛穴）を周囲へ引き上げ
+      {
+        const mr = m1R[i], mg = m1G[i], mb = m1B[i];
+        const diff = (0.299 * nr + 0.587 * ng + 0.114 * nb) - (0.299 * mr + 0.587 * mg + 0.114 * mb);
+        if (diff < -1.5) {
+          const t = Math.min(1, (-diff) / 30) * 0.85 * a;
+          nr += (mr - nr) * t; ng += (mg - ng) * t; nb += (mb - nb) * t;
+        }
       }
-      // 色ムラ補正：明るさは保ち、色味だけ周囲平均へ寄せる（赤み・日焼けムラ）
-      const ca = chromaAmt * a;
-      if (ca > 0.01) {
+      // パス2: 大スケールの暗部（ほうれい線・クマ・たるみ影）を引き上げ
+      {
+        const mr = m2R[i], mg = m2G[i], mb = m2B[i];
+        const diff = (0.299 * nr + 0.587 * ng + 0.114 * nb) - (0.299 * mr + 0.587 * mg + 0.114 * mb);
+        if (diff < -2) {
+          const t = Math.min(1, (-diff) / 55) * 0.65 * a;
+          nr += (mr - nr) * t; ng += (mg - ng) * t; nb += (mb - nb) * t;
+        } else if (diff > 0) {
+          // 明部はごくわずかに整えるだけ（立体感を維持）
+          const t = Math.min(1, diff / 80) * 0.10 * a;
+          nr += (mr - nr) * t; ng += (mg - ng) * t; nb += (mb - nb) * t;
+        }
+        // 色ムラ補正: 明るさは保ち、色味だけ広域平均へ寄せる（赤み・日焼けムラ）
+        const ca = 0.5 * a;
         const yP = 0.299 * nr + 0.587 * ng + 0.114 * nb;
         const cbP = 128 - 0.168736 * nr - 0.331264 * ng + 0.5 * nb;
         const crP = 128 + 0.5 * nr - 0.418688 * ng - 0.081312 * nb;
@@ -1197,6 +1303,78 @@
     ctx.putImageData(img, 0, 0);
   }
 
+  /* ---------- ガイデッドフィルタ（エッジ保存平滑化） ----------
+     実際の美顔アプリで使われる手法。輝度をガイドにして
+     「エッジ（輪郭・髪の生え際・メガネ等）は保ったまま、平坦な肌のムラだけを均す」。
+     ぼかしと違い、輪郭が滲まないのが最大の違い。 */
+  function guidedSmooth(canvas, mask) {
+    const w = canvas.width, h = canvas.height;
+    const n = w * h;
+    const r = 9;        // 平滑化の半径
+    const eps = 110;    // エッジ判定のしきい値（輝度分散）。小さいほどエッジを残す
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    const maskCtx = mask.getContext('2d', { willReadFrequently: true });
+    const md = maskCtx.getImageData(0, 0, w, h).data;
+
+    const I = new Float32Array(n);
+    const P = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      P[0][i] = d[p]; P[1][i] = d[p + 1]; P[2][i] = d[p + 2];
+      I[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+    }
+    const tmp = new Float32Array(n);
+    const meanI = new Float32Array(n);
+    const meanII = new Float32Array(n);
+    boxBlurChannel(I, meanI, tmp, w, h, r);
+    const II = new Float32Array(n);
+    for (let i = 0; i < n; i++) II[i] = I[i] * I[i];
+    boxBlurChannel(II, meanII, tmp, w, h, r);
+
+    const A = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+    const B = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+    const work1 = new Float32Array(n), work2 = new Float32Array(n);
+    for (let c = 0; c < 3; c++) {
+      const Pc = P[c];
+      boxBlurChannel(Pc, work1, tmp, w, h, r);            // meanP
+      for (let i = 0; i < n; i++) work2[i] = I[i] * Pc[i];
+      boxBlurChannel(work2, A[c], tmp, w, h, r);          // meanIP（一時的にAへ）
+      for (let i = 0; i < n; i++) {
+        const varI = meanII[i] - meanI[i] * meanI[i];
+        const covIP = A[c][i] - meanI[i] * work1[i];
+        const a = covIP / (varI + eps);
+        A[c][i] = a;
+        B[c][i] = work1[i] - a * meanI[i];
+      }
+      boxBlurChannel(A[c], work2, tmp, w, h, r);
+      A[c].set(work2);
+      boxBlurChannel(B[c], work2, tmp, w, h, r);
+      B[c].set(work2);
+    }
+
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      const a = md[p + 3] / 255;
+      if (a < 0.04) continue;
+      for (let c = 0; c < 3; c++) {
+        const q = A[c][i] * I[i] + B[c][i];
+        const v = d[p + c] + (q - d[p + c]) * a;
+        d[p + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  // ヒーリング+平滑化をフル強度で適用した「美肌ベース」を作る（重い処理はここに集約して1回だけ）
+  function buildBeautyBase(warped, mask) {
+    const base = document.createElement('canvas');
+    base.width = warped.width; base.height = warped.height;
+    base.getContext('2d').drawImage(warped, 0, 0);
+    healSkinFull(base, mask);
+    guidedSmooth(base, mask);
+    return base;
+  }
+
   let skinLayerCanvas = null, skinLayerCtx = null;
   function getSkinLayer(w, h) {
     if (!skinLayerCanvas) {
@@ -1210,7 +1388,8 @@
   }
 
   // 1枚のショットに 盛り（ワープ＋美肌＋フィルター）を適用して新しいキャンバスを返す
-  function applyBeauty(srcCanvas, faces, params, preWarped, shotIdx) {
+  // preBase: buildBeautyBase() 済みのキャンバス（あれば重い処理をスキップして合成だけ行う）
+  function applyBeauty(srcCanvas, faces, params, preWarped, shotIdx, preBase) {
     const conf = modeConf();
     const w = srcCanvas.width, h = srcCanvas.height;
     const eyeS = params.eye / 100;
@@ -1228,28 +1407,18 @@
       const useMask = mask && !maskIsEmpty(mask);
 
       if (useMask) {
-        /* --- 肌ピンポイント処理 ---
-           1) ヒーリング（シミ・シワ・ほうれい線・クマ・色ムラを周囲の肌へ均す）
-           2) 平滑化（陶器肌）
-           3) 美白（白スクリーン＋彩度調整） */
-        healSkin(out, mask, skinS);
-
-        const layerCtx = getSkinLayer(w, h);
-        const blurred = makeBlurred(out, 2 + skinS * 2.5);
-
-        // なめらか肌: ぼかしをマスク越しに重ねる（ヒーリング済みの肌をさらに滑らかに）
-        layerCtx.globalCompositeOperation = 'source-over';
-        layerCtx.clearRect(0, 0, w, h);
-        layerCtx.imageSmoothingEnabled = true;
-        layerCtx.drawImage(blurred, 0, 0, w, h);
-        layerCtx.globalCompositeOperation = 'destination-in';
-        layerCtx.drawImage(mask, 0, 0);
-        layerCtx.globalCompositeOperation = 'source-over';
-        outCtx.globalAlpha = skinS * 0.55;
-        outCtx.drawImage(skinLayerCanvas, 0, 0);
+        /* --- 肌ピンポイント処理 v2 ---
+           1) 美肌ベース（2スケールヒーリング+ガイデッドフィルタ、フル強度で事前計算）を
+              スライダー値の割合で合成（マスク外はベース＝元画像なので単純合成でOK）
+           2) 美白（白スクリーン＋彩度調整、マスク越し） */
+        const base = preBase || buildBeautyBase(work, mask);
+        outCtx.globalAlpha = Math.min(1, skinS * 1.05);
+        outCtx.drawImage(base, 0, 0);
         outCtx.globalAlpha = 1;
 
+        const layerCtx = getSkinLayer(w, h);
         // 美白: 白をマスク越しにスクリーン合成（肌だけ白く）
+        layerCtx.globalCompositeOperation = 'source-over';
         layerCtx.clearRect(0, 0, w, h);
         layerCtx.fillStyle = '#ffffff';
         layerCtx.fillRect(0, 0, w, h);
@@ -1369,22 +1538,28 @@
     });
   }
 
-  // デカ目/小顔のワープ結果をキャッシュ（美肌・フィルターのみの変更時はワープ再計算を省いて即応答）
-  const warpCache = { idx: -1, eye: -1, face: -1, facesRef: null, canvas: null };
+  // ワープ結果と美肌ベースをキャッシュ
+  // （デカ目/小顔変更時のみワープ+ベースを再計算。美肌・チーク・リップ・フィルターは合成だけなので即応答）
+  const warpCache = { idx: -1, eye: -1, face: -1, facesRef: null, skinConfRef: null, canvas: null, base: null };
 
   function renderBeautyPreview() {
     const idx = state.beautySelected;
     const src = state.shots[idx];
     if (!src) return;
     const faces = state.faceData[idx];
-    if (warpCache.idx !== idx || warpCache.eye !== state.beauty.eye || warpCache.face !== state.beauty.face || warpCache.facesRef !== faces) {
+    const skinConfRef = state.skinConf[idx] || null;
+    if (warpCache.idx !== idx || warpCache.eye !== state.beauty.eye || warpCache.face !== state.beauty.face
+        || warpCache.facesRef !== faces || warpCache.skinConfRef !== skinConfRef) {
       warpCache.canvas = warpShot(src, faces, state.beauty.eye / 100, state.beauty.face / 100);
+      const mask = getSkinMask(idx, src, faces, state.beauty.eye / 100);
+      warpCache.base = (mask && !maskIsEmpty(mask)) ? buildBeautyBase(warpCache.canvas, mask) : null;
       warpCache.idx = idx;
       warpCache.eye = state.beauty.eye;
       warpCache.face = state.beauty.face;
       warpCache.facesRef = faces;
+      warpCache.skinConfRef = skinConfRef;
     }
-    const result = applyBeauty(src, faces, state.beauty, warpCache.canvas, idx);
+    const result = applyBeauty(src, faces, state.beauty, warpCache.canvas, idx, warpCache.base);
     beautyCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     beautyCtx.drawImage(result, 0, 0);
   }
@@ -1471,26 +1646,31 @@
   });
 
   async function detectFacesForShots() {
-    await initFaceLandmarker();
+    // 顔ランドマークとML肌セグメンテーションを並行で準備
+    await Promise.all([initFaceLandmarker(), initSkinSegmenter()]);
     if (!faceLandmarker) {
       beautyFaceNote.textContent = '顔検出が使えないため、美肌とフィルターのみ反映されます';
       beautyFaceNote.classList.remove('hidden');
-      return;
     }
     let anyFace = false;
     for (let i = 0; i < state.shots.length; i++) {
-      try {
-        const res = faceLandmarker.detect(state.shots[i]);
-        state.faceData[i] = (res.faceLandmarks && res.faceLandmarks.length) ? res.faceLandmarks : null;
-        if (state.faceData[i]) anyFace = true;
-      } catch (err) {
-        state.faceData[i] = null;
+      if (faceLandmarker) {
+        try {
+          const res = faceLandmarker.detect(state.shots[i]);
+          state.faceData[i] = (res.faceLandmarks && res.faceLandmarks.length) ? res.faceLandmarks : null;
+          if (state.faceData[i]) anyFace = true;
+        } catch (err) {
+          state.faceData[i] = null;
+        }
       }
+      // ML肌マスク（モデルが読めていれば）
+      state.skinConf[i] = computeSkinConf(state.shots[i]);
     }
-    if (!anyFace) {
+    skinMaskCache.clear(); // ML肌マスクが揃ったので、仮マスクのキャッシュを破棄して作り直す
+    if (faceLandmarker && !anyFace) {
       beautyFaceNote.textContent = '顔が見つからなかったよ…美肌とフィルターだけ反映されます';
       beautyFaceNote.classList.remove('hidden');
-    } else {
+    } else if (faceLandmarker) {
       beautyFaceNote.classList.add('hidden');
     }
     queueBeautyRender();
@@ -2091,6 +2271,45 @@
   }
 
   // 動作検証用フック（アプリの動作には影響しない）
-  window.__puriDebug = { buildSkinMask, applyBeauty };
+  window.__puriDebug = {
+    buildSkinMask,
+    applyBeauty,
+    // 実顔画像でのエンドツーエンド検証: URL→顔検出→ML肌マスク→盛り適用
+    async testOnImage(url, params) {
+      await Promise.all([initFaceLandmarker(), initSkinSegmenter()]);
+      const img = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = url;
+      });
+      const src = document.createElement('canvas');
+      src.width = SHOT_W; src.height = SHOT_H;
+      drawCover(src.getContext('2d'), img, 0, 0, SHOT_W, SHOT_H);
+      const faces = faceLandmarker ? (faceLandmarker.detect(src).faceLandmarks || null) : null;
+      const mlConf = computeSkinConf(src);
+      const mask = buildSkinMask(src, faces, 0, mlConf);
+      const t0 = performance.now();
+      state.skinConf[9] = mlConf; // idx 9 をテスト用に使用
+      state.faceData[9] = faces;
+      skinMaskCache.delete(9);
+      const result = applyBeauty(src, faces, params || { skin: 70, eye: 40, face: 25, cheek: 40, lip: 35, filter: 'none' }, null, 9);
+      const ms = Math.round(performance.now() - t0);
+      // 検証用に画面へ貼る
+      document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
+      [src, mask, result].forEach((cv, i) => {
+        cv.className = 'debug-canvas';
+        cv.style.cssText = `position:fixed;z-index:9999;left:${i * 33.5}vw;bottom:0;width:33vw;border:2px solid #f0f;background:#333;`;
+        document.body.appendChild(cv);
+      });
+      // マスクのカバレッジ計測
+      const mctx = mask.getContext('2d');
+      const mdata = mctx.getImageData(0, 0, mask.width, mask.height).data;
+      let covered = 0, total = 0;
+      for (let i = 3; i < mdata.length; i += 40) { total++; if (mdata[i] > 100) covered++; }
+      return { faceCount: faces ? faces.length : 0, mlConfUsed: !!mlConf, maskCoveragePct: Math.round(covered / total * 100), processingMs: ms };
+    },
+  };
 
 })();
