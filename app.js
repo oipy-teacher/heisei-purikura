@@ -31,9 +31,9 @@
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
       presets: [
-        { id: 'usu',      label: 'うす盛れ',     skin: 25, eye: 20, face: 10, cheek: 20, lip: 15 },
-        { id: 'shikkari', label: 'しっかり盛れ', skin: 55, eye: 50, face: 30, cheek: 45, lip: 40 },
-        { id: 'keba',     label: 'ケバ盛れ',     skin: 85, eye: 80, face: 50, cheek: 75, lip: 65 },
+        { id: 'usu',      label: 'うす盛れ',     skin: 30, white: 20, clear: 20, eye: 20, face: 10, cheek: 20, lip: 15 },
+        { id: 'shikkari', label: 'しっかり盛れ', skin: 60, white: 40, clear: 40, eye: 50, face: 30, cheek: 45, lip: 40 },
+        { id: 'keba',     label: 'ケバ盛れ',     skin: 90, white: 70, clear: 55, eye: 80, face: 50, cheek: 75, lip: 65 },
       ],
       defaultPreset: 'shikkari',
       makeup: { cheek: '#ff5f8f', lip: '#ff2f6e' },
@@ -83,9 +83,9 @@
       textStampStyle: { font: 'italic 600 18px Georgia, serif', fill: '#a8917d', stroke: null, strokeWidth: 0, rotate: 4 },
       // 盛れ感プリセット（現行機 Hyper shot の「無加工風/ナチュ盛れ/プリ盛れ」選択を再現）
       presets: [
-        { id: 'mukakou', label: '無加工風',   skin: 15, eye: 5,  face: 5,  cheek: 10, lip: 10 },
-        { id: 'natural', label: 'ナチュ盛れ', skin: 40, eye: 25, face: 15, cheek: 30, lip: 25 },
-        { id: 'puri',    label: 'プリ盛れ',   skin: 65, eye: 45, face: 30, cheek: 55, lip: 45 },
+        { id: 'mukakou', label: '無加工風',   skin: 20, white: 0,  clear: 15, eye: 5,  face: 5,  cheek: 10, lip: 10 },
+        { id: 'natural', label: 'ナチュ盛れ', skin: 45, white: 10, clear: 40, eye: 25, face: 15, cheek: 30, lip: 25 },
+        { id: 'puri',    label: 'プリ盛れ',   skin: 70, white: 25, clear: 60, eye: 45, face: 30, cheek: 55, lip: 45 },
       ],
       defaultPreset: 'natural',
       makeup: { cheek: '#e2917d', lip: '#c96a5f' },
@@ -169,7 +169,7 @@
     processedShots: [],  // 盛り加工後の4枚
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
-    beauty: { skin: 55, eye: 50, face: 30, cheek: 45, lip: 40, filter: 'none' },
+    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, cheek: 45, lip: 40, filter: 'none' },
     beautySelected: 0,
     beautyTimerId: null,
     beautyRemaining: BEAUTY_SECONDS,
@@ -304,7 +304,7 @@
     state.curtain = conf.curtains[0];
     state.frame = conf.frames[0];
     const preset = conf.presets.find(p => p.id === conf.defaultPreset);
-    state.beauty = { skin: preset.skin, eye: preset.eye, face: preset.face, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
+    state.beauty = { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
     buildSelectGrids();
     buildDecoTools();
     unlockAudio();
@@ -569,8 +569,8 @@
   async function renderPreviewFrame(sourceEl) {
     let maskCv = null;
     if (state.chromaOn && imageSegmenter) {
-      // 縮小プロキシへ描いてから推論（等倍より数倍高速）
-      segProxyCtx.drawImage(sourceEl, 0, 0, SEG_W, SEG_H);
+      // 縮小プロキシへ描いてから推論（等倍より数倍高速）。カバークロップでアスペクト比を維持
+      drawCover(segProxyCtx, sourceEl, 0, 0, SEG_W, SEG_H);
       const result = await segmentForVideoAsync(segProxy, performance.now());
       maskCv = buildPersonMask(result);
     }
@@ -584,7 +584,7 @@
       }
       personWorkCtx.globalCompositeOperation = 'source-over';
       personWorkCtx.clearRect(0, 0, SHOT_W, SHOT_H);
-      personWorkCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
+      drawCover(personWorkCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
       personWorkCtx.globalCompositeOperation = 'destination-in';
       personWorkCtx.imageSmoothingEnabled = true;
       personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H); // 拡大時のバイリニアがフェザーになる
@@ -593,7 +593,7 @@
       drawCurtainBg(previewCtx);
       previewCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
     } else {
-      previewCtx.drawImage(sourceEl, 0, 0, SHOT_W, SHOT_H);
+      drawCover(previewCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
     }
     // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現・Safari対応のためスクリーン合成）
     applyToneFx(previewCtx, SHOT_W, SHOT_H, { bright: 0.07 });
@@ -626,7 +626,10 @@
           delegate: 'GPU',
         },
         runningMode: 'IMAGE',
-        numFaces: 4, // プリクラは複数人で撮るので最大4人まで対応
+        numFaces: 6, // プリクラは複数人で撮るので余裕を持って6人まで
+        // 端の人・小さめの顔・横向きの顔も拾えるよう、しきい値を下げる（複数人時のばらつき対策）
+        minFaceDetectionConfidence: 0.3,
+        minFacePresenceConfidence: 0.3,
       });
     } catch (err) {
       console.warn('顔ランドマークモデルの読み込みに失敗しました。デカ目・小顔はスキップされます。', err);
@@ -678,7 +681,8 @@
       const sctx = small.getContext('2d');
       const md = sctx.createImageData(mw, mh);
       for (let i = 0; i < faceSkin.length; i++) {
-        const conf = Math.min(1, faceSkin[i] + bodySkin[i]);
+        // 顔の肌はフル強度、首・腕などの体の肌は65%に抑えて「顔を狙い撃ち」にする
+        const conf = Math.min(1, faceSkin[i] + bodySkin[i] * 0.65);
         const o = i * 4;
         md.data[o] = 255; md.data[o + 1] = 255; md.data[o + 2] = 255;
         md.data[o + 3] = Math.round(conf * 255);
@@ -1331,7 +1335,7 @@
         const mr = m1R[i], mg = m1G[i], mb = m1B[i];
         const diff = (0.299 * nr + 0.587 * ng + 0.114 * nb) - (0.299 * mr + 0.587 * mg + 0.114 * mb);
         if (diff < -1.5) {
-          const t = Math.min(1, (-diff) / 30) * 0.85 * a;
+          const t = Math.min(1, (-diff) / 24) * 0.95 * a;
           nr += (mr - nr) * t; ng += (mg - ng) * t; nb += (mb - nb) * t;
         }
       }
@@ -1340,7 +1344,7 @@
         const mr = m2R[i], mg = m2G[i], mb = m2B[i];
         const diff = (0.299 * nr + 0.587 * ng + 0.114 * nb) - (0.299 * mr + 0.587 * mg + 0.114 * mb);
         if (diff < -2) {
-          const t = Math.min(1, (-diff) / 55) * 0.65 * a;
+          const t = Math.min(1, (-diff) / 45) * 0.8 * a;
           nr += (mr - nr) * t; ng += (mg - ng) * t; nb += (mb - nb) * t;
         } else if (diff > 0) {
           // 明部はごくわずかに整えるだけ（立体感を維持）
@@ -1417,11 +1421,26 @@
       B[c].set(work2);
     }
 
+    // 微細テクスチャの再注入（周波数分離のプロ仕上げ）:
+    // ヒーリング済み画像の細かいキメ（半径2pxの高周波成分）を平滑化後に35%戻す。
+    // → ツルツルのプラスチック肌ではなく「キメの整った素肌」に見える
+    const fineR = new Float32Array(n);
+    boxBlurChannel(P[0], fineR, tmp, w, h, 2);
+    const fineG = new Float32Array(n);
+    boxBlurChannel(P[1], fineG, tmp, w, h, 2);
+    const fineB = new Float32Array(n);
+    boxBlurChannel(P[2], fineB, tmp, w, h, 2);
+    const TEXTURE = 0.35;
+
     for (let i = 0, p = 0; i < n; i++, p += 4) {
       const a = md[p + 3] / 255;
       if (a < 0.04) continue;
+      const detR = (P[0][i] - fineR[i]) * TEXTURE;
+      const detG = (P[1][i] - fineG[i]) * TEXTURE;
+      const detB = (P[2][i] - fineB[i]) * TEXTURE;
       for (let c = 0; c < 3; c++) {
-        const q = A[c][i] * I[i] + B[c][i];
+        const det = c === 0 ? detR : c === 1 ? detG : detB;
+        const q = A[c][i] * I[i] + B[c][i] + det;
         const v = d[p + c] + (q - d[p + c]) * a;
         d[p + c] = v < 0 ? 0 : v > 255 ? 255 : v;
       }
@@ -1429,14 +1448,30 @@
     ctx.putImageData(img, 0, 0);
   }
 
-  // ヒーリング+平滑化をフル強度で適用した「美肌ベース」を作る（重い処理はここに集約して1回だけ）
+  // ヒーリング+平滑化をフル強度で適用した「美肌ベース」と、
+  // 透明感用の「グロー層」（明るくぼかした肌、スクリーン合成用）を作る。
+  // 重い処理はここに集約して1ショット1回だけ。スライダーは合成率の変更のみ。
   function buildBeautyBase(warped, mask) {
+    const w = warped.width, h = warped.height;
     const base = document.createElement('canvas');
-    base.width = warped.width; base.height = warped.height;
+    base.width = w; base.height = h;
     base.getContext('2d').drawImage(warped, 0, 0);
     healSkinFull(base, mask);
     guidedSmooth(base, mask);
-    return base;
+
+    // 透明感グロー層: ベースをぼかして少し明るくし、肌マスクで切り抜いたもの
+    const glow = document.createElement('canvas');
+    glow.width = w; glow.height = h;
+    const gctx = glow.getContext('2d');
+    const blurred = makeBlurred(base, 5);
+    gctx.imageSmoothingEnabled = true;
+    gctx.drawImage(blurred, 0, 0, w, h);
+    applyToneFx(gctx, w, h, { bright: 0.18 });
+    gctx.globalCompositeOperation = 'destination-in';
+    gctx.drawImage(mask, 0, 0);
+    gctx.globalCompositeOperation = 'source-over';
+
+    return { base, glow };
   }
 
   let skinLayerCanvas = null, skinLayerCtx = null;
@@ -1465,61 +1500,91 @@
     outCtx.drawImage(work, 0, 0);
 
     const skinS = params.skin / 100;
-    if (skinS > 0) {
+    const whiteS = (params.white || 0) / 100;
+    const clearS = (params.clear || 0) / 100;
+    if (skinS > 0 || whiteS > 0 || clearS > 0) {
       const tone = conf.skinTone;
       const mask = getSkinMask(shotIdx == null ? -1 : shotIdx, srcCanvas, faces, eyeS);
       const useMask = mask && !maskIsEmpty(mask);
 
       if (useMask) {
-        /* --- 肌ピンポイント処理 v2 ---
-           1) 美肌ベース（2スケールヒーリング+ガイデッドフィルタ、フル強度で事前計算）を
-              スライダー値の割合で合成（マスク外はベース＝元画像なので単純合成でOK）
-           2) 美白（白スクリーン＋彩度調整、マスク越し） */
-        const base = preBase || buildBeautyBase(work, mask);
-        outCtx.globalAlpha = Math.min(1, skinS * 1.05);
-        outCtx.drawImage(base, 0, 0);
-        outCtx.globalAlpha = 1;
+        /* --- 肌ピンポイント処理 v4 ---
+           美肌: 肌質の改善（2スケールヒーリング+ガイデッドフィルタ+キメ再注入）
+           美白: 白さ（白スクリーン＋彩度調整）
+           透明感: グロー（明るいぼかし肌のスクリーン合成）+ 淡ブルーで黄ぐすみを除去
+           — それぞれ独立制御 */
+        const baseObj = (skinS > 0 || clearS > 0) ? (preBase || buildBeautyBase(work, mask)) : null;
+        if (skinS > 0 && baseObj) {
+          outCtx.globalAlpha = Math.min(1, skinS * 1.1);
+          outCtx.drawImage(baseObj.base, 0, 0);
+          outCtx.globalAlpha = 1;
+        }
 
-        const layerCtx = getSkinLayer(w, h);
-        // 美白: 白をマスク越しにスクリーン合成（肌だけ白く）
-        layerCtx.globalCompositeOperation = 'source-over';
-        layerCtx.clearRect(0, 0, w, h);
-        layerCtx.fillStyle = '#ffffff';
-        layerCtx.fillRect(0, 0, w, h);
-        layerCtx.globalCompositeOperation = 'destination-in';
-        layerCtx.drawImage(mask, 0, 0);
-        layerCtx.globalCompositeOperation = 'source-over';
-        outCtx.globalCompositeOperation = 'screen';
-        outCtx.globalAlpha = Math.min(1, skinS * tone.brightPerUnit * 2.2);
-        outCtx.drawImage(skinLayerCanvas, 0, 0);
-        outCtx.globalCompositeOperation = 'source-over';
-        outCtx.globalAlpha = 1;
-
-        // 彩度落とし（平成の白肌）: グレーをマスク越しに彩度合成
-        if (tone.desatPerUnit > 0) {
+        if (clearS > 0 && baseObj) {
+          // グロー: 明るいぼかし肌をスクリーン合成 → 内側から光る透明感
+          outCtx.globalCompositeOperation = 'screen';
+          outCtx.globalAlpha = clearS * 0.42;
+          outCtx.drawImage(baseObj.glow, 0, 0);
+          // 黄ぐすみ除去: 淡ブルーをソフトライトで（肌マスク越し）
+          const layerCtx = getSkinLayer(w, h);
+          layerCtx.globalCompositeOperation = 'source-over';
           layerCtx.clearRect(0, 0, w, h);
-          layerCtx.fillStyle = '#808080';
+          layerCtx.fillStyle = '#dbe7ff';
           layerCtx.fillRect(0, 0, w, h);
           layerCtx.globalCompositeOperation = 'destination-in';
           layerCtx.drawImage(mask, 0, 0);
           layerCtx.globalCompositeOperation = 'source-over';
-          outCtx.globalCompositeOperation = 'saturation';
-          outCtx.globalAlpha = Math.min(1, skinS * tone.desatPerUnit * 1.6);
+          outCtx.globalCompositeOperation = 'soft-light';
+          outCtx.globalAlpha = clearS * 0.35;
           outCtx.drawImage(skinLayerCanvas, 0, 0);
           outCtx.globalCompositeOperation = 'source-over';
           outCtx.globalAlpha = 1;
         }
+
+        if (whiteS > 0) {
+          const layerCtx = getSkinLayer(w, h);
+          // 美白: 白をマスク越しにスクリーン合成（肌だけ白く）
+          layerCtx.globalCompositeOperation = 'source-over';
+          layerCtx.clearRect(0, 0, w, h);
+          layerCtx.fillStyle = '#ffffff';
+          layerCtx.fillRect(0, 0, w, h);
+          layerCtx.globalCompositeOperation = 'destination-in';
+          layerCtx.drawImage(mask, 0, 0);
+          layerCtx.globalCompositeOperation = 'source-over';
+          outCtx.globalCompositeOperation = 'screen';
+          outCtx.globalAlpha = Math.min(1, whiteS * tone.brightPerUnit * 2.4);
+          outCtx.drawImage(skinLayerCanvas, 0, 0);
+          outCtx.globalCompositeOperation = 'source-over';
+          outCtx.globalAlpha = 1;
+
+          // 彩度落とし（平成の白肌）: グレーをマスク越しに彩度合成
+          if (tone.desatPerUnit > 0) {
+            layerCtx.clearRect(0, 0, w, h);
+            layerCtx.fillStyle = '#808080';
+            layerCtx.fillRect(0, 0, w, h);
+            layerCtx.globalCompositeOperation = 'destination-in';
+            layerCtx.drawImage(mask, 0, 0);
+            layerCtx.globalCompositeOperation = 'source-over';
+            outCtx.globalCompositeOperation = 'saturation';
+            outCtx.globalAlpha = Math.min(1, whiteS * tone.desatPerUnit * 1.8);
+            outCtx.drawImage(skinLayerCanvas, 0, 0);
+            outCtx.globalCompositeOperation = 'source-over';
+            outCtx.globalAlpha = 1;
+          }
+        }
       } else {
         // フォールバック（顔も肌色も見つからない場合）: 従来の全体ソフトフォーカス
-        const blurred = makeBlurred(work, 1.5 + skinS * 2.5);
-        outCtx.save();
-        outCtx.globalAlpha = skinS * 0.5;
-        outCtx.imageSmoothingEnabled = true;
-        outCtx.drawImage(blurred, 0, 0, w, h);
-        outCtx.restore();
+        if (skinS > 0) {
+          const blurred = makeBlurred(work, 1.5 + skinS * 2.5);
+          outCtx.save();
+          outCtx.globalAlpha = skinS * 0.5;
+          outCtx.imageSmoothingEnabled = true;
+          outCtx.drawImage(blurred, 0, 0, w, h);
+          outCtx.restore();
+        }
         applyToneFx(outCtx, w, h, {
-          bright: skinS * tone.brightPerUnit,
-          desat: skinS * tone.desatPerUnit,
+          bright: whiteS * tone.brightPerUnit,
+          desat: whiteS * tone.desatPerUnit,
         });
       }
     }
@@ -1586,6 +1651,8 @@
   const beautyFaceNote = $('#beauty-face-note');
 
   const sliderSkin = $('#slider-skin');
+  const sliderWhite = $('#slider-white');
+  const sliderClear = $('#slider-clear');
   const sliderEye = $('#slider-eye');
   const sliderFace = $('#slider-face');
   const sliderCheek = $('#slider-cheek');
@@ -1630,11 +1697,15 @@
 
   function syncSliders() {
     sliderSkin.value = state.beauty.skin;
+    sliderWhite.value = state.beauty.white || 0;
+    sliderClear.value = state.beauty.clear || 0;
     sliderEye.value = state.beauty.eye;
     sliderFace.value = state.beauty.face;
     sliderCheek.value = state.beauty.cheek || 0;
     sliderLip.value = state.beauty.lip || 0;
     $('#val-skin').textContent = state.beauty.skin;
+    $('#val-white').textContent = state.beauty.white || 0;
+    $('#val-clear').textContent = state.beauty.clear || 0;
     $('#val-eye').textContent = state.beauty.eye;
     $('#val-face').textContent = state.beauty.face;
     $('#val-cheek').textContent = state.beauty.cheek || 0;
@@ -1659,6 +1730,8 @@
       b.textContent = p.label;
       b.addEventListener('click', () => {
         state.beauty.skin = p.skin;
+        state.beauty.white = p.white;
+        state.beauty.clear = p.clear;
         state.beauty.eye = p.eye;
         state.beauty.face = p.face;
         state.beauty.cheek = p.cheek;
@@ -1700,7 +1773,7 @@
     }
   }
 
-  [[sliderSkin, 'skin'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
+  [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
     el.addEventListener('input', () => {
       state.beauty[key] = Number(el.value);
       $('#val-' + key).textContent = el.value;
@@ -1804,9 +1877,10 @@
     ctx.closePath();
   }
 
-  // アスペクト比を保ったままセルいっぱいに描画（中央クロップ）
+  // アスペクト比を保ったままセルいっぱいに描画（中央クロップ）。video要素にも対応
   function drawCover(ctx, img, x, y, w, h) {
-    const sw = img.width, sh = img.height;
+    const sw = img.videoWidth || img.width, sh = img.videoHeight || img.height;
+    if (!sw || !sh) { ctx.drawImage(img, x, y, w, h); return; }
     const scale = Math.max(w / sw, h / sh);
     const cw = w / scale, ch = h / scale;
     const sx = (sw - cw) / 2, sy = (sh - ch) / 2;
