@@ -19,15 +19,24 @@
         { id: 'lavender', label: 'ラベンダー', color: '#e0c3ff' },
         { id: 'peach',    label: 'ピーチ',     color: '#ffc9a8' },
       ],
+      // 初代プリント倶楽部(1995)は落書き機能なし・フレーム選択が主役だった時代考証に基づき、
+      // 平成モードはフレーム充実＋フィルター＋シンプルペンのみの構成
       frames: [
-        { id: 'heart',  label: 'ハート',   emoji: '💗' },
-        { id: 'star',   label: 'スター',   emoji: '⭐' },
-        { id: 'flower', label: 'フラワー', emoji: '🌸' },
-        { id: 'ribbon', label: 'リボン',   emoji: '🎀' },
+        { id: 'heart',   label: 'ハート',   emoji: '💗' },
+        { id: 'star',    label: 'スター',   emoji: '⭐' },
+        { id: 'flower',  label: 'フラワー', emoji: '🌸' },
+        { id: 'ribbon',  label: 'リボン',   emoji: '🎀' },
+        { id: 'kirakira', label: 'キラキラ', emoji: '✨' },
+        { id: 'ichigo',  label: 'いちご',   emoji: '🍓' },
+        { id: 'onpu',    label: 'おんぷ',   emoji: '🎵' },
+        { id: 'plain',   label: 'シンプル', emoji: '' },
       ],
+      frameStyle: 'motif', // シール全周にモチーフを並べる（初期プリ機のフレーム風）
       penColors: ['#ff2fa0', '#ff8fc7', '#ffef5c', '#5cff8f', '#5cc8ff', '#a06bff', '#ffffff', '#000000'],
-      stamps: ['💖', '⭐', '✨', '🎀', '🌸', '🐰', '💫', '👑', '🍓', '🎵', '😳', '👍'],
-      textStamps: ['LOVE♡', '友情の証', 'また遊ぼうね', '親友', 'だいすき', 'ケバ盛れ', 'LOVE注入♡', 'プリ帳いき'],
+      penTypes: ['normal'],
+      stamps: [],
+      drawnStamps: [],
+      textStamps: [],
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
       presets: [
@@ -43,8 +52,10 @@
       filters: [
         { id: 'none',   label: 'なし',      fx: {} },
         { id: 'bihaku', label: '美白MAX',   fx: { bright: 0.30, desat: 0.45 } },
+        { id: 'retro',  label: 'レトロ',    fx: { desat: 0.3, warm: { color: '#d9a06a', amt: 0.28 }, bright: 0.06, contrast: 0.12 } },
         { id: 'sepia',  label: 'セピア',    fx: { desat: 0.9, colorize: { color: '#a97e52', amt: 0.5 }, bright: 0.08 } },
         { id: 'vivid',  label: 'ビビッド',  fx: { contrast: 0.45, bright: 0.05 } },
+        { id: 'showa',  label: '写ルンです', fx: { desat: 0.2, warm: { color: '#c9d4a0', amt: 0.18 }, contrast: 0.2 } },
       ],
       sheet: {
         title: '平成 Print Club',
@@ -78,8 +89,29 @@
         { id: 'cloud',       label: 'くも',   emoji: '☁️' },
       ],
       penColors: ['#b98a8a', '#8a9b8a', '#c0b283', '#8a9bb0', '#7d6b7d', '#e6ccb3', '#ffffff', '#3d3733'],
+      penTypes: ['normal', 'neon', 'fuchi', 'kira'],
       stamps: ['🤍', '🫶', '✨', '🌷', '🧸', '☁️', '🍓', '🥐', '📷', '🎧', '🪞', '🎀'],
-      textStamps: ['#今日のプリ', '推し活', 'エモい', 'それな', 'BFF♡', 'ｼﾝﾌﾟﾙ盛れ', 'ｶﾜｲｲは正義', 'memories'],
+      // 手描き風スタンプ（Canvas描画。参考画像のハート各種・キラ・吹き出しを再現）
+      drawnStamps: ['heartSticker', 'heartGlossy', 'heartOutline', 'heartLine', 'heartArrow', 'heartChalk', 'sparkleLine', 'bubble'],
+      // スタイル付き文字スタンプ（sticker=白フチ / outline=中抜き / neon=ネオン発光 / plain=モード標準）
+      textStamps: [
+        { t: 'Perfect',  style: 'outline' },
+        { t: 'GOOD',     style: 'outline' },
+        { t: '満点',     style: 'sticker', color: '#5a5a5a' },
+        { t: 'イイネ◎',  style: 'sticker', color: '#a08ad0' },
+        { t: 'Point',    style: 'sticker', color: '#f2889f' },
+        { t: 'LUCKY',    style: 'sticker', color: '#e05a5a' },
+        { t: '爆誕っ',   style: 'sticker', color: '#3d3733' },
+        { t: 'ひみつ',   style: 'sticker', color: '#e0498a' },
+        { t: 'えっ!?',   style: 'plain' },
+        { t: '達成✧',    style: 'sticker', color: '#e8a83d' },
+        { t: '#今日のプリ', style: 'plain' },
+        { t: 'エモい',   style: 'plain' },
+        { t: 'BFF♡',     style: 'sticker', color: '#e0498a' },
+        { t: 'かわいくなりすぎちゃったかも', style: 'neon' },
+        { t: 'さすがに盛りすぎちゃったかも', style: 'neon' },
+        { t: '全銀河中キュンさせちゃう',     style: 'neon' },
+      ],
       textStampStyle: { font: 'italic 600 18px Georgia, serif', fill: '#a8917d', stroke: null, strokeWidth: 0, rotate: 4 },
       // 盛れ感プリセット（現行機 Hyper shot の「無加工風/ナチュ盛れ/プリ盛れ」選択を再現）
       presets: [
@@ -180,11 +212,11 @@
     stampSize: 48,
     tool: 'pen',
     stampChar: null,
-    textStampStr: null,
+    textStampSel: null,
+    dstampId: null,
     isDrawing: false,
     lastX: 0,
     lastY: 0,
-    history: [],
     timerId: null,
     remaining: DECO_SECONDS,
     warningPlayed: false,
@@ -1964,14 +1996,21 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (sheet.cornerDeco === 'frameEmoji') {
-      ctx.font = '30px sans-serif';
-      const corners = [
-        [26, HEADER_H + 10],
-        [SHEET_W - 26, HEADER_H + 10],
-        [26, SHEET_H - FOOTER_H - 10],
-        [SHEET_W - 26, SHEET_H - FOOTER_H - 10],
-      ];
-      corners.forEach(([cx, cy]) => ctx.fillText(state.frame.emoji, cx, cy));
+      // 初期プリ機のフレーム風: シール全周にモチーフを並べる（「シンプル」はモチーフなし）
+      if (state.frame.emoji) {
+        ctx.font = '22px sans-serif';
+        const step = 62;
+        const topY = HEADER_H + 8;
+        const botY = SHEET_H - FOOTER_H - 8;
+        for (let x = 30; x <= SHEET_W - 30; x += step) {
+          ctx.fillText(state.frame.emoji, x, topY);
+          ctx.fillText(state.frame.emoji, x, botY);
+        }
+        for (let y = topY + step; y < botY; y += step) {
+          ctx.fillText(state.frame.emoji, 16, y);
+          ctx.fillText(state.frame.emoji, SHEET_W - 16, y);
+        }
+      }
     } else {
       // 令和：フレーム絵文字を小さく上品に散らす
       ctx.font = '18px sans-serif';
@@ -1989,18 +2028,375 @@
     ctx.fillText(`${dateStr}　${sheet.footerName}`, SHEET_W / 2, SHEET_H - FOOTER_H / 2);
   }
 
-  /* ===================== 3. 落書き画面 ===================== */
+  /* ===================== 3. 落書き画面（オブジェクト方式） =====================
+     すべての描き込みを「オブジェクト」として保持し、キャンバスはオブジェクト列から再描画する。
+     これにより ロイロノート式の「なぞり消し」（触れた線やスタンプを丸ごと消す）と
+     軽量なアンドゥ（操作の巻き戻し）が可能になる。 */
   const drawCanvas = $('#draw-canvas');
   drawCanvas.width = SHEET_W;
   drawCanvas.height = SHEET_H;
   const drawCtx = drawCanvas.getContext('2d');
-  // ストローク描画中のプレビュー用レイヤー（白フチ・ネオンのつなぎ目を出さないため、
-  // 描画中は毎フレーム線全体を描き直し、指を離した時に本レイヤーへ合成する）
+  // ストローク描画中のプレビュー用レイヤー
   const strokeCanvas = $('#stroke-canvas');
   strokeCanvas.width = SHEET_W;
   strokeCanvas.height = SHEET_H;
   const strokeCtx = strokeCanvas.getContext('2d');
 
+  let decoObjects = [];   // 描き込みオブジェクトの列（描画順）
+  let undoStack = [];     // 操作履歴 {op:'add'} | {op:'remove', items:[{index,obj}]}
+
+  /* ---------- 手描き風スタンプ（Canvas描画） ---------- */
+  function heartPath(ctx, s) {
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.32);
+    ctx.bezierCurveTo(-s * 0.55, -s * 0.12, -s * 0.30, -s * 0.52, 0, -s * 0.22);
+    ctx.bezierCurveTo(s * 0.30, -s * 0.52, s * 0.55, -s * 0.12, 0, s * 0.32);
+    ctx.closePath();
+  }
+
+  const DRAWN_STAMPS = {
+    heartSticker: { label: 'ハートシール', draw(ctx, s) {
+      heartPath(ctx, s);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s * 0.22;
+      ctx.stroke();
+      ctx.fillStyle = '#f0959c';
+      ctx.fill();
+    } },
+    heartGlossy: { label: 'ツヤハート', draw(ctx, s) {
+      heartPath(ctx, s);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s * 0.14;
+      ctx.stroke();
+      const g = ctx.createLinearGradient(0, -s * 0.5, 0, s * 0.35);
+      g.addColorStop(0, '#f8b0b8');
+      g.addColorStop(1, '#e87880');
+      ctx.fillStyle = g;
+      ctx.fill();
+      // ハイライト
+      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.18, -s * 0.22, s * 0.12, s * 0.07, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } },
+    heartOutline: { label: '白フチハート', draw(ctx, s) {
+      heartPath(ctx, s);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s * 0.16;
+      ctx.stroke();
+    } },
+    heartLine: { label: '線画ハート', draw(ctx, s) {
+      heartPath(ctx, s);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#2e2a28';
+      ctx.lineWidth = Math.max(1.5, s * 0.06);
+      ctx.stroke();
+    } },
+    heartArrow: { label: 'ハート矢', draw(ctx, s) {
+      heartPath(ctx, s);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#2e2a28';
+      ctx.lineWidth = Math.max(1.5, s * 0.06);
+      ctx.stroke();
+      // 矢（左下→右上）
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.62, s * 0.5);
+      ctx.lineTo(s * 0.62, -s * 0.45);
+      ctx.stroke();
+      // 矢尻
+      ctx.beginPath();
+      ctx.moveTo(s * 0.62, -s * 0.45);
+      ctx.lineTo(s * 0.42, -s * 0.42);
+      ctx.moveTo(s * 0.62, -s * 0.45);
+      ctx.lineTo(s * 0.58, -s * 0.24);
+      ctx.stroke();
+      // 羽
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.62, s * 0.5);
+      ctx.lineTo(-s * 0.5, s * 0.55);
+      ctx.moveTo(-s * 0.62, s * 0.5);
+      ctx.lineTo(-s * 0.66, s * 0.36);
+      ctx.stroke();
+    } },
+    heartChalk: { label: 'チョークハート', draw(ctx, s) {
+      // クレヨン風: 塗りに細かい抜けを散らす
+      heartPath(ctx, s);
+      ctx.fillStyle = '#e0757d';
+      ctx.fill();
+      ctx.save();
+      heartPath(ctx, s);
+      ctx.clip();
+      ctx.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < 45; i++) {
+        const rx = (Math.random() * 2 - 1) * s * 0.55;
+        const ry = (Math.random() * 2 - 1) * s * 0.5;
+        ctx.globalAlpha = 0.3 + Math.random() * 0.5;
+        ctx.beginPath();
+        ctx.arc(rx, ry, s * (0.015 + Math.random() * 0.04), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    } },
+    sparkleLine: { label: 'キラ', draw(ctx, s) {
+      ctx.strokeStyle = '#fff6c8';
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(255,240,160,.9)';
+      ctx.shadowBlur = s * 0.25;
+      ctx.lineWidth = Math.max(1.5, s * 0.09);
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.55); ctx.lineTo(0, s * 0.55);
+      ctx.moveTo(-s * 0.38, 0); ctx.lineTo(s * 0.38, 0);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1, s * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.22, -s * 0.22); ctx.lineTo(s * 0.22, s * 0.22);
+      ctx.moveTo(s * 0.22, -s * 0.22); ctx.lineTo(-s * 0.22, s * 0.22);
+      ctx.stroke();
+    } },
+    bubble: { label: 'ふきだし', draw(ctx, s) {
+      ctx.beginPath();
+      ctx.ellipse(0, -s * 0.08, s * 0.6, s * 0.42, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,.95)';
+      ctx.fill();
+      ctx.strokeStyle = '#8a8a8a';
+      ctx.lineWidth = Math.max(1.5, s * 0.05);
+      ctx.stroke();
+      // しっぽ
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.15, s * 0.28);
+      ctx.quadraticCurveTo(-s * 0.28, s * 0.5, -s * 0.42, s * 0.58);
+      ctx.quadraticCurveTo(-s * 0.22, s * 0.52, -s * 0.02, s * 0.33);
+      ctx.fillStyle = 'rgba(255,255,255,.95)';
+      ctx.fill();
+      ctx.stroke();
+    } },
+  };
+
+  /* ---------- スタイル付き文字スタンプの描画 ---------- */
+  function drawTextStampStyled(ctx, o) {
+    const fs = o.fontSize;
+    ctx.save();
+    ctx.translate(o.x, o.y);
+    ctx.rotate(o.rot);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (o.style === 'sticker') {
+      // 白フチシール風
+      ctx.font = `900 ${fs}px "Hiragino Maru Gothic ProN", sans-serif`;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = fs * 0.32;
+      ctx.strokeText(o.t, 0, 0);
+      ctx.fillStyle = o.color || '#f2889f';
+      ctx.fillText(o.t, 0, 0);
+    } else if (o.style === 'outline') {
+      // 中抜き文字
+      ctx.font = `900 ${fs}px "Hiragino Maru Gothic ProN", sans-serif`;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = fs * 0.3;
+      ctx.strokeText(o.t, 0, 0);
+      ctx.strokeStyle = o.color || '#3d3733';
+      ctx.lineWidth = Math.max(1.2, fs * 0.07);
+      ctx.strokeText(o.t, 0, 0);
+    } else if (o.style === 'neon') {
+      // ネオン発光（プリ機の定番フレーズ用）
+      ctx.font = `700 ${fs}px "Hiragino Maru Gothic ProN", sans-serif`;
+      ctx.shadowColor = '#ff7ad9';
+      ctx.shadowBlur = fs * 0.9;
+      ctx.fillStyle = 'rgba(255,255,255,.96)';
+      ctx.fillText(o.t, 0, 0);
+      ctx.fillText(o.t, 0, 0);
+      ctx.shadowBlur = 0;
+    } else {
+      // plain: 作成時のモード標準スタイル
+      ctx.font = o.font;
+      if (o.strokeColor) {
+        ctx.lineWidth = o.strokeWidth;
+        ctx.strokeStyle = o.strokeColor;
+        ctx.strokeText(o.t, 0, 0);
+      }
+      ctx.fillStyle = o.color;
+      ctx.fillText(o.t, 0, 0);
+    }
+    ctx.restore();
+  }
+
+  /* ---------- オブジェクト描画・再描画 ---------- */
+  function strokePolyline(ctx, pts, type, color, size) {
+    if (pts.length < 2) {
+      const p = pts[0];
+      ctx.save();
+      if (type === 'fuchi') {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(p.x, p.y, (size + 6) / 2, 0, Math.PI * 2); ctx.fill();
+      }
+      if (type === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = size * 1.6; }
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    };
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (type === 'fuchi') {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = size + 7;
+      path(); ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+    } else if (type === 'neon') {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = Math.max(8, size * 1.8);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+      path(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = Math.max(1.5, size * 0.35);
+      path(); ctx.stroke();
+    } else {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawObject(ctx, o) {
+    switch (o.type) {
+      case 'stroke':
+        strokePolyline(ctx, o.pts, o.penType, o.color, o.size);
+        break;
+      case 'erase':
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = o.size;
+        ctx.beginPath();
+        ctx.moveTo(o.pts[0].x, o.pts[0].y);
+        for (let i = 1; i < o.pts.length; i++) ctx.lineTo(o.pts[i].x, o.pts[i].y);
+        if (o.pts.length === 1) ctx.lineTo(o.pts[0].x + 0.1, o.pts[0].y);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      case 'kira':
+        o.items.forEach((it) => {
+          ctx.save();
+          ctx.font = `${it.size}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.translate(it.x, it.y);
+          ctx.rotate(it.rot);
+          ctx.fillText(it.ch, 0, 0);
+          ctx.restore();
+        });
+        break;
+      case 'stamp':
+        ctx.save();
+        ctx.font = `${o.size}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(o.char, o.x, o.y);
+        ctx.restore();
+        break;
+      case 'dstamp': {
+        const def = DRAWN_STAMPS[o.id];
+        if (!def) break;
+        ctx.save();
+        ctx.translate(o.x, o.y);
+        def.draw(ctx, o.size);
+        ctx.restore();
+        break;
+      }
+      case 'text':
+        drawTextStampStyled(ctx, o);
+        break;
+    }
+  }
+
+  function renderDeco() {
+    drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+    decoObjects.forEach(o => drawObject(drawCtx, o));
+  }
+
+  function pushUndo(op) {
+    undoStack.push(op);
+    if (undoStack.length > 60) undoStack.shift();
+  }
+
+  function undo() {
+    const op = undoStack.pop();
+    if (!op) return;
+    if (op.op === 'add') {
+      decoObjects.pop();
+    } else if (op.op === 'remove') {
+      op.items.slice().sort((a, b) => a.index - b.index).forEach(({ index, obj }) => {
+        decoObjects.splice(Math.min(index, decoObjects.length), 0, obj);
+      });
+    }
+    renderDeco();
+  }
+
+  /* ---------- なぞり消し（ロイロノート式: 触れたものを丸ごと消す） ---------- */
+  function distToSegment(px, py, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 ? ((px - a.x) * dx + (py - a.y) * dy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const cx = a.x + dx * t, cy = a.y + dy * t;
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  function hitTestObject(o, x, y, r) {
+    switch (o.type) {
+      case 'stroke': {
+        const th = o.size / 2 + r;
+        if (o.pts.length === 1) return Math.hypot(x - o.pts[0].x, y - o.pts[0].y) < th;
+        for (let i = 1; i < o.pts.length; i++) {
+          if (distToSegment(x, y, o.pts[i - 1], o.pts[i]) < th) return true;
+        }
+        return false;
+      }
+      case 'kira':
+        return o.items.some(it => Math.hypot(x - it.x, y - it.y) < it.size * 0.7 + r);
+      case 'stamp':
+      case 'dstamp':
+        return Math.abs(x - o.x) < o.size * 0.7 + r && Math.abs(y - o.y) < o.size * 0.7 + r;
+      case 'text':
+        return Math.abs(x - o.x) < (o.w || 60) / 2 + r && Math.abs(y - o.y) < o.fontSize * 0.8 + r;
+      default:
+        return false; // erase オブジェクトは対象外
+    }
+  }
+
+  let swipeRemoved = [];
+  function swipeEraseAt(x, y) {
+    let removedAny = false;
+    for (let i = decoObjects.length - 1; i >= 0; i--) {
+      if (hitTestObject(decoObjects[i], x, y, 14)) {
+        swipeRemoved.push({ index: i, obj: decoObjects[i] });
+        decoObjects.splice(i, 1);
+        removedAny = true;
+      }
+    }
+    if (removedAny) renderDeco();
+  }
+
+  /* ---------- ツールUI ---------- */
   function buildColorRow() {
     const conf = modeConf();
     const row = $('#color-row');
@@ -2024,33 +2420,68 @@
     const conf = modeConf();
     const row = $('#stamp-row');
     row.innerHTML = '';
-    conf.stamps.forEach(s => {
+    // 手描き風スタンプ（ミニプレビュー付き）
+    (conf.drawnStamps || []).forEach((id) => {
+      const def = DRAWN_STAMPS[id];
+      if (!def) return;
+      const b = document.createElement('button');
+      b.className = 'stamp-btn';
+      b.title = def.label;
+      const cv = document.createElement('canvas');
+      cv.width = 36; cv.height = 36;
+      cv.style.cssText = 'width:28px;height:28px;display:block;';
+      const cctx = cv.getContext('2d');
+      // プレビューは薄グレー地に描く（白系スタンプの視認用）
+      cctx.fillStyle = '#c9c2ce';
+      cctx.beginPath(); cctx.arc(18, 18, 17, 0, Math.PI * 2); cctx.fill();
+      cctx.save(); cctx.translate(18, 19); def.draw(cctx, 22); cctx.restore();
+      b.appendChild(cv);
+      b.addEventListener('click', () => setTool('dstamp', id));
+      row.appendChild(b);
+    });
+    // 絵文字スタンプ
+    (conf.stamps || []).forEach(s => {
       const b = document.createElement('button');
       b.className = 'stamp-btn';
       b.textContent = s;
       b.addEventListener('click', () => setTool('stamp', s));
       row.appendChild(b);
     });
+    const group = $('#group-stamp');
+    if (group) group.style.display = ((conf.drawnStamps || []).length + (conf.stamps || []).length) ? '' : 'none';
   }
 
   function buildTextStampRow() {
     const conf = modeConf();
     const row = $('#text-stamp-row');
     row.innerHTML = '';
-    conf.textStamps.forEach(s => {
+    (conf.textStamps || []).forEach(s => {
+      const item = typeof s === 'string' ? { t: s, style: 'plain' } : s;
       const b = document.createElement('button');
       b.className = 'text-stamp-btn';
-      b.textContent = s;
-      b.addEventListener('click', () => setTool('textstamp', s));
+      b.textContent = item.t;
+      b.addEventListener('click', () => setTool('textstamp', item));
       row.appendChild(b);
     });
+    const group = $('#group-text');
+    if (group) group.style.display = (conf.textStamps || []).length ? '' : 'none';
   }
 
   function buildDecoTools() {
+    const conf = modeConf();
     buildColorRow();
     buildStampRow();
     buildTextStampRow();
-    state.penColor = modeConf().penColors[0];
+    state.penColor = conf.penColors[0];
+    // ペン種別（モードごとに使えるものだけ表示。1種類なら行ごと隠す）
+    const types = conf.penTypes || ['normal'];
+    document.querySelectorAll('.pen-type-btn').forEach(b => {
+      b.style.display = types.includes(b.dataset.pentype) ? '' : 'none';
+      b.classList.toggle('active', b.dataset.pentype === 'normal');
+    });
+    const penTypeRow = $('#pen-type-row');
+    if (penTypeRow) penTypeRow.style.display = types.length > 1 ? '' : 'none';
+    state.penType = 'normal';
   }
   buildDecoTools();
 
@@ -2059,10 +2490,12 @@
   function setTool(tool, extra) {
     state.tool = tool;
     state.stampChar = tool === 'stamp' ? extra : null;
-    state.textStampStr = tool === 'textstamp' ? extra : null;
+    state.dstampId = tool === 'dstamp' ? extra : null;
+    state.textStampSel = tool === 'textstamp' ? extra : null;
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     if (tool === 'pen') $('.tool-btn[data-mode="pen"]').classList.add('active');
     if (tool === 'eraser') $('.tool-btn[data-mode="eraser"]').classList.add('active');
+    if (tool === 'swipe') $('.tool-btn[data-mode="swipe"]').classList.add('active');
   }
 
   document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -2079,186 +2512,157 @@
     };
   }
 
-  function pushHistory() {
-    state.history.push(drawCanvas.toDataURL());
-    if (state.history.length > 25) state.history.shift();
-  }
-
-  function undo() {
-    if (!state.history.length) return;
-    const last = state.history.pop();
-    const img = new Image();
-    img.onload = () => {
-      drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
-      drawCtx.drawImage(img, 0, 0);
-    };
-    img.src = last;
-  }
-
-  /* --- ペン種別ごとのストローク描画 --- */
+  /* ---------- ポインタ操作 ---------- */
   const SPARKLE_CHARS = ['✨', '⭐', '💫', '✦'];
-  let strokePts = [];
+  let curStroke = null;   // 描画中の stroke/erase/kira オブジェクト
   let lastSparkleX = 0, lastSparkleY = 0;
-
-  function drawStrokePolyline(ctx, pts, type, color, size) {
-    if (pts.length < 2) {
-      // 1点だけならドットを打つ
-      const p = pts[0];
-      ctx.save();
-      if (type === 'fuchi') {
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(p.x, p.y, (size + 6) / 2, 0, Math.PI * 2); ctx.fill();
-      }
-      if (type === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = size * 1.6; }
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-      return;
-    }
-    const path = () => {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    };
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (type === 'fuchi') {
-      // 白フチ: 太い白 → 上に色
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = size + 7;
-      path(); ctx.stroke();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = size;
-      path(); ctx.stroke();
-    } else if (type === 'neon') {
-      // ネオン: 色のグロー + 白コア
-      ctx.shadowColor = color;
-      ctx.shadowBlur = Math.max(8, size * 1.8);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = size;
-      path(); ctx.stroke();
-      path(); ctx.stroke(); // 2度描きでグローを濃く
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = 'rgba(255,255,255,.9)';
-      ctx.lineWidth = Math.max(1.5, size * 0.35);
-      path(); ctx.stroke();
-    } else {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = size;
-      path(); ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function stampSparkle(x, y) {
-    const size = state.penSize * (1.6 + Math.random() * 1.6);
-    drawCtx.save();
-    drawCtx.font = `${Math.round(size + 10)}px sans-serif`;
-    drawCtx.textAlign = 'center';
-    drawCtx.textBaseline = 'middle';
-    drawCtx.translate(x + (Math.random() * 8 - 4), y + (Math.random() * 8 - 4));
-    drawCtx.rotate(Math.random() * Math.PI * 2);
-    drawCtx.fillText(SPARKLE_CHARS[Math.floor(Math.random() * SPARKLE_CHARS.length)], 0, 0);
-    drawCtx.restore();
-  }
 
   drawCanvas.addEventListener('pointerdown', (e) => {
     if (state.remaining <= 0) return;
     try { drawCanvas.setPointerCapture(e.pointerId); } catch (err) { /* 一部環境では無視して続行 */ }
     const { x, y } = getCanvasPos(e);
 
-    if (state.tool === 'stamp' && state.stampChar) {
-      pushHistory();
-      drawCtx.font = `${state.stampSize}px sans-serif`;
-      drawCtx.textAlign = 'center';
-      drawCtx.textBaseline = 'middle';
-      drawCtx.fillText(state.stampChar, x, y);
+    if (state.tool === 'swipe') {
+      state.isDrawing = true;
+      swipeRemoved = [];
+      swipeEraseAt(x, y);
       return;
     }
-    if (state.tool === 'textstamp' && state.textStampStr) {
-      pushHistory();
-      const style = modeConf().textStampStyle;
+
+    if (state.tool === 'stamp' && state.stampChar) {
+      const o = { type: 'stamp', char: state.stampChar, x, y, size: state.stampSize };
+      decoObjects.push(o);
+      drawObject(drawCtx, o);
+      pushUndo({ op: 'add' });
+      return;
+    }
+    if (state.tool === 'dstamp' && state.dstampId) {
+      const o = { type: 'dstamp', id: state.dstampId, x, y, size: state.stampSize * 1.2 };
+      decoObjects.push(o);
+      drawObject(drawCtx, o);
+      pushUndo({ op: 'add' });
+      return;
+    }
+    if (state.tool === 'textstamp' && state.textStampSel) {
+      const sel = state.textStampSel;
+      const modeStyle = modeConf().textStampStyle;
       const sizeScale = state.stampSize / 48;
+      const fontSize = Math.round((sel.style === 'neon' ? 22 : 20) * sizeScale);
+      const o = {
+        type: 'text', t: sel.t, style: sel.style || 'plain', color: sel.color || modeStyle.fill,
+        x, y, fontSize,
+        rot: (Math.random() * modeStyle.rotate * 2 - modeStyle.rotate) * Math.PI / 180,
+        font: modeStyle.font.replace(/(\d+)px/, (m, n) => Math.round(Number(n) * sizeScale) + 'px'),
+        strokeColor: modeStyle.stroke,
+        strokeWidth: (modeStyle.strokeWidth || 0) * sizeScale,
+      };
+      // ヒットテスト用に幅を測る
       drawCtx.save();
-      drawCtx.font = style.font.replace(/(\d+)px/, (m, n) => Math.round(Number(n) * sizeScale) + 'px');
-      drawCtx.textAlign = 'center';
-      drawCtx.textBaseline = 'middle';
-      drawCtx.translate(x, y);
-      drawCtx.rotate((Math.random() * style.rotate * 2 - style.rotate) * Math.PI / 180);
-      if (style.stroke) {
-        drawCtx.lineWidth = style.strokeWidth * sizeScale;
-        drawCtx.strokeStyle = style.stroke;
-        drawCtx.strokeText(state.textStampStr, 0, 0);
-      }
-      drawCtx.fillStyle = style.fill;
-      drawCtx.fillText(state.textStampStr, 0, 0);
+      drawCtx.font = `900 ${fontSize}px sans-serif`;
+      o.w = drawCtx.measureText(o.t).width + fontSize * 0.4;
       drawCtx.restore();
+      decoObjects.push(o);
+      drawObject(drawCtx, o);
+      pushUndo({ op: 'add' });
       return;
     }
 
     // pen / eraser
-    pushHistory();
     state.isDrawing = true;
     state.lastX = x; state.lastY = y;
 
     if (state.tool === 'eraser') {
-      drawCtx.beginPath();
-      drawCtx.moveTo(x, y);
+      curStroke = { type: 'erase', size: state.penSize * 2.2, pts: [{ x, y }] };
       return;
     }
     if (state.penType === 'kira') {
+      curStroke = { type: 'kira', items: [] };
       lastSparkleX = x; lastSparkleY = y;
-      stampSparkle(x, y);
+      addSparkle(x, y);
       return;
     }
-    // 通常/ネオン/白フチ: ストロークレイヤーでプレビュー
-    strokePts = [{ x, y }];
-    drawStrokePolyline(strokeCtx, strokePts, state.penType, state.penColor, state.penSize);
+    curStroke = { type: 'stroke', penType: state.penType, color: state.penColor, size: state.penSize, pts: [{ x, y }] };
+    strokePolyline(strokeCtx, curStroke.pts, curStroke.penType, curStroke.color, curStroke.size);
   });
+
+  function addSparkle(x, y) {
+    const it = {
+      ch: SPARKLE_CHARS[Math.floor(Math.random() * SPARKLE_CHARS.length)],
+      x: x + (Math.random() * 8 - 4),
+      y: y + (Math.random() * 8 - 4),
+      size: Math.round(state.penSize * (1.6 + Math.random() * 1.6)) + 10,
+      rot: Math.random() * Math.PI * 2,
+    };
+    curStroke.items.push(it);
+    drawCtx.save();
+    drawCtx.font = `${it.size}px sans-serif`;
+    drawCtx.textAlign = 'center';
+    drawCtx.textBaseline = 'middle';
+    drawCtx.translate(it.x, it.y);
+    drawCtx.rotate(it.rot);
+    drawCtx.fillText(it.ch, 0, 0);
+    drawCtx.restore();
+  }
 
   drawCanvas.addEventListener('pointermove', (e) => {
     if (!state.isDrawing || state.remaining <= 0) return;
     const { x, y } = getCanvasPos(e);
 
-    if (state.tool === 'eraser') {
+    if (state.tool === 'swipe') {
+      swipeEraseAt(x, y);
+      return;
+    }
+    if (state.tool === 'eraser' && curStroke) {
+      // プレビューは直接destination-outで消しつつ、オブジェクトにも記録
+      curStroke.pts.push({ x, y });
       drawCtx.save();
+      drawCtx.globalCompositeOperation = 'destination-out';
       drawCtx.lineCap = 'round';
       drawCtx.lineJoin = 'round';
-      drawCtx.globalCompositeOperation = 'destination-out';
-      drawCtx.lineWidth = state.penSize * 2.2;
+      drawCtx.lineWidth = curStroke.size;
+      drawCtx.beginPath();
+      drawCtx.moveTo(state.lastX, state.lastY);
       drawCtx.lineTo(x, y);
       drawCtx.stroke();
       drawCtx.restore();
-      drawCtx.globalCompositeOperation = 'source-over';
       state.lastX = x; state.lastY = y;
       return;
     }
-    if (state.penType === 'kira') {
+    if (state.penType === 'kira' && curStroke) {
       const dx = x - lastSparkleX, dy = y - lastSparkleY;
       if (dx * dx + dy * dy > (state.penSize * 2.4) ** 2) {
-        stampSparkle(x, y);
+        addSparkle(x, y);
         lastSparkleX = x; lastSparkleY = y;
       }
       state.lastX = x; state.lastY = y;
       return;
     }
-    strokePts.push({ x, y });
-    strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
-    drawStrokePolyline(strokeCtx, strokePts, state.penType, state.penColor, state.penSize);
-    state.lastX = x; state.lastY = y;
+    if (curStroke) {
+      curStroke.pts.push({ x, y });
+      strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+      strokePolyline(strokeCtx, curStroke.pts, curStroke.penType, curStroke.color, curStroke.size);
+      state.lastX = x; state.lastY = y;
+    }
   });
 
   function endStroke() {
     if (!state.isDrawing) return;
     state.isDrawing = false;
-    if (state.tool === 'eraser' || state.penType === 'kira') return;
-    // ストロークを本レイヤーへ確定
-    if (strokePts.length) {
+    if (state.tool === 'swipe') {
+      if (swipeRemoved.length) {
+        pushUndo({ op: 'remove', items: swipeRemoved });
+        swipeRemoved = [];
+      }
+      return;
+    }
+    if (!curStroke) return;
+    if (curStroke.type === 'stroke') {
       drawCtx.drawImage(strokeCanvas, 0, 0);
       strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
-      strokePts = [];
     }
+    decoObjects.push(curStroke);
+    pushUndo({ op: 'add' });
+    curStroke = null;
   }
   drawCanvas.addEventListener('pointerup', endStroke);
   drawCanvas.addEventListener('pointercancel', endStroke);
@@ -2281,8 +2685,10 @@
 
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-clear').addEventListener('click', () => {
-    pushHistory();
-    drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+    if (!decoObjects.length) return;
+    pushUndo({ op: 'remove', items: decoObjects.map((obj, index) => ({ index, obj })) });
+    decoObjects = [];
+    renderDeco();
   });
 
   /* ===================== できあがり確認 ===================== */
@@ -2307,7 +2713,9 @@
   function startDecoScreen() {
     showScreen('screen-deco');
     drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
-    state.history = [];
+    decoObjects = [];
+    undoStack = [];
+    renderDeco();
     buildDecoTools();
     setTool('pen');
     state.remaining = DECO_SECONDS;
@@ -2372,7 +2780,9 @@
     state.shots = [];
     state.processedShots = [];
     state.faceData = [];
-    state.history = [];
+    decoObjects = [];
+    undoStack = [];
+    renderDeco();
     stopBGM();
     showScreen('screen-title');
   });
