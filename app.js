@@ -479,11 +479,52 @@
     });
   }
 
+  // 選択画面のフィルターチップ（選んだ値は盛り画面のフィルターと共通）
+  function buildSelectFilterRow() {
+    const conf = modeConf();
+    const row = $('#select-filter-row');
+    row.innerHTML = '';
+    conf.filters.forEach(f => {
+      const b = document.createElement('button');
+      b.className = 'preset-btn' + (f.id === state.beauty.filter ? ' active' : '');
+      b.textContent = f.label;
+      b.addEventListener('click', () => {
+        state.beauty.filter = f.id;
+        row.querySelectorAll('.preset-btn').forEach(x => x.classList.toggle('active', x === b));
+      });
+      row.appendChild(b);
+    });
+  }
+
   function buildSelectGrids() {
     const conf = modeConf();
     buildLayoutList();
     buildChoiceGrid($('#curtain-list'), conf.curtains, 'curtain', (item) => { state.curtain = item; });
     buildChoiceGrid($('#frame-list'), conf.frames, 'frame', (item) => { state.frame = item; });
+    buildSelectFilterRow();
+
+    /* モード別にセクションを並べ替える:
+       平成 = フレーム＋フィルターがデフォ（初代プリ機の流れ）。分割・カラー・デジタル背景は「こだわり設定」へ
+       令和 = 分割・カラー・フレームがデフォ。デジタル背景は「こだわり設定」へ */
+    const main = $('#select-main');
+    const adv = $('#advanced-body');
+    const order = state.mode === 'heisei'
+      ? { main: ['sel-frame', 'sel-filter'], adv: ['sel-layout', 'sel-curtain', 'sel-chroma'] }
+      : { main: ['sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-chroma'] };
+    order.main.forEach(id => main.appendChild($('#' + id)));
+    order.adv.forEach(id => adv.appendChild($('#' + id)));
+    $('#sel-advanced').open = false;
+
+    // メイン側だけ STEP番号を振る（こだわり側は素の見出し）
+    let step = 1;
+    order.main.forEach(id => {
+      const h = $('#' + id).querySelector('.step-heading');
+      if (h) h.textContent = `STEP ${step++}. ${h.dataset.title}`;
+    });
+    order.adv.forEach(id => {
+      const h = $('#' + id).querySelector('.step-heading');
+      if (h) h.textContent = h.dataset.title;
+    });
   }
 
   // 背景くりぬきトグル（文化祭ではアナログのカーテン背景を使うため、デフォルトOFF）

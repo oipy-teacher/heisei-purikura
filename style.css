@@ -224,6 +224,32 @@ body[data-mode="reiwa"] .layout-item { background: #f7f2ea; }
 body[data-mode="reiwa"] .layout-item.selected { border-color: #b39b8a; }
 body[data-mode="reiwa"] .layout-item .layout-label { color: #8a7568; }
 
+.sel-section { margin-bottom: 4px; }
+
+.sel-advanced {
+  margin-top: 16px;
+  background: #f8f4fc;
+  border: 2px dashed #d9c7ec;
+  border-radius: 16px;
+  padding: 10px 16px;
+  text-align: left;
+}
+.sel-advanced summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+  color: #8a6ab0;
+  padding: 4px 0;
+  list-style: none;
+}
+.sel-advanced summary::-webkit-details-marker { display: none; }
+.sel-advanced[open] summary { margin-bottom: 8px; }
+body[data-mode="reiwa"] .sel-advanced { background: #f6f1ea; border-color: #ddceba; }
+body[data-mode="reiwa"] .sel-advanced summary { color: #8a7568; }
+
+.select-filters { justify-content: center; margin-bottom: 8px; }
+.select-filters .preset-btn { flex: 0 1 auto; min-width: 84px; padding: 12px 14px; font-size: 14px; }
+
 .chroma-row {
   display: flex;
   align-items: center;

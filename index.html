@@ -41,22 +41,42 @@
     </div>
   </section>
 
-  <!-- ============ 1. シールデザイン選択 ============ -->
+  <!-- ============ 1. シールデザイン選択（並び順はモードによってJSが組み替える） ============ -->
   <section id="screen-select" class="screen">
     <div class="panel">
-      <h2 class="step-heading">STEP 1. ぶんかつ（レイアウト）をえらんでね</h2>
-      <div id="layout-list" class="layout-grid"></div>
-      <h2 class="step-heading">STEP 2. シールのカラーをえらんでね</h2>
-      <div id="curtain-list" class="choice-grid"></div>
-      <h2 class="step-heading">STEP 3. フレームをえらんでね</h2>
-      <div id="frame-list" class="choice-grid"></div>
-      <div class="chroma-row">
-        <div class="chroma-label">
-          <p class="chroma-title">🪄 背景くりぬき</p>
-          <p class="chroma-note">会場のカーテン背景をそのまま写すなら OFF のまま！</p>
-        </div>
-        <button id="btn-chroma-toggle" class="chroma-toggle" data-on="false">OFF</button>
+      <div id="select-main"></div>
+      <details id="sel-advanced" class="sel-advanced">
+        <summary>⚙️ こだわり設定（ひらく）</summary>
+        <div id="advanced-body"></div>
+      </details>
+
+      <!-- 以下の各セクションはJSが select-main / advanced-body へ振り分ける -->
+      <div class="sel-section" id="sel-layout">
+        <h2 class="step-heading" data-title="ぶんかつ（レイアウト）をえらんでね"></h2>
+        <div id="layout-list" class="layout-grid"></div>
       </div>
+      <div class="sel-section" id="sel-curtain">
+        <h2 class="step-heading" data-title="シールのカラーをえらんでね"></h2>
+        <div id="curtain-list" class="choice-grid"></div>
+      </div>
+      <div class="sel-section" id="sel-frame">
+        <h2 class="step-heading" data-title="フレームをえらんでね"></h2>
+        <div id="frame-list" class="choice-grid"></div>
+      </div>
+      <div class="sel-section" id="sel-filter">
+        <h2 class="step-heading" data-title="うつり（フィルター）をえらんでね"></h2>
+        <div id="select-filter-row" class="preset-row select-filters"></div>
+      </div>
+      <div class="sel-section" id="sel-chroma">
+        <div class="chroma-row">
+          <div class="chroma-label">
+            <p class="chroma-title">🪄 デジタル背景（くりぬき）</p>
+            <p class="chroma-note">会場のカーテン背景をそのまま写すなら OFF のまま！</p>
+          </div>
+          <button id="btn-chroma-toggle" class="chroma-toggle" data-on="false">OFF</button>
+        </div>
+      </div>
+
       <button id="btn-to-camera" class="btn-main">この組み合わせでOK！ ▶</button>
     </div>
   </section>
