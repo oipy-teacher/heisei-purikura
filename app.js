@@ -35,7 +35,7 @@
       penColors: ['#ff2fa0', '#ff8fc7', '#ffef5c', '#5cff8f', '#5cc8ff', '#a06bff', '#ffffff', '#000000'],
       penTypes: ['normal'],
       stamps: [],
-      drawnStamps: [],
+      drawnStamps: ['dateRetro'], // 写ルンです風の日付焼き込み（時代考証的にもドンピシャ）
       textStamps: [],
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
@@ -52,6 +52,7 @@
       filters: [
         { id: 'none',   label: 'なし',      fx: {} },
         { id: 'bihaku', label: '美白MAX',   fx: { bright: 0.30, desat: 0.45 } },
+        { id: 'ganguro', label: '日やけギャル', fx: { tan: { color: '#c9926a', amt: 0.5 }, contrast: 0.15, warm: { color: '#d98a4a', amt: 0.2 } } },
         { id: 'retro',  label: 'レトロ',    fx: { desat: 0.3, warm: { color: '#d9a06a', amt: 0.28 }, bright: 0.06, contrast: 0.12 } },
         { id: 'sepia',  label: 'セピア',    fx: { desat: 0.9, colorize: { color: '#a97e52', amt: 0.5 }, bright: 0.08 } },
         { id: 'vivid',  label: 'ビビッド',  fx: { contrast: 0.45, bright: 0.05 } },
@@ -92,7 +93,7 @@
       penTypes: ['normal', 'neon', 'fuchi', 'kira'],
       stamps: ['🤍', '🫶', '✨', '🌷', '🧸', '☁️', '🍓', '🥐', '📷', '🎧', '🪞', '🎀'],
       // 手描き風スタンプ（Canvas描画。参考画像のハート各種・キラ・吹き出しを再現）
-      drawnStamps: ['heartSticker', 'heartGlossy', 'heartOutline', 'heartLine', 'heartArrow', 'heartChalk', 'sparkleLine', 'bubble'],
+      drawnStamps: ['heartSticker', 'heartGlossy', 'heartOutline', 'heartLine', 'heartArrow', 'heartChalk', 'sparkleLine', 'bubble', 'dateCute'],
       // スタイル付き文字スタンプ（sticker=白フチ / outline=中抜き / neon=ネオン発光 / plain=モード標準）
       textStamps: [
         { t: 'Perfect',  style: 'outline' },
@@ -111,6 +112,8 @@
         { t: 'かわいくなりすぎちゃったかも', style: 'neon' },
         { t: 'さすがに盛りすぎちゃったかも', style: 'neon' },
         { t: '全銀河中キュンさせちゃう',     style: 'neon' },
+        { t: '太子祭',   style: 'sticker', color: '#d94a6a' },
+        { t: '聖徳',     style: 'sticker', color: '#4a6ad9' },
       ],
       textStampStyle: { font: 'italic 600 18px Georgia, serif', fill: '#a8917d', stroke: null, strokeWidth: 0, rotate: 4 },
       // 盛れ感プリセット（現行機 Hyper shot の「無加工風/ナチュ盛れ/プリ盛れ」選択を再現）
@@ -156,24 +159,47 @@
 
   const SHOT_W = 640, SHOT_H = 480;
 
-  // シートレイアウト（分割）。16分割は平成プリの定番！
+  // シートレイアウト（分割）。16分割は平成プリの定番！まる系は保護者リクエスト
   const LAYOUTS = [
     { id: 'quad',    label: '4分割',     cols: 2, rows: 2, gap: 26, radius: 10 },
     { id: 'wide2',   label: '2枚ワイド', cols: 1, rows: 2, gap: 26, radius: 12 },
     { id: 'six',     label: '6分割',     cols: 2, rows: 3, gap: 18, radius: 8 },
     { id: 'sixteen', label: '16分割',    cols: 4, rows: 4, gap: 12, radius: 6 },
+    { id: 'circle4', label: 'まる4',     cols: 2, rows: 2, gap: 26, radius: 0, shape: 'circle' },
+    { id: 'circleMix', label: 'まるMIX', gap: 20, radius: 0, shape: 'circle',
+      // 大きさ指定の丸型ミックス（大1+中1+小2）。ヘッダー下の描画領域に対する比率
+      cellsNorm: [
+        { x: 0.06, y: 0.02, w: 0.56, h: 0.48 },
+        { x: 0.62, y: 0.30, w: 0.36, h: 0.30 },
+        { x: 0.10, y: 0.56, w: 0.38, h: 0.32 },
+        { x: 0.52, y: 0.64, w: 0.44, h: 0.36 },
+      ] },
   ];
 
   function layoutCells(layout) {
     const cells = [];
+    const innerY = HEADER_H;
+    const innerH = SHEET_H - HEADER_H - FOOTER_H;
+    if (layout.cellsNorm) {
+      // 比率指定のカスタムセル（まるMIX等）
+      layout.cellsNorm.forEach(c => {
+        cells.push({
+          x: c.x * SHEET_W,
+          y: innerY + c.y * innerH,
+          w: c.w * SHEET_W,
+          h: c.h * innerH,
+        });
+      });
+      return cells;
+    }
     const availW = SHEET_W - layout.gap * (layout.cols + 1);
-    const availH = SHEET_H - HEADER_H - FOOTER_H - layout.gap * (layout.rows + 1);
+    const availH = innerH - layout.gap * (layout.rows + 1);
     const cw = availW / layout.cols, ch = availH / layout.rows;
     for (let r = 0; r < layout.rows; r++) {
       for (let c = 0; c < layout.cols; c++) {
         cells.push({
           x: layout.gap + c * (cw + layout.gap),
-          y: HEADER_H + layout.gap + r * (ch + layout.gap),
+          y: innerY + layout.gap + r * (ch + layout.gap),
           w: cw, h: ch,
         });
       }
@@ -305,16 +331,33 @@
   bgmAudio.volume = 0.32;
   bgmAudio.preload = 'auto';
 
-  function startBGM() {
-    const src = modeConf().bgm;
+  const BGM_TITLE = 'audio/bgm_title.mp3';
+
+  function playBgmSrc(src) {
     if (!bgmAudio.src.endsWith(src)) bgmAudio.src = src;
     bgmAudio.currentTime = 0;
     bgmAudio.play().catch(() => {});
+  }
+  function startBGM() {
+    playBgmSrc(modeConf().bgm);
   }
   function stopBGM() {
     bgmAudio.pause();
     bgmAudio.currentTime = 0;
   }
+
+  // タイトルBGM: 自動再生はブラウザにブロックされるため、最初のタッチで開始
+  let titleBgmStarted = false;
+  document.addEventListener('pointerdown', () => {
+    if (!titleBgmStarted && screens['screen-title'].classList.contains('active')) {
+      titleBgmStarted = true;
+      unlockAudio();
+      setTimeout(() => {
+        // モードボタン押下と同時だった場合はモードBGMを優先
+        if (screens['screen-title'].classList.contains('active')) playBgmSrc(BGM_TITLE);
+      }, 60);
+    }
+  }, true);
 
   // iOS Safari 対策：最初のユーザー操作のタイミングで全音声を一度ミュート再生し、以降のタイマー発火の再生を許可させる
   function unlockAudio() {
@@ -389,17 +432,35 @@
   // レイアウトのミニプレビューSVGを生成
   function layoutIconSVG(layout) {
     const W = 52, H = 68, pad = 3;
-    const availW = W - pad * (layout.cols + 1);
-    const availH = H - pad * (layout.rows + 1);
-    const cw = availW / layout.cols, ch = availH / layout.rows;
-    let rects = '';
-    for (let r = 0; r < layout.rows; r++) {
-      for (let c = 0; c < layout.cols; c++) {
-        const x = pad + c * (cw + pad), y = pad + r * (ch + pad);
-        rects += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#e3a8c9"/>`;
+    let shapes = '';
+    const isCircle = layout.shape === 'circle';
+    if (layout.cellsNorm) {
+      layout.cellsNorm.forEach(c => {
+        const x = c.x * W, y = c.y * H, cw = c.w * W, ch = c.h * H;
+        if (isCircle) {
+          const r = Math.min(cw, ch) / 2;
+          shapes += `<circle cx="${(x + cw / 2).toFixed(1)}" cy="${(y + ch / 2).toFixed(1)}" r="${r.toFixed(1)}" fill="#e3a8c9"/>`;
+        } else {
+          shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#e3a8c9"/>`;
+        }
+      });
+    } else {
+      const availW = W - pad * (layout.cols + 1);
+      const availH = H - pad * (layout.rows + 1);
+      const cw = availW / layout.cols, ch = availH / layout.rows;
+      for (let r = 0; r < layout.rows; r++) {
+        for (let c = 0; c < layout.cols; c++) {
+          const x = pad + c * (cw + pad), y = pad + r * (ch + pad);
+          if (isCircle) {
+            const rr = Math.min(cw, ch) / 2;
+            shapes += `<circle cx="${(x + cw / 2).toFixed(1)}" cy="${(y + ch / 2).toFixed(1)}" r="${rr.toFixed(1)}" fill="#e3a8c9"/>`;
+          } else {
+            shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#e3a8c9"/>`;
+          }
+        }
       }
     }
-    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${W}" height="${H}" rx="4" fill="#fff" stroke="#e8cede"/>${rects}</svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${W}" height="${H}" rx="4" fill="#fff" stroke="#e8cede"/>${shapes}</svg>`;
   }
 
   function buildLayoutList() {
@@ -1082,6 +1143,13 @@
       ctx.globalCompositeOperation = 'soft-light';
       ctx.globalAlpha = Math.min(1, fx.warm.amt);
       ctx.fillStyle = fx.warm.color;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (fx.tan) {
+      // 乗算で日焼け色に（平成ガングロ用）
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = Math.min(1, fx.tan.amt);
+      ctx.fillStyle = fx.tan.color;
       ctx.fillRect(0, 0, w, h);
     }
     if (fx.bright) {
@@ -1961,13 +2029,31 @@
     const cells = layoutCells(state.layout);
     const radius = state.layout.radius;
     const pad = Math.min(6, state.layout.gap * 0.3);
+    const isCircle = state.layout.shape === 'circle';
     cells.forEach((cell, i) => {
       const shotCanvas = shots[i % shots.length];
       if (!shotCanvas) return;
       const { x, y, w: cw, h: chh } = cell;
+      // 円形セルは正円（短辺基準）
+      const cx = x + cw / 2, cy = y + chh / 2;
+      const rad = Math.min(cw, chh) / 2;
+
+      const cellPath = () => {
+        if (isCircle) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        } else {
+          roundRect(ctx, x, y, cw, chh, radius);
+        }
+      };
 
       ctx.save();
-      roundRect(ctx, x - pad, y - pad, cw + pad * 2, chh + pad * 2, radius + 4);
+      if (isCircle) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad + pad, 0, Math.PI * 2);
+      } else {
+        roundRect(ctx, x - pad, y - pad, cw + pad * 2, chh + pad * 2, radius + 4);
+      }
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0,0,0,.22)';
       ctx.shadowBlur = state.mode === 'reiwa' ? 5 : 8;
@@ -1975,13 +2061,17 @@
       ctx.restore();
 
       ctx.save();
-      roundRect(ctx, x, y, cw, chh, radius);
+      cellPath();
       ctx.clip();
-      drawCover(ctx, shotCanvas, x, y, cw, chh);
+      if (isCircle) {
+        drawCover(ctx, shotCanvas, cx - rad, cy - rad, rad * 2, rad * 2);
+      } else {
+        drawCover(ctx, shotCanvas, x, y, cw, chh);
+      }
       ctx.restore();
 
       ctx.save();
-      roundRect(ctx, x, y, cw, chh, radius);
+      cellPath();
       ctx.lineWidth = state.mode === 'reiwa' ? 1.5 : 3;
       if (state.mode === 'reiwa') {
         ctx.strokeStyle = '#e0d5c8';
@@ -2155,6 +2245,32 @@
       ctx.moveTo(-s * 0.22, -s * 0.22); ctx.lineTo(s * 0.22, s * 0.22);
       ctx.moveTo(s * 0.22, -s * 0.22); ctx.lineTo(-s * 0.22, s * 0.22);
       ctx.stroke();
+    } },
+    dateRetro: { label: '日付(写ルンです風)', draw(ctx, s) {
+      // フィルムカメラの日付焼き込み風（オレンジのデジタル文字）
+      const d = new Date();
+      const txt = `'${String(d.getFullYear()).slice(2)} ${d.getMonth() + 1} ${d.getDate()}`;
+      ctx.font = `700 ${Math.round(s * 0.42)}px "Courier New", monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(255,122,26,.9)';
+      ctx.shadowBlur = s * 0.12;
+      ctx.fillStyle = '#ff8a2a';
+      ctx.fillText(txt, 0, 0);
+      ctx.fillText(txt, 0, 0);
+    } },
+    dateCute: { label: '日付(シール風)', draw(ctx, s) {
+      const d = new Date();
+      const txt = `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ♡`;
+      ctx.font = `900 ${Math.round(s * 0.36)}px "Hiragino Maru Gothic ProN", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s * 0.13;
+      ctx.strokeText(txt, 0, 0);
+      ctx.fillStyle = '#f2889f';
+      ctx.fillText(txt, 0, 0);
     } },
     bubble: { label: 'ふきだし', draw(ctx, s) {
       ctx.beginPath();
@@ -2783,7 +2899,7 @@
     decoObjects = [];
     undoStack = [];
     renderDeco();
-    stopBGM();
+    playBgmSrc(BGM_TITLE); // タイトルへ戻ったらタイトル曲へ
     showScreen('screen-title');
   });
 
