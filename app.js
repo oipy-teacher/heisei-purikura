@@ -982,8 +982,30 @@
     }
     poseGuideEl.textContent = 'かわいく決めてね💕';
     stopCamera();
-    startBeautyScreen();
+    if (state.mode === 'heisei') {
+      // 平成モードに盛り調整（デカ目・美肌スライダー等）は存在しない時代。
+      // 初代プリ機の「低画素カメラで写りが良く見える」を固定の軽い補正で再現し、そのまま落書きへ
+      poseGuideEl.textContent = '現像中…📸';
+      await finishHeiseiProcessing();
+    } else {
+      startBeautyScreen();
+    }
   });
+
+  // 平成モード用: 盛りUIなしの自動仕上げ（軽い写り補正 + 選択画面で選んだフィルター）
+  async function finishHeiseiProcessing() {
+    try {
+      await initSkinSegmenter(); // 肌検知だけ使う（顔ランドマークは不要）
+      for (let i = 0; i < state.shots.length; i++) {
+        state.skinConf[i] = computeSkinConf(state.shots[i]);
+      }
+      skinMaskCache.clear();
+    } catch (err) { /* 肌検知が使えなくてもフィルターのみで続行 */ }
+    const params = { skin: 25, white: 10, clear: 12, eye: 0, face: 0, cheek: 0, lip: 0, filter: state.beauty.filter };
+    state.processedShots = state.shots.map((shot, i) => applyBeauty(shot, null, params, null, i));
+    composeSheet();
+    startDecoScreen();
+  }
 
   /* ===================== 盛り加工エンジン ===================== */
 
