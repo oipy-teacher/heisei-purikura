@@ -126,6 +126,10 @@
       makeup: { cheek: '#e2917d', lip: '#c96a5f' },
       // 令和は血色感を残すナチュラル美肌（さらパフ肌）
       skinTone: { brightPerUnit: 0.10, desatPerUnit: 0 },
+      /* 透明感（clear）で「色ムラの平滑化」を行うか。
+         令和だけ true。平成の白肌は色が平坦で明るさで押す時代の絵作りなので、
+         色ムラをならす現代的な透明感は入れない（時代考証・2026-07-19の裁定を維持）。 */
+      clearColorSmooth: true,
       filters: [
         { id: 'none',   label: 'なし',     fx: {} },
         { id: 'film',   label: 'フィルム', fx: { desat: 0.25, warm: { color: '#d9a06a', amt: 0.20 }, bright: 0.06 } },
@@ -1718,6 +1722,21 @@
   }
 
   let skinLayerCanvas = null, skinLayerCtx = null;
+  /* 非分離ブレンドモード 'color'（上の色相・彩度 ＋ 下の輝度）が使えるか。
+     使えない実装では代入しても 'source-over' のまま戻るので、それで判定する。
+     ctx.filter で一度火傷している（2026-07-06）ので、使う前に必ず確認する。 */
+  let colorBlendOK = null;
+  function canUseColorBlend() {
+    if (colorBlendOK === null) {
+      try {
+        const t = document.createElement('canvas').getContext('2d');
+        t.globalCompositeOperation = 'color';
+        colorBlendOK = t.globalCompositeOperation === 'color';
+      } catch (e) { colorBlendOK = false; }
+    }
+    return colorBlendOK;
+  }
+
   function getSkinLayer(w, h) {
     if (!skinLayerCanvas) {
       skinLayerCanvas = document.createElement('canvas');
@@ -1764,9 +1783,36 @@
         }
 
         if (clearS > 0 && baseObj) {
-          // グロー: 明るいぼかし肌をスクリーン合成 → 内側から光る透明感
+          /* --- 色ムラの平滑化（2026-07-27 追加・透明感の主役） ---
+             肌が「不透明」に見える一番の原因は暗さではなく、赤み・黄ぐすみの斑（まだら）。
+             ここでは輝度をいっさい触らずに、色だけをぼかして斑をならす。
+             globalCompositeOperation='color' は「上の色相・彩度 ＋ 下の輝度」で合成するので、
+             ぼかした肌をこれで重ねると、毛穴やキメ（＝輝度の情報）を残したまま色ムラだけが消える。
+             美肌＝輝度をならす／美白＝輝度を上げる／透明感＝色をならす、と軸を分けるための処理。
+             ※ この処理を入れる前の clear は「ぼかした肌を明るくして screen 合成」だけで、
+                向きとしては美肌＋美白と同じ輝度方向に寄っていた（＝美肌の弱い版）。 */
+          if (conf.clearColorSmooth && canUseColorBlend()) {
+            const cCtx = getSkinLayer(w, h);
+            cCtx.globalCompositeOperation = 'source-over';
+            cCtx.clearRect(0, 0, w, h);
+            cCtx.imageSmoothingEnabled = true;
+            // makeBlurred は共有の作業用キャンバスを返すので、受け取ったら即座に描く
+            cCtx.drawImage(makeBlurred(baseObj.base, 7), 0, 0, w, h);
+            cCtx.globalCompositeOperation = 'destination-in';
+            cCtx.drawImage(mask, 0, 0);
+            cCtx.globalCompositeOperation = 'source-over';
+            outCtx.globalCompositeOperation = 'color';
+            outCtx.globalAlpha = Math.min(1, clearS * 0.85);
+            outCtx.drawImage(skinLayerCanvas, 0, 0);
+            outCtx.globalCompositeOperation = 'source-over';
+            outCtx.globalAlpha = 1;
+          }
+
+          /* グロー: 明るいぼかし肌をスクリーン合成 → 内側から光る透明感。
+             色の平滑化を入れた分、輝度方向へ寄せすぎないよう 0.42 → 0.22 に落とす
+             （0.42 のままだと美白と見分けがつかず、透明感スライダーの役割が重複するため）。 */
           outCtx.globalCompositeOperation = 'screen';
-          outCtx.globalAlpha = clearS * 0.42;
+          outCtx.globalAlpha = clearS * (conf.clearColorSmooth ? 0.22 : 0.42);
           outCtx.drawImage(baseObj.glow, 0, 0);
           // 黄ぐすみ除去: 淡ブルーをソフトライトで（肌マスク越し）
           const layerCtx = getSkinLayer(w, h);
