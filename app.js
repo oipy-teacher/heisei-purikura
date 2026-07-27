@@ -148,8 +148,22 @@
   };
 
   const NUM_SHOTS = 4;
-  const DECO_SECONDS = 180;   // 落書き3分（実機の落書き制限時間 約200秒に準拠）
+
+  /* 落書きの制限時間（モード別・2026-07-26 オーナー裁定）
+     平成 = 180秒。実機の約200秒に準拠。時間に追われて描く緊張感が体験の核なので変えない。
+     令和 = 長め。スマホの小さい画面で指で拡大しながら描くため、実機と同じ尺だと足りない。
+     ※ 実際に試して調整する前提の数字。ここだけ直せば変えられる。 */
+  const DECO_SECONDS_BY_MODE = { heisei: 180, reiwa: 600 };
+  const DECO_SECONDS = DECO_SECONDS_BY_MODE.heisei; // 既定値（後方互換）
+  const decoSeconds = () => DECO_SECONDS_BY_MODE[state.mode] ?? DECO_SECONDS;
+
   const BEAUTY_SECONDS = 60;  // 盛り調整1分（実機の盛り調整時間に準拠）
+
+  /* 全身モードの準備カウント。
+     プリクラ機は無人。客が自分で「はじめる」を押したあと、雲台を回して場ミリまで
+     歩いて構える必要がある。押した直後にカウントダウンが始まると間に合わない。
+     実測して調整すること。 */
+  const PREP_SECONDS = 18;
 
   const SHEET_W = 680;
   const SHEET_H = 900;
@@ -221,6 +235,7 @@
     curtain: MODES.heisei.curtains[0],
     frame: MODES.heisei.frames[0],
     layout: LAYOUTS[0],
+    shotMode: 'bust',    // bust = 手持ち自撮り（前面カメラ） / full = 三脚・全身（背面カメラ）
     chromaOn: false,
     stream: null,
     shots: [],           // 撮影した生の4枚
@@ -381,6 +396,7 @@
     const preset = conf.presets.find(p => p.id === conf.defaultPreset);
     state.beauty = { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
     buildSelectGrids();
+    applyShotMode();
     buildDecoTools();
     unlockAudio();
     playSound('start');
@@ -509,8 +525,8 @@
     const main = $('#select-main');
     const adv = $('#advanced-body');
     const order = state.mode === 'heisei'
-      ? { main: ['sel-frame', 'sel-filter'], adv: ['sel-layout', 'sel-curtain', 'sel-chroma'] }
-      : { main: ['sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-chroma'] };
+      ? { main: ['sel-shotmode', 'sel-frame', 'sel-filter'], adv: ['sel-layout', 'sel-curtain', 'sel-chroma'] }
+      : { main: ['sel-shotmode', 'sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-chroma'] };
     order.main.forEach(id => main.appendChild($('#' + id)));
     order.adv.forEach(id => adv.appendChild($('#' + id)));
     $('#sel-advanced').open = false;
@@ -526,6 +542,35 @@
       if (h) h.textContent = h.dataset.title;
     });
   }
+
+  /* 撮影モード（2026-07-26 追加）
+     bust = 手に持って自撮り。前面カメラ・鏡像。これまでどおりの写り。
+     full = 三脚にiPadを固定し、背面カメラで全身を撮る。文化祭の撮影ルーム用。
+            背景はプロジェクター投影を使うので、デジタル背景（くりぬき）は強制OFFにする。 */
+  function applyShotMode() {
+    const full = state.shotMode === 'full';
+    // 背面カメラでは鏡像にしない（投影背景の文字も服のロゴも裏返ってしまうため）
+    document.body.dataset.mirror = full ? 'off' : 'on';
+    document.querySelectorAll('.shotmode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.shotmode === state.shotMode);
+    });
+    if (full && state.chromaOn) {
+      // 全身モードは実物のスクリーン投影が背景。くりぬきは邪魔になるので切る
+      state.chromaOn = false;
+      const t = $('#btn-chroma-toggle');
+      if (t) { t.dataset.on = 'false'; t.textContent = 'OFF'; }
+    }
+    const chromaSec = $('#sel-chroma');
+    if (chromaSec) chromaSec.style.display = full ? 'none' : '';
+  }
+
+  document.querySelectorAll('.shotmode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.shotMode = btn.dataset.shotmode;
+      playSound('seDecide');
+      applyShotMode();
+    });
+  });
 
   // 背景くりぬきトグル（文化祭ではアナログのカーテン背景を使うため、デフォルトOFF）
   const chromaToggle = $('#btn-chroma-toggle');
@@ -891,8 +936,10 @@
     }
 
     try {
+      // 全身モードは三脚に固定して背面（アウト）カメラで撮る。バストアップは従来どおり前面。
+      const facing = state.shotMode === 'full' ? 'environment' : 'user';
       state.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
+        video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } },
         audio: false,
       });
       video.srcObject = state.stream;
@@ -937,9 +984,12 @@
     const c = document.createElement('canvas');
     c.width = SHOT_W; c.height = SHOT_H;
     const ctx = c.getContext('2d');
-    // 鏡合わせのプレビューに合わせて左右反転して保存
-    ctx.translate(c.width, 0);
-    ctx.scale(-1, 1);
+    // 前面カメラのときだけ、鏡合わせのプレビューに合わせて左右反転して保存する。
+    // 背面カメラ（全身モード）は反転しない＝見たままが写る。
+    if (state.shotMode !== 'full') {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(previewCanvas, 0, 0, c.width, c.height);
     return c;
   }
@@ -952,10 +1002,36 @@
     flashCanvas.style.opacity = '0';
   }
 
+  /* 準備カウント（全身モードのみ）
+     プリクラ機は無人。押した本人が雲台を回して場ミリまで歩き、構えるための時間。
+     プロジェクターに大きく出るので、部屋のどこからでも残り秒数が見える。 */
+  async function runPrepCountdown() {
+    const note = document.createElement('div');
+    note.className = 'prep-note';
+    note.textContent = 'カメラを回して、立ちいちへ！';
+    countdownEl.parentElement.appendChild(note);
+    countdownEl.classList.add('prep');
+    countdownEl.style.opacity = '1';
+    for (let s = PREP_SECONDS; s > 0; s--) {
+      countdownEl.textContent = String(s);
+      if (s <= 3) playSound('seTap');
+      if (s === 3) note.textContent = 'ポーズをきめて！';
+      await sleep(1000);
+    }
+    countdownEl.style.opacity = '0';
+    countdownEl.classList.remove('prep');
+    note.remove();
+  }
+
   btnStartShooting.addEventListener('click', async () => {
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
     const poseGuideEl = $('#pose-guide');
+    if (state.shotMode === 'full') {
+      poseGuideEl.textContent = 'じゅんびちゅう…';
+      await runPrepCountdown();
+      poseGuideEl.textContent = 'かわいく決めてね💕';
+    }
     for (let i = 0; i < NUM_SHOTS; i++) {
       poseGuideEl.textContent = POSE_GUIDES[i] || 'かわいく決めてね💕';
       await runCountdown(i);
@@ -969,8 +1045,12 @@
       // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）
       previewRunning = false;
       previewCtx.save();
-      previewCtx.translate(SHOT_W, 0);
-      previewCtx.scale(-1, 1); // 画面表示はCSSで左右反転されるため、撮影済み画像は事前に反転して相殺
+      // 前面カメラのときは画面表示がCSSで左右反転されるため、事前に反転して相殺する。
+      // 背面カメラ（全身モード）はCSS反転も無効なので、そのまま描く。
+      if (state.shotMode !== 'full') {
+        previewCtx.translate(SHOT_W, 0);
+        previewCtx.scale(-1, 1);
+      }
       previewCtx.drawImage(shot, 0, 0);
       previewCtx.restore();
       await sleep(900);
@@ -2897,15 +2977,28 @@
     renderDeco();
     buildDecoTools();
     setTool('pen');
-    state.remaining = DECO_SECONDS;
+    state.remaining = decoSeconds();
     state.warningPlayed = false;
     $('#deco-timeup').classList.add('hidden');
     $('#confirm-modal').classList.add('hidden');
-    drawCanvas.style.pointerEvents = 'auto';
     timerDisplay.textContent = formatTime(state.remaining);
     timerDisplay.classList.remove('warn');
-    playSound('decoStart');
 
+    /* タイマーは「客が『らくがきスタート』を押した瞬間」から走らせる（2026-07-26 オーナー裁定）。
+       撮影ルームから出て、別の場所へ移動して、座るまでの間に持ち時間が溶けるのを防ぐため。 */
+    if (state.timerId) clearInterval(state.timerId);
+    drawCanvas.style.pointerEvents = 'none';
+    $('#deco-start-gate').classList.remove('hidden');
+  }
+
+  $('#btn-deco-start').addEventListener('click', () => {
+    $('#deco-start-gate').classList.add('hidden');
+    drawCanvas.style.pointerEvents = 'auto';
+    playSound('decoStart');
+    startDecoTimer();
+  });
+
+  function startDecoTimer() {
     if (state.timerId) clearInterval(state.timerId);
     state.timerId = setInterval(() => {
       state.remaining--;

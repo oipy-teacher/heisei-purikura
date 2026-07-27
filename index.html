@@ -51,6 +51,19 @@
       </details>
 
       <!-- 以下の各セクションはJSが select-main / advanced-body へ振り分ける -->
+      <div class="sel-section" id="sel-shotmode">
+        <h2 class="step-heading" data-title="どうやって撮る？"></h2>
+        <div class="shotmode-row">
+          <button class="shotmode-btn active" data-shotmode="bust">
+            <span class="shotmode-name">📱 バストアップ</span>
+            <span class="shotmode-note">手に持って自撮り。いつもの写り</span>
+          </button>
+          <button class="shotmode-btn" data-shotmode="full">
+            <span class="shotmode-name">🧍 全身モード</span>
+            <span class="shotmode-note">三脚にセット。うしろのカメラで全身を撮るよ</span>
+          </button>
+        </div>
+      </div>
       <div class="sel-section" id="sel-layout">
         <h2 class="step-heading" data-title="ぶんかつ（レイアウト）をえらんでね"></h2>
         <div id="layout-list" class="layout-grid"></div>
@@ -165,6 +178,13 @@
   <!-- ============ 3. 落書き画面 ============ -->
   <section id="screen-deco" class="screen">
     <div class="deco-wrap">
+      <div id="deco-start-gate" class="deco-gate hidden">
+        <div class="deco-gate-inner">
+          <p class="deco-gate-title">らくがき、はじめる？</p>
+          <p class="deco-gate-note">おしたらタイマーがスタートするよ。<br>すわって、おちついてからでOK！</p>
+          <button id="btn-deco-start" class="btn-main">▶ らくがきスタート</button>
+        </div>
+      </div>
       <div class="deco-header">
         <div class="timer-box">
           <span class="timer-label">らくがきタイム</span>
