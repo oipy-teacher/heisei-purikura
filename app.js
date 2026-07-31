@@ -850,6 +850,9 @@
       eyes.forEach(({ c, ew }) => {
         const r = ew * 1.5;
         if (r < 4) return;
+        // 切り出し元が画面外にはみ出すと拡大コピーが歪むため、端に近い目はスキップ
+        // （撮影後の本加工 radialWarp は画面端でも正しく処理される）
+        if (c.x - r < 0 || c.y - r < 0 || c.x + r > w || c.y + r > h) return;
         const dpx = Math.ceil(r * 2);
         if (liveEyeTmp.width !== dpx || liveEyeTmp.height !== dpx) {
           liveEyeTmp.width = dpx; liveEyeTmp.height = dpx;
