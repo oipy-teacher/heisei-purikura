@@ -780,6 +780,7 @@
 
   // パフォーマンス自動調整
   const livePerf = { ema: 0, detectEvery: 2, eyeOn: true, disabled: false, noted: false };
+  let liveReadyNoted = false; // 「準備中→ON」の一言を1セッション1回だけ出す
 
   function liveBeautyWanted() {
     return state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled;
@@ -972,7 +973,16 @@
       drawCover(segProxyCtx, sourceEl, 0, 0, SEG_W, SEG_H);
       const result = await segmentForVideoAsync(segProxy, performance.now());
       // 1回の推論から、人物マスク（くり抜き用）と肌マスク（ライブ盛れ用）を両取りする
-      if (liveBeauty) buildLiveSkinMask(result.confidenceMasks);
+      if (liveBeauty) {
+        buildLiveSkinMask(result.confidenceMasks);
+        // 準備が整った最初のフレームで一言（くり抜きONのときは既存の案内を優先）
+        if (liveSkinReady && !liveReadyNoted && !state.chromaOn) {
+          liveReadyNoted = true;
+          segmenterStatus.textContent = '✨ ライブ盛れ ON！';
+          segmenterStatus.classList.remove('hidden');
+          setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
+        }
+      }
       if (state.chromaOn) {
         maskCv = buildPersonMask(result); // 内部で result を close する
       } else {
@@ -981,6 +991,13 @@
       }
     } else if (!imageSegmenter) {
       liveSkinReady = false;
+      // モデルが読めなかった場合、「準備中…」を出しっぱなしにしない
+      if (liveBeauty && segmenterFailed && !liveReadyNoted && !state.chromaOn) {
+        liveReadyNoted = true;
+        segmenterStatus.textContent = '（ライブ盛れは今回お休み中。撮影後にしっかり盛れます）';
+        segmenterStatus.classList.remove('hidden');
+        setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+      }
     }
 
     // --- 無加工の合成フレーム（撮影データはここから取る） ---
@@ -1220,10 +1237,16 @@
     liveSkinReady = false;
     liveFrameCount = 0;
     livePerf.ema = 0; // 前セッションの負荷計測はリセット（degrade段階は端末特性なので維持）
+    liveReadyNoted = false;
     syncLiveBeautyUI();
-    if (state.mode === 'reiwa' && state.liveBeautyOn) {
+    if (state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled) {
       initFaceLandmarkerLive();
       if (!imageSegmenter && !segmenterFailed && !segmenterLoading) initSegmenter();
+      // 準備中の一言（くり抜きONのときは既存の案内を優先）
+      if (!state.chromaOn && !(imageSegmenter && segmenterIsMulticlass)) {
+        segmenterStatus.textContent = '✨ ライブ盛れを準備中…';
+        segmenterStatus.classList.remove('hidden');
+      }
     }
 
     if (state.chromaOn) {
