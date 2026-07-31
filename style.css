@@ -374,6 +374,49 @@ body[data-mode="reiwa"] .deco-gate-title { color: #8a7568; }
 .camera-side { color: #fff; text-align: center; min-width: 220px; }
 .cam-caption { font-size: 20px; font-weight: 800; margin: 6px 0; }
 .cam-caption.small { font-size: 14px; opacity: .85; margin-bottom: 18px; }
+
+/* ライブ盛れパネル（令和モードの撮影画面・2026-07-31新設） */
+.live-beauty-panel { margin: 0 0 14px; }
+.live-toggle {
+  display: inline-block;
+  padding: 8px 18px;
+  border: 2px solid rgba(255,255,255,.55);
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.live-toggle.on {
+  background: rgba(255,255,255,.9);
+  color: #7d6b7d;
+  box-shadow: 0 0 14px rgba(255,255,255,.5);
+}
+.live-preset-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.live-preset-row.dimmed { opacity: .35; pointer-events: none; }
+.live-preset-btn {
+  padding: 6px 12px;
+  border: 1.5px solid rgba(255,255,255,.5);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.live-preset-btn.active {
+  background: rgba(255,255,255,.9);
+  color: #7d6b7d;
+}
+.live-note { font-size: 11px; opacity: .7; margin: 6px 0 0; }
 .cam-error { color: #ffd; margin-top: 14px; font-size: 13px; max-width: 260px; }
 .segmenter-status { color: #ffe27a; font-size: 12px; margin-top: 12px; opacity: .9; }
 .segmenter-status.hidden { display: none; }

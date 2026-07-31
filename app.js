@@ -241,6 +241,7 @@
     layout: LAYOUTS[0],
     shotMode: 'bust',    // bust = 手持ち自撮り（前面カメラ） / full = 三脚・全身（背面カメラ）
     chromaOn: false,
+    liveBeautyOn: true,  // 令和モードのライブ盛れプレビュー（2026-07-31新設）
     stream: null,
     shots: [],           // 撮影した生の4枚
     processedShots: [],  // 盛り加工後の4枚
@@ -748,18 +749,239 @@
     ctx.fillRect(0, 0, SHOT_W, SHOT_H);
   }
 
+  /* ===================== ライブ盛れプレビュー（2026-07-31 新設） =====================
+     令和モードの撮影中、ライブ映像に「盛れた自分」をリアルタイム表示する。
+     現行プリ機・SNOW世代の「撮る前から盛れてる」を再現するのが目的。
+
+     設計の要点:
+     - 撮影データ(captureFrame)は無加工の liveClean から取る。ライブ盛れは表示専用。
+       撮影後は従来の高品質パイプライン(applyBeauty)で本加工するので二重加工しない。
+     - iPad Safari 対応のため ctx.filter は使わず、ブレンド合成＋縮小拡大ぼかしのみ。
+     - 肌マスクは背景くりぬきと同じ selfie_multiclass の1回の推論から相乗りで取る
+       （追加の推論コストほぼゼロ）。くり抜きOFF時も盛れ用に推論を回す。
+     - 顔ランドマークは VIDEO モードの専用インスタンスで間引き検出。
+     - 端末が重い場合は自動で段階的に軽くする（検出間引き→デカ目OFF→ライブ盛れOFF）。 */
+  const liveClean = document.createElement('canvas');
+  liveClean.width = SHOT_W; liveClean.height = SHOT_H;
+  const liveCleanCtx = liveClean.getContext('2d');
+
+  // ライブ用の肌マスク（推論解像度のまま持ち、描画時にバイリニア拡大＝フェザー）
+  const liveSkinSmall = document.createElement('canvas');
+  const liveSkinSmallCtx = liveSkinSmall.getContext('2d');
+  let liveSkinEMA = null;
+  let liveSkinReady = false;
+
+  // ライブ用顔ランドマーク（VIDEOモード・盛り画面のIMAGEモードとは別インスタンス）
+  let faceLandmarkerLive = null;
+  let landmarkerLiveLoading = false;
+  let landmarkerLiveFailed = false;
+  let liveFaces = null;
+  let liveFrameCount = 0;
+
+  // パフォーマンス自動調整
+  const livePerf = { ema: 0, detectEvery: 2, eyeOn: true, disabled: false, noted: false };
+
+  function liveBeautyWanted() {
+    return state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled;
+  }
+
+  async function initFaceLandmarkerLive() {
+    if (faceLandmarkerLive || landmarkerLiveLoading || landmarkerLiveFailed) return;
+    landmarkerLiveLoading = true;
+    try {
+      const vision = await loadVision();
+      const fileset = await loadFileset();
+      faceLandmarkerLive = await vision.FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        numFaces: 4, // ライブは軽さ優先で4人まで（撮影後の本加工は従来どおり6人）
+        minFaceDetectionConfidence: 0.3,
+        minFacePresenceConfidence: 0.3,
+      });
+    } catch (err) {
+      console.warn('ライブ用顔ランドマークの読み込みに失敗しました。ライブ盛れは肌のみになります。', err);
+      landmarkerLiveFailed = true;
+    }
+    landmarkerLiveLoading = false;
+  }
+
+  // multiclass の推論結果から、人物マスクとライブ肌マスクを同時に作る（1推論で2役）
+  function buildLiveSkinMask(masks) {
+    if (!segmenterIsMulticlass || !masks || masks.length < 4) { liveSkinReady = false; return; }
+    const bodySkin = masks[2].getAsFloat32Array();
+    const faceSkin = masks[3].getAsFloat32Array();
+    const mw = masks[2].width, mh = masks[2].height;
+    const len = faceSkin.length;
+    if (!liveSkinEMA || liveSkinEMA.length !== len) liveSkinEMA = new Float32Array(len);
+    if (liveSkinSmall.width !== mw || liveSkinSmall.height !== mh) {
+      liveSkinSmall.width = mw; liveSkinSmall.height = mh;
+    }
+    const md = liveSkinSmallCtx.createImageData(mw, mh);
+    const d = md.data;
+    for (let i = 0; i < len; i++) {
+      const conf = Math.min(1, faceSkin[i] + bodySkin[i] * 0.65);
+      const ema = liveSkinEMA[i] = liveSkinEMA[i] * 0.4 + conf * 0.6;
+      const o = i * 4;
+      d[o] = 255; d[o + 1] = 255; d[o + 2] = 255;
+      d[o + 3] = (smoothstep(0.35, 0.7, ema) * 255) | 0;
+    }
+    liveSkinSmallCtx.putImageData(md, 0, 0);
+    liveSkinReady = true;
+  }
+
+  // デカ目のライブ版: 本番の radialWarp は重いので、フェザー付き拡大コピーで近似する
+  let liveEyeTmp = null, liveEyeTmpCtx = null;
+  function liveEyeMagnify(ctx, cleanCv, faces, eyeS) {
+    if (!faces || !faces.length || eyeS <= 0) return;
+    if (!liveEyeTmp) {
+      liveEyeTmp = document.createElement('canvas');
+      liveEyeTmpCtx = liveEyeTmp.getContext('2d');
+    }
+    const w = cleanCv.width, h = cleanCv.height;
+    faces.forEach((lm) => {
+      if (!lm || lm.length < 478) return;
+      const eyes = [
+        { c: lmToPx(lm[468], w, h), ew: dist(lmToPx(lm[33], w, h), lmToPx(lm[133], w, h)) },
+        { c: lmToPx(lm[473], w, h), ew: dist(lmToPx(lm[362], w, h), lmToPx(lm[263], w, h)) },
+      ];
+      eyes.forEach(({ c, ew }) => {
+        const r = ew * 1.5;
+        if (r < 4) return;
+        const dpx = Math.ceil(r * 2);
+        if (liveEyeTmp.width !== dpx || liveEyeTmp.height !== dpx) {
+          liveEyeTmp.width = dpx; liveEyeTmp.height = dpx;
+        }
+        const scale = 1 + eyeS * 0.16; // 本番warp(0.28)より控えめ＝近似のアラを出さない
+        const ds = dpx * scale;
+        const off = (ds - dpx) / 2;
+        liveEyeTmpCtx.globalCompositeOperation = 'source-over';
+        liveEyeTmpCtx.clearRect(0, 0, dpx, dpx);
+        liveEyeTmpCtx.imageSmoothingEnabled = true;
+        liveEyeTmpCtx.drawImage(cleanCv, c.x - r, c.y - r, dpx, dpx, -off, -off, ds, ds);
+        // 縁をフェザーして周囲と馴染ませる
+        const grad = liveEyeTmpCtx.createRadialGradient(r, r, r * 0.45, r, r, r);
+        grad.addColorStop(0, 'rgba(0,0,0,1)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        liveEyeTmpCtx.globalCompositeOperation = 'destination-in';
+        liveEyeTmpCtx.fillStyle = grad;
+        liveEyeTmpCtx.fillRect(0, 0, dpx, dpx);
+        liveEyeTmpCtx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(liveEyeTmp, c.x - r, c.y - r);
+      });
+    });
+  }
+
+  // ライブ盛れの1フレーム描画（previewCtx に、liveClean を土台として重ねる）
+  function renderLiveBeauty(ctx) {
+    const conf = modeConf();
+    const p = state.beauty;
+    const skinS = p.skin / 100;
+    const whiteS = (p.white || 0) / 100;
+    const clearS = (p.clear || 0) / 100;
+    const w = SHOT_W, h = SHOT_H;
+
+    if ((skinS > 0 || whiteS > 0 || clearS > 0) && liveSkinReady) {
+      // ぼかし肌レイヤー（縮小→拡大。makeBlurred は共有キャンバスを返すので即描く）
+      const layerCtx = getSkinLayer(w, h);
+      layerCtx.globalCompositeOperation = 'source-over';
+      layerCtx.clearRect(0, 0, w, h);
+      layerCtx.imageSmoothingEnabled = true;
+      layerCtx.drawImage(makeBlurred(liveClean, 5), 0, 0, w, h);
+      layerCtx.globalCompositeOperation = 'destination-in';
+      layerCtx.drawImage(liveSkinSmall, 0, 0, w, h);
+      layerCtx.globalCompositeOperation = 'source-over';
+
+      if (skinS > 0) {
+        // 美肌: ぼかし肌を重ねて肌質をならす（ライブ簡易版）
+        ctx.globalAlpha = Math.min(1, skinS * 0.75);
+        ctx.drawImage(skinLayerCanvas, 0, 0);
+        ctx.globalAlpha = 1;
+      }
+      if (clearS > 0) {
+        // 透明感: 色ムラをならす（color合成）＋うっすらグロー。本番と同じ軸の簡易版
+        if (conf.clearColorSmooth && canUseColorBlend()) {
+          ctx.globalCompositeOperation = 'color';
+          ctx.globalAlpha = Math.min(1, clearS * 0.6);
+          ctx.drawImage(skinLayerCanvas, 0, 0);
+        }
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = clearS * 0.15;
+        ctx.drawImage(skinLayerCanvas, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+      if (whiteS > 0) {
+        // 美白: 白を肌マスク越しにスクリーン合成
+        layerCtx.clearRect(0, 0, w, h);
+        layerCtx.fillStyle = '#ffffff';
+        layerCtx.fillRect(0, 0, w, h);
+        layerCtx.globalCompositeOperation = 'destination-in';
+        layerCtx.drawImage(liveSkinSmall, 0, 0, w, h);
+        layerCtx.globalCompositeOperation = 'source-over';
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = Math.min(1, whiteS * conf.skinTone.brightPerUnit * 2.0);
+        ctx.drawImage(skinLayerCanvas, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // デカ目（ライブ近似）＋チーク・リップ
+    if (livePerf.eyeOn) liveEyeMagnify(ctx, liveClean, liveFaces, p.eye / 100);
+    drawMakeup(ctx, liveFaces, w, h, (p.cheek || 0) / 100, (p.lip || 0) / 100, conf);
+
+    // 選択中フィルターもライブで反映（合成のみなので軽い）
+    const selFilter = conf.filters.find(f => f.id === p.filter);
+    if (selFilter && selFilter.fx && Object.keys(selFilter.fx).length) {
+      applyToneFx(ctx, w, h, selFilter.fx);
+    }
+  }
+
+  // フレーム時間を見て自動的に軽くする（iPad実機の発熱・カクつき対策）
+  function liveAutoDegrade(frameMs) {
+    livePerf.ema = livePerf.ema ? livePerf.ema * 0.9 + frameMs * 0.1 : frameMs;
+    if (livePerf.ema > 90 && livePerf.detectEvery < 3) livePerf.detectEvery = 3;
+    if (livePerf.ema > 120 && livePerf.eyeOn) livePerf.eyeOn = false;
+    if (livePerf.ema > 180 && !livePerf.disabled) {
+      livePerf.disabled = true;
+      if (!livePerf.noted) {
+        livePerf.noted = true;
+        segmenterStatus.textContent = '⚡ この端末では重いため、盛れはシャッター後に反映します';
+        segmenterStatus.classList.remove('hidden');
+        setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
+        syncLiveBeautyUI();
+      }
+    }
+  }
+
   // ライブプレビュー1フレーム分の合成。くりぬきOFF時は素通し＋軽い美肌ライト
   async function renderPreviewFrame(sourceEl) {
+    const t0 = performance.now();
+    const liveBeauty = liveBeautyWanted();
     let maskCv = null;
-    if (state.chromaOn && imageSegmenter) {
+    liveFrameCount++;
+
+    if ((state.chromaOn || (liveBeauty && segmenterIsMulticlass)) && imageSegmenter) {
       // 縮小プロキシへ描いてから推論（等倍より数倍高速）。カバークロップでアスペクト比を維持
       drawCover(segProxyCtx, sourceEl, 0, 0, SEG_W, SEG_H);
       const result = await segmentForVideoAsync(segProxy, performance.now());
-      maskCv = buildPersonMask(result);
+      // 1回の推論から、人物マスク（くり抜き用）と肌マスク（ライブ盛れ用）を両取りする
+      if (liveBeauty) buildLiveSkinMask(result.confidenceMasks);
+      if (state.chromaOn) {
+        maskCv = buildPersonMask(result); // 内部で result を close する
+      } else {
+        if (result.confidenceMasks) result.confidenceMasks.forEach(m => m.close && m.close());
+        if (result.close) result.close();
+      }
+    } else if (!imageSegmenter) {
+      liveSkinReady = false;
     }
 
-    previewCtx.clearRect(0, 0, SHOT_W, SHOT_H);
-
+    // --- 無加工の合成フレーム（撮影データはここから取る） ---
+    liveCleanCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     if (maskCv) {
       if (!personWorkCanvas) { personWorkCanvas = document.createElement('canvas'); personWorkCtx = personWorkCanvas.getContext('2d'); }
       if (personWorkCanvas.width !== SHOT_W || personWorkCanvas.height !== SHOT_H) {
@@ -773,15 +995,30 @@
       personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H); // 拡大時のバイリニアがフェザーになる
       personWorkCtx.globalCompositeOperation = 'source-over';
 
-      drawCurtainBg(previewCtx);
-      previewCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
+      drawCurtainBg(liveCleanCtx);
+      liveCleanCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
     } else {
-      drawCover(previewCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
+      drawCover(liveCleanCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
     }
     // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現・Safari対応のためスクリーン合成）
-    applyToneFx(previewCtx, SHOT_W, SHOT_H, { bright: 0.07 });
+    applyToneFx(liveCleanCtx, SHOT_W, SHOT_H, { bright: 0.07 });
+
+    // --- ライブ用の顔検出（間引き実行。座標系を合わせるため合成後のフレームに対して行う） ---
+    if (liveBeauty && faceLandmarkerLive && liveFrameCount % livePerf.detectEvery === 0) {
+      try {
+        const res = faceLandmarkerLive.detectForVideo(liveClean, performance.now());
+        liveFaces = (res.faceLandmarks && res.faceLandmarks.length) ? res.faceLandmarks : null;
+      } catch (err) { /* 検出失敗フレームは前回の結果を使い続ける */ }
+    }
+
+    // --- 表示（ライブ盛れONなら加工を重ねる。撮影データには影響しない） ---
+    previewCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    previewCtx.drawImage(liveClean, 0, 0);
+    if (liveBeauty) renderLiveBeauty(previewCtx);
+
     previewCanvas.classList.add('ready');
     video.classList.add('masked');
+    if (liveBeauty) liveAutoDegrade(performance.now() - t0);
   }
 
   async function previewLoop() {
@@ -894,6 +1131,57 @@
   const camError = $('#cam-error');
   const btnStartShooting = $('#btn-start-shooting');
 
+  /* ---------- ライブ盛れUI（令和モードの撮影画面だけに出す） ---------- */
+  const liveBeautyPanel = $('#live-beauty-panel');
+  const btnLiveBeauty = $('#btn-live-beauty');
+  const livePresetRow = $('#live-preset-row');
+
+  function syncLiveBeautyUI() {
+    const isReiwa = state.mode === 'reiwa';
+    liveBeautyPanel.classList.toggle('hidden', !isReiwa);
+    if (!isReiwa) return;
+    const on = state.liveBeautyOn && !livePerf.disabled;
+    btnLiveBeauty.textContent = on ? '✨ ライブ盛れ ON' : 'ライブ盛れ OFF';
+    btnLiveBeauty.classList.toggle('on', on);
+    livePresetRow.classList.toggle('dimmed', !on);
+    // 盛れ感プリセット（無加工風/ナチュ盛れ/プリ盛れ）。選ぶと撮影後の盛り調整の初期値にもなる
+    const conf = modeConf();
+    livePresetRow.innerHTML = '';
+    conf.presets.forEach(p => {
+      const b = document.createElement('button');
+      const isActive = ['skin', 'white', 'clear', 'eye', 'face', 'cheek', 'lip'].every(k => state.beauty[k] === p[k]);
+      b.className = 'live-preset-btn' + (isActive ? ' active' : '');
+      b.textContent = p.label;
+      b.addEventListener('click', () => {
+        state.beauty.skin = p.skin;
+        state.beauty.white = p.white;
+        state.beauty.clear = p.clear;
+        state.beauty.eye = p.eye;
+        state.beauty.face = p.face;
+        state.beauty.cheek = p.cheek;
+        state.beauty.lip = p.lip;
+        syncLiveBeautyUI();
+      });
+      livePresetRow.appendChild(b);
+    });
+  }
+
+  btnLiveBeauty.addEventListener('click', () => {
+    if (livePerf.disabled) {
+      // 自動OFFされた端末でオーナーが明示的に押し直したら、もう一度だけ試す
+      livePerf.disabled = false;
+      livePerf.ema = 0;
+      state.liveBeautyOn = true;
+    } else {
+      state.liveBeautyOn = !state.liveBeautyOn;
+    }
+    if (state.liveBeautyOn) {
+      initFaceLandmarkerLive();
+      if (!imageSegmenter && !segmenterFailed && !segmenterLoading) initSegmenter();
+    }
+    syncLiveBeautyUI();
+  });
+
   function buildShotIndicator() {
     shotIndicator.innerHTML = '';
     for (let i = 0; i < NUM_SHOTS; i++) {
@@ -922,6 +1210,18 @@
     // 盛り機能用のモデルを裏で読み込み開始（盛り画面までに間に合わせる）
     initFaceLandmarker();
     initSkinSegmenter();
+
+    // ライブ盛れ（令和モード）: 肌マスク用のセグメンタと VIDEO 用顔ランドマークを準備
+    liveFaces = null;
+    liveSkinEMA = null;
+    liveSkinReady = false;
+    liveFrameCount = 0;
+    livePerf.ema = 0; // 前セッションの負荷計測はリセット（degrade段階は端末特性なので維持）
+    syncLiveBeautyUI();
+    if (state.mode === 'reiwa' && state.liveBeautyOn) {
+      initFaceLandmarkerLive();
+      if (!imageSegmenter && !segmenterFailed && !segmenterLoading) initSegmenter();
+    }
 
     if (state.chromaOn) {
       if (imageSegmenter) {
@@ -994,7 +1294,9 @@
       ctx.translate(c.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(previewCanvas, 0, 0, c.width, c.height);
+    // ライブ盛れは表示専用。撮影データは無加工の liveClean から取り、
+    // 撮影後の高品質パイプライン(applyBeauty)で本加工する（二重加工の防止・2026-07-31）
+    ctx.drawImage(liveClean, 0, 0, c.width, c.height);
     return c;
   }
 
@@ -1057,6 +1359,8 @@
       }
       previewCtx.drawImage(shot, 0, 0);
       previewCtx.restore();
+      // ライブ盛れ中は、チラ見せも盛れた見た目で（無加工に戻ると「あれ？」となるため）
+      if (liveBeautyWanted()) renderLiveBeauty(previewCtx);
       await sleep(900);
       if (i < NUM_SHOTS - 1) {
         previewRunning = true;
@@ -1879,8 +2183,18 @@
     }
 
     // チーク＆リップ（顔ランドマークベースのメイク）
-    const cheekS = (params.cheek || 0) / 100;
-    const lipS = (params.lip || 0) / 100;
+    drawMakeup(outCtx, faces, w, h, (params.cheek || 0) / 100, (params.lip || 0) / 100, conf);
+
+    // 選択フィルター
+    const selFilter = conf.filters.find(f => f.id === params.filter);
+    if (selFilter && selFilter.fx && Object.keys(selFilter.fx).length) {
+      applyToneFx(outCtx, w, h, selFilter.fx);
+    }
+    return out;
+  }
+
+  // チーク＆リップの描画（本加工とライブ盛れプレビューの共通処理・2026-07-31切り出し）
+  function drawMakeup(outCtx, faces, w, h, cheekS, lipS, conf) {
     if (faces && faces.length && (cheekS > 0 || lipS > 0)) {
       faces.forEach((lm) => {
         if (!lm || lm.length < 468) return;
@@ -1922,13 +2236,6 @@
         }
       });
     }
-
-    // 選択フィルター
-    const selFilter = conf.filters.find(f => f.id === params.filter);
-    if (selFilter && selFilter.fx && Object.keys(selFilter.fx).length) {
-      applyToneFx(outCtx, w, h, selFilter.fx);
-    }
-    return out;
   }
 
   /* ===================== 2.5 盛り調整画面 ===================== */
