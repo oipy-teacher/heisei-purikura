@@ -3939,13 +3939,18 @@
     $('#deco-timeup').classList.add('hidden');
     composeFinal();
     showScreen('screen-print');
-    playSound('save');
+    startPrintSequence();
   }
 
   /* ===================== 4. プリント画面 ===================== */
   const finalCanvas = $('#final-canvas');
   finalCanvas.width = SHEET_W;
   finalCanvas.height = SHEET_H;
+
+  function fileStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  }
 
   function composeFinal() {
     const ctx = finalCanvas.getContext('2d');
@@ -3955,13 +3960,165 @@
     const dataUrl = finalCanvas.toDataURL('image/png');
     const link = $('#btn-download');
     link.href = dataUrl;
-    const d = new Date();
-    link.download = `purikura_${state.mode}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.png`;
+    link.download = `purikura_${state.mode}_${fileStamp()}.png`;
+    // 追加出力（16分割・たて長）は押されたときに作る。前回セッションの生成結果は破棄
+    ['#btn-download-16', '#btn-download-story'].forEach(sel => {
+      const el = $(sel);
+      el.removeAttribute('href');
+      delete el.dataset.done;
+    });
   }
+
+  /* ---------- シール排出演出（2026-08-12 新設） ----------
+     実機の「印刷待ち」の時間も体験の一部（待つあいだもデモ・アナウンスが流れる考証）。
+     print_out.mp3 を鳴らしながらシールが排出口からゆっくり出てくる。
+     終わったら従来の完成ボイス（save）と保存ボタンを出す。 */
+  const PRINT_EJECT_MS = 4600;
+  const printStage = $('#print-stage');
+  let printReadyId = null;
+  function startPrintSequence() {
+    printStage.classList.remove('ready');
+    printStage.classList.add('printing');
+    playSound('printOut');
+    if (printReadyId) clearTimeout(printReadyId);
+    printReadyId = setTimeout(() => {
+      printStage.classList.remove('printing'); // アニメ終端＝transform:0 と同じ位置なので外してよい
+      printStage.classList.add('ready');
+      playSound('save');
+    }, PRINT_EJECT_MS);
+  }
+
+  /* ---------- 追加出力①: 16分割シール風（初代プリント倶楽部1995年の型） ----------
+     初代は「16分割・1枚17mm×24mm（横長）」のみだった（JAIA20年史）。
+     選んだレイアウトに関係なく、その比率の16分割台紙を別出力として作る。落書きは載せない
+     （初代に落書き機能は無い、という考証）。 */
+  function composeSixteenRetro() {
+    const cv = document.createElement('canvas');
+    cv.width = SHEET_W; cv.height = SHEET_H;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+    ctx.strokeStyle = '#ffb6de';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(8, 8, SHEET_W - 16, SHEET_H - 16);
+    ctx.textAlign = 'center';
+    ctx.font = '900 30px -apple-system, sans-serif';
+    ctx.fillStyle = '#ff2fa0';
+    ctx.fillText('★ Print Club ★', SHEET_W / 2, 52);
+
+    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    if (shots.length) {
+      const margin = 26, gap = 10, cols = 4, rows = 4;
+      const cw = (SHEET_W - margin * 2 - gap * (cols - 1)) / cols;
+      const chh = cw * 17 / 24; // 初代のシール比率 横24:縦17
+      const gridH = rows * chh + (rows - 1) * gap;
+      const yTop = 70 + ((SHEET_H - 70 - 46) - gridH) / 2;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = margin + c * (cw + gap);
+          const y = yTop + r * (chh + gap);
+          const shot = shots[(r * cols + c) % shots.length];
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, cw, chh);
+          ctx.clip();
+          drawCover(ctx, shot, x, y, cw, chh);
+          ctx.restore();
+          ctx.strokeStyle = '#ffd3ea';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, chh - 1);
+        }
+      }
+    }
+    const d = new Date();
+    ctx.font = '700 13px sans-serif';
+    ctx.fillStyle = '#c78ab0';
+    ctx.fillText(`${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}　16pcs sticker`, SHEET_W / 2, SHEET_H - 18);
+    return cv;
+  }
+
+  /* ---------- 追加出力②: 9:16 たて長コラージュ（現行実機Meidyの型） ----------
+     スマホのストーリーズにそのまま貼れる縦長画像。ポラロイド風に4枚を並べる。 */
+  function composeStoryCollage() {
+    const W = 1080, H = 1920;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const conf = modeConf();
+    const sheet = conf.sheet;
+    const cc = state.curtain.color;
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, shadeColor(cc, 40));
+    grad.addColorStop(0.5, cc);
+    grad.addColorStop(1, shadeColor(cc, -25));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // タイトル＋日付
+    ctx.textAlign = 'center';
+    ctx.save();
+    if (sheet.titleGlow) { ctx.shadowColor = sheet.titleGlow; ctx.shadowBlur = 14; }
+    ctx.font = state.mode === 'reiwa' ? 'italic 600 64px Georgia, serif' : '900 72px -apple-system, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(sheet.title, W / 2, 160);
+    ctx.restore();
+    const d = new Date();
+    ctx.font = state.mode === 'reiwa' ? 'italic 500 34px Georgia, serif' : '800 34px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.fillText(`${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`, W / 2, 224);
+
+    // 写真: ポラロイド風カードを2x2で交互に傾けて配置
+    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    if (shots.length) {
+      const pw = 470, ph = 353, padT = 16, padS = 16, padB = 52;
+      const cardW = pw + padS * 2, cardH = ph + padT + padB;
+      const centers = [
+        { x: 278, y: 330 + cardH / 2, rot: -3 },
+        { x: 802, y: 380 + cardH / 2, rot: 2.5 },
+        { x: 278, y: 900 + cardH / 2, rot: 2 },
+        { x: 802, y: 950 + cardH / 2, rot: -2.5 },
+      ];
+      centers.forEach((pos, i) => {
+        const shot = shots[i % shots.length];
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
+        ctx.rotate(pos.rot * Math.PI / 180);
+        ctx.shadowColor = 'rgba(0,0,0,.3)';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = '#ffffff';
+        roundRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 8);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        drawCover(ctx, shot, -pw / 2, -cardH / 2 + padT, pw, ph);
+        ctx.restore();
+      });
+    }
+
+    // フッター（ハッシュタグ風）
+    ctx.font = state.mode === 'reiwa' ? 'italic 600 38px Georgia, serif' : '900 40px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.95)';
+    ctx.fillText(`#文化祭プリ　${sheet.footerName}`, W / 2, H - 100);
+    return cv;
+  }
+
+  // 追加出力は押された瞬間に生成して同じタップで保存する（クリック処理内でhrefを確定させる）
+  $('#btn-download-16').addEventListener('click', function () {
+    if (this.dataset.done) return;
+    this.href = composeSixteenRetro().toDataURL('image/png');
+    this.download = `purikura16_${state.mode}_${fileStamp()}.png`;
+    this.dataset.done = '1';
+  });
+  $('#btn-download-story').addEventListener('click', function () {
+    if (this.dataset.done) return;
+    this.href = composeStoryCollage().toDataURL('image/png');
+    this.download = `purikura_story_${state.mode}_${fileStamp()}.png`;
+    this.dataset.done = '1';
+  });
 
   $('#btn-restart').addEventListener('click', () => {
     if (state.timerId) clearInterval(state.timerId);
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
+    if (printReadyId) { clearTimeout(printReadyId); printReadyId = null; }
     state.shots = [];
     state.processedShots = [];
     state.faceData = [];
