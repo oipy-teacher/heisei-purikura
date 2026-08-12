@@ -2118,7 +2118,9 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
 }
 .as-h-logo.big {
   position: static;
-  font-size: 46px;
+  /* スマホ縦(390px)で「白肌もガングロも♡」が左右にはみ出さないよう流動化
+     （9.2vw: 390px→約36px＝実測で左右とも枠内。検見2周目の軽微指摘1） */
+  font-size: clamp(24px, 9.2vw, 46px);
   transform: rotate(-4deg);
 }
 .as-mid-h {
@@ -2252,4 +2254,30 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
 /* 高さの低い端末（スマホ横）: 平成扉の年代票は帯と重なるため飾りとして省略 */
 @media (max-height: 520px) {
   .door-era-h { display: none; }
+  /* キラキラ星の2番（left88%/top9%）が落書きヘッダーの「できあがり！」の文字に
+     周期的に重なるため、低い画面ではヘッダー帯（上端約70px）の下へ逃がす
+     （検見2周目の軽微指摘2。装飾はボタン領域に置かない） */
+  #sparkle-layer .spark:nth-child(2) { left: 90%; top: 26%; }
+}
+
+/* 幅の狭い端末（iPhone SE級375pxまで含む）: タイトル下部の2注記が近接・重なるため
+   上下2段に分離する（検見2周目の軽微指摘3。390pxで間隔8px→375pxで重なっていた） */
+@media (max-width: 430px) {
+  .door-desc-r { bottom: 30px; }
+  .title-note { bottom: 6px; right: 10px; }
+}
+
+/* スマホ縦: 平成の排出演出「機械の顔」の暗い窓が縦長すぎて空洞が大きく見えるため、
+   シート表示をひと回り小さくして比率を補正（検見2周目の軽微指摘4）。
+   あわせて平成スロットの余白を詰め、スロット幅が画面幅(390px)を超えるのも解消 */
+@media (max-width: 480px) and (orientation: portrait) {
+  #final-canvas { max-height: 88vw; }
+  /* スロットは中身（シート）に幅を合わせる。ブロックのままだと画面幅いっぱいに広がり、
+     暗い窓の左右にもシートより41pxずつ広い空洞ができていた */
+  body.theme-heisei .printer-slot {
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 30px 18px 12px;
+  }
 }
