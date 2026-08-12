@@ -315,26 +315,57 @@
     seTap: 'audio/se_tap.mp3',
     seDecide: 'audio/se_decide.mp3',
     seShutter: 'audio/se_shutter.mp3',
+    /* --- 実機模倣アップデート（2026-08-12）で追加した音声。
+           音声ファイルは別担当が並行制作中のため、ファイルが無い間は
+           soundAvailable の仕組みで「黙ってスキップ」される（アプリは止まらない）。 --- */
+    attractCall: 'audio/attract_call.mp3',        // 待機デモの呼び込み
+    courseSelectV2: 'audio/course_select_v2.mp3', // コース選択画面の案内
+    pose1: 'audio/pose_01.mp3',                   // ポーズ提案ボイス（ランダム）
+    pose2: 'audio/pose_02.mp3',
+    pose3: 'audio/pose_03.mp3',
+    pose4: 'audio/pose_04.mp3',
+    pose5: 'audio/pose_05.mp3',
+    pose6: 'audio/pose_06.mp3',
+    okCheck: 'audio/ok_check.mp3',                // 「この画像でオッケー？！」
+    moriageSelect: 'audio/moriage_select.mp3',    // 盛れ感レベル選択
+    decoOwaru: 'audio/doodle_owaru.mp3',          // 落書き「おわる」ボタン
+    decoHalftime: 'audio/doodle_halftime.mp3',    // 落書き残り時間の中間通知
+    printOut: 'audio/print_out.mp3',              // シール排出
   };
 
   const sounds = {};
+  /* 各音声ファイルの読み込み可否。undefined=不明 / true=使える / false=404等で使えない。
+     新音声は並行制作中でファイルが未着のことがあるため、false のものは再生も待機もしない。 */
+  const soundAvailable = {};
   Object.entries(SOUND_FILES).forEach(([key, src]) => {
     const a = new Audio(src);
     a.preload = 'auto';
+    a.addEventListener('error', () => { soundAvailable[key] = false; }, { once: true });
+    a.addEventListener('canplaythrough', () => {
+      if (soundAvailable[key] === undefined) soundAvailable[key] = true;
+    }, { once: true });
     sounds[key] = a;
   });
 
+  function soundMissing(key) { return soundAvailable[key] === false; }
+
   function playSound(key) {
     const a = sounds[key];
-    if (!a) return;
+    if (!a || soundMissing(key)) return;
     a.currentTime = 0;
     a.play().catch(() => { /* 自動再生がブロックされた場合は無視 */ });
+  }
+
+  // 第一候補が未着（ファイル無し）のときだけ代替を鳴らす
+  function playSoundOr(key, fallbackKey) {
+    if (!soundMissing(key)) { playSound(key); return; }
+    if (fallbackKey) playSound(fallbackKey);
   }
 
   // 撮影カウントダウン用：セリフの再生が実際に終わるまで待つ（＝見た目とボイスを完全に同期させる）
   function playSoundAwait(key) {
     const a = sounds[key];
-    if (!a) return Promise.resolve();
+    if (!a || soundMissing(key)) return Promise.resolve();
     return new Promise((resolve) => {
       let done = false;
       const finish = () => { if (done) return; done = true; a.removeEventListener('ended', finish); resolve(); };
