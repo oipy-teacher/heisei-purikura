@@ -1457,8 +1457,31 @@
     { key: 'countHai', label: 'ハイ！' },
   ];
 
-  async function runCountdown(shotIndex) {
-    await playSoundAwait('introShot' + (shotIndex + 1));
+  /* ポーズ提案ボイス（2026-08-12 新設）: 実機は「テンポのよい掛け声とポーズ提案が
+     矢継ぎ早に流れる」（era-designerリサーチ）。pose_01〜06 を1プレイ内で重複しない
+     ランダム順に消化し、7回目以降はまたシャッフルして続ける。 */
+  const POSE_KEYS = ['pose1', 'pose2', 'pose3', 'pose4', 'pose5', 'pose6'];
+  let poseOrder = [];
+  let poseOrderIdx = 0;
+  function resetPoseOrder() {
+    poseOrder = POSE_KEYS.slice();
+    for (let i = poseOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [poseOrder[i], poseOrder[j]] = [poseOrder[j], poseOrder[i]];
+    }
+    poseOrderIdx = 0;
+  }
+  function nextPoseKey() {
+    if (poseOrderIdx >= poseOrder.length) resetPoseOrder();
+    return poseOrder[poseOrderIdx++];
+  }
+
+  async function runCountdown(shotIndex, opts) {
+    const { skipIntro = false, poseKey = null } = opts || {};
+    // 前置き（1枚目いくよー等）。撮り直しのときは飛ばしてテンポを保つ
+    if (!skipIntro) await playSoundAwait('introShot' + (shotIndex + 1));
+    // ポーズ提案ボイス（ファイル未着なら黙ってスキップ）
+    if (poseKey) await playSoundAwait(poseKey);
     for (const step of COUNTDOWN_STEPS) {
       countdownEl.textContent = step.label;
       countdownEl.style.opacity = '1';
@@ -1517,6 +1540,41 @@
     note.remove();
   }
 
+  /* ---------- 「この画像でオッケー？！」チェック（2026-08-12 新設） ----------
+     現行実機の「3、2、1…この画像でオッケー？！」を再現。撮影直後の1枚を見せて
+     タップで採用/撮り直しを選ばせる。プリクラ機は無人運用なので、
+     OK_CHECK_AUTO_SECONDS 何も押されなければ自動で採用して先へ進む（行列を止めない）。
+     撮り直しは1ショットにつき1回まで（4枚全自動のテンポを崩さないための上限）。 */
+  const OK_CHECK_AUTO_SECONDS = 8;
+  const okCheckEl = $('#ok-check');
+  const btnOkYes = $('#btn-ok-yes');
+  const btnOkRetake = $('#btn-ok-retake');
+  const okAutoNote = $('#ok-auto-note');
+
+  function askOkCheck(canRetake) {
+    return new Promise((resolve) => {
+      playSound('okCheck');
+      btnOkRetake.style.display = canRetake ? '' : 'none';
+      okCheckEl.classList.remove('hidden');
+      let remain = OK_CHECK_AUTO_SECONDS;
+      okAutoNote.textContent = `なにも押さないと あと${remain}秒で自動オッケー！`;
+      const done = (ok) => {
+        clearInterval(iv);
+        btnOkYes.onclick = null;
+        btnOkRetake.onclick = null;
+        okCheckEl.classList.add('hidden');
+        resolve(ok);
+      };
+      const iv = setInterval(() => {
+        remain--;
+        if (remain <= 0) { done(true); return; }
+        okAutoNote.textContent = `なにも押さないと あと${remain}秒で自動オッケー！`;
+      }, 1000);
+      btnOkYes.onclick = () => done(true);
+      btnOkRetake.onclick = () => done(false);
+    });
+  }
+
   btnStartShooting.addEventListener('click', async () => {
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
@@ -1526,30 +1584,45 @@
       await runPrepCountdown();
       poseGuideEl.textContent = 'かわいく決めてね💕';
     }
+    resetPoseOrder();
     for (let i = 0; i < NUM_SHOTS; i++) {
-      poseGuideEl.textContent = POSE_GUIDES[i] || 'かわいく決めてね💕';
-      await runCountdown(i);
-      const shot = captureFrame();
-      state.shots.push(shot);
-      playSound('seShutter');
-      await flash();
-      shotIndicator.children[i].classList.add('done');
-      $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
+      let retakes = 0;
+      for (;;) {
+        poseGuideEl.textContent = POSE_GUIDES[i] || 'かわいく決めてね💕';
+        await runCountdown(i, { skipIntro: retakes > 0, poseKey: nextPoseKey() });
+        const shot = captureFrame();
+        playSound('seShutter');
+        await flash();
 
-      // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）
-      previewRunning = false;
-      previewCtx.save();
-      // 前面カメラのときは画面表示がCSSで左右反転されるため、事前に反転して相殺する。
-      // 背面カメラ（全身モード）はCSS反転も無効なので、そのまま描く。
-      if (state.shotMode !== 'full') {
-        previewCtx.translate(SHOT_W, 0);
-        previewCtx.scale(-1, 1);
+        // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）
+        previewRunning = false;
+        previewCtx.save();
+        // 前面カメラのときは画面表示がCSSで左右反転されるため、事前に反転して相殺する。
+        // 背面カメラ（全身モード）はCSS反転も無効なので、そのまま描く。
+        if (state.shotMode !== 'full') {
+          previewCtx.translate(SHOT_W, 0);
+          previewCtx.scale(-1, 1);
+        }
+        previewCtx.drawImage(shot, 0, 0);
+        previewCtx.restore();
+        // ライブ盛れ中は、チラ見せも盛れた見た目で（無加工に戻ると「あれ？」となるため）
+        if (liveBeautyWanted()) renderLiveBeauty(previewCtx);
+        await sleep(500);
+
+        // 「この画像でオッケー？！」（無人運用のため無操作なら自動採用・撮り直しは1回まで）
+        const ok = await askOkCheck(retakes < 1);
+        if (ok) {
+          state.shots.push(shot);
+          shotIndicator.children[i].classList.add('done');
+          $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
+          break;
+        }
+        retakes++;
+        poseGuideEl.textContent = 'もういっかい！';
+        previewRunning = true;
+        previewLoop();
+        await sleep(400);
       }
-      previewCtx.drawImage(shot, 0, 0);
-      previewCtx.restore();
-      // ライブ盛れ中は、チラ見せも盛れた見た目で（無加工に戻ると「あれ？」となるため）
-      if (liveBeautyWanted()) renderLiveBeauty(previewCtx);
-      await sleep(900);
       if (i < NUM_SHOTS - 1) {
         previewRunning = true;
         previewLoop();
@@ -3636,7 +3709,7 @@
   });
 
   /* ===================== 効果音（タッチ/決定） ===================== */
-  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish'];
+  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish', 'btn-ok-yes'];
   document.addEventListener('click', (e) => {
     const el = e.target.closest('button, .choice-item, .layout-item, .color-swatch');
     if (!el) return;

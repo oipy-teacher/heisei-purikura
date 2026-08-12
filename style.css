@@ -422,6 +422,23 @@ body[data-mode="reiwa"] .deco-gate-title { color: #8a7568; }
 .shot-dot { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.35); border: 2px solid #fff; }
 .shot-dot.done { background: #ff2fa0; }
 
+/* 撮影直後の「この画像でオッケー？！」確認（現行実機の型・2026-08-12） */
+.ok-check {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 12px 12px;
+  background: linear-gradient(0deg, rgba(0,0,0,.68), rgba(0,0,0,.35) 75%, transparent);
+}
+.ok-check-title {
+  margin: 0; font-size: 24px; font-weight: 900; color: #fff;
+  text-shadow: 0 0 14px #ff2fa0, 0 2px 0 rgba(0,0,0,.4);
+  animation: pulse 1s infinite;
+}
+body[data-mode="reiwa"] .ok-check-title { text-shadow: 0 0 14px #cbb9a8, 0 2px 0 rgba(0,0,0,.4); }
+.ok-check-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.ok-check .btn-sub { background: rgba(255,255,255,.92); }
+.ok-auto-note { margin: 0; font-size: 12px; font-weight: 800; color: #ffe27a; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+
 .camera-side { color: #fff; text-align: center; min-width: 220px; }
 .cam-caption { font-size: 20px; font-weight: 800; margin: 6px 0; }
 .cam-caption.small { font-size: 14px; opacity: .85; margin-bottom: 18px; }
