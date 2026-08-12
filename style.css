@@ -105,138 +105,176 @@ body[data-mode="reiwa"] .btn-back { color: #ab9a8a; background: #f6f1ea; border-
   border-color: rgba(255,255,255,.5);
 }
 
-/* ============ 0. title ============ */
-#screen-title {
-  background:
-    radial-gradient(circle at 20% 20%, rgba(255,255,255,.25), transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(255,255,255,.2), transparent 40%),
-    linear-gradient(160deg, #ff9ad5 0%, #a06bff 45%, #5aa9ff 100%);
-}
-.crt-frame {
-  width: min(92vw, 620px);
-  padding: 40px 30px;
-  text-align: center;
-  border-radius: 28px;
-  background: rgba(255,255,255,.12);
-  border: 3px dashed rgba(255,255,255,.6);
-  position: relative;
-}
-.sparkle-bg {
-  position: absolute; inset: -60px;
-  background-image:
-    radial-gradient(circle, #fff 2px, transparent 2.5px),
-    radial-gradient(circle, #fff 2px, transparent 2.5px),
-    radial-gradient(circle, #fff 1.5px, transparent 2px);
-  background-size: 140px 140px, 90px 90px, 60px 60px;
-  background-position: 0 0, 40px 60px, 100px 20px;
-  opacity: .5;
-  pointer-events: none;
-  z-index: -1;
-  animation: twinkle 3s infinite alternate;
-}
-@keyframes twinkle { from{opacity:.3;} to{opacity:.6;} }
-
-.title-logo {
-  margin: 0;
-  line-height: 1;
-  text-shadow: 3px 3px 0 #ff2fa0, 6px 6px 0 rgba(0,0,0,.25);
-  color: #fff;
-}
-.logo-line1 { display:block; font-size: 30px; letter-spacing: .3em; }
-.logo-line2 {
-  display:block;
-  font-size: 62px;
-  font-weight: 900;
-  background: linear-gradient(180deg,#fff,#ffe6f7);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.title-sub { color: #fff; font-size: 16px; margin: 14px 0 30px; opacity: .9; }
-.coin-slot { margin-top: 10px; }
-.coin-text { color: #fff; font-weight: 800; font-size: 15px; margin-bottom: 14px; letter-spacing: .1em; }
-.title-note { color: #fff; opacity: .7; font-size: 12px; margin-top: 26px; }
-
-.mode-buttons {
-  display: flex;
-  gap: 18px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.mode-btn {
-  flex: 1;
-  min-width: 200px;
-  max-width: 250px;
-  border-radius: 22px;
-  padding: 18px 14px;
-  cursor: pointer;
-  text-align: center;
-  border: 4px solid #fff;
-}
-.mode-btn .mode-name { display: block; font-size: 24px; font-weight: 900; letter-spacing: .06em; }
-.mode-btn .mode-desc { display: block; font-size: 12px; margin-top: 8px; line-height: 1.5; font-weight: 700; }
-.mode-btn.heisei {
-  background: linear-gradient(180deg,#ff8fc7,#ff2fa0);
-  color: #fff;
-  box-shadow: 0 6px 0 #c22876, 0 10px 18px rgba(0,0,0,.35);
-}
-.mode-btn.heisei:active { transform: translateY(4px); box-shadow: 0 2px 0 #c22876; }
-.mode-btn.reiwa {
-  background: linear-gradient(180deg,#faf6f0,#e8ddd3);
-  color: #7d6b63;
-  box-shadow: 0 6px 0 #b3a495, 0 10px 18px rgba(0,0,0,.3);
-}
-.mode-btn.reiwa:active { transform: translateY(4px); box-shadow: 0 2px 0 #b3a495; }
-.mode-btn.pulse { animation: pulse 1.4s infinite; }
-.mode-btn.reiwa.pulse { animation-delay: .7s; }
-
-/* ============ 待機デモ（アトラクト） ============ */
-.attract-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  background: linear-gradient(300deg, #ff2fa0, #a06bff, #5aa9ff, #ff8fc7, #ffe066);
-  background-size: 400% 400%;
-  animation: attractBg 8s ease infinite;
-  cursor: pointer;
-}
-@keyframes attractBg {
-  0%,100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-.attract-slides { position: relative; width: min(92vw, 700px); height: 46vh; }
-.attract-slide {
+/* ============ 0. title（対角2分割の扉・2026-08-12 デザイン刷新） ============ */
+#screen-title { background: #fff; }
+.title-split { position: absolute; inset: 0; overflow: hidden; }
+.door {
   position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 8px; text-align: center;
-  opacity: 0; transform: scale(.94);
-  transition: opacity .6s ease, transform .6s ease;
+  border: none; cursor: pointer;
+  text-align: center;
+  display: block;
+  padding: 0;
+}
+/* 上=平成の扉（ピンクドット地＋ヒョウ柄帯）。境界は約7°の斜め */
+.door-heisei {
+  clip-path: polygon(0 0, 100% 0, 100% 40%, 0 56%);
+  background: radial-gradient(circle at 50% 50%, #ffffff 5px, transparent 5.5px) 0 0 / 26px 26px, #ff8fc7;
+}
+.door-leopard {
+  position: absolute; top: 0; left: 0; right: 0; height: 56px;
+  background: url('assets/heisei-leopard-tile.svg') 0 0 / 120px 120px repeat;
+  opacity: .85;
+}
+.door-logo-h {
+  position: absolute; top: 16%; left: 8%;
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  font-size: 64px; font-weight: 800;
+  color: #ff2fa0;
+  transform: rotate(-5deg);
+  letter-spacing: .02em;
+  z-index: 2;
+}
+/* 白2重フチ（下層に白ストローク・さらに外へ紫ストロークの2枚重ね方式・仕様書1-b） */
+.door-logo-h::before,
+.door-logo-h::after {
+  content: attr(data-text);
+  position: absolute; inset: 0;
+  z-index: -1;
+}
+.door-logo-h::after { -webkit-text-stroke: 10px #ffffff; color: #fff; }
+.door-logo-h::before { -webkit-text-stroke: 18px #a06bff; color: #a06bff; z-index: -2; }
+.door-era-h {
+  position: absolute; top: calc(16% + 92px); left: 10%;
+  font-size: 14px; font-weight: 800; letter-spacing: .3em;
+  color: #3a1030;
+  background: #ffe066;
+  padding: 4px 14px; border-radius: 999px;
+  border: 2px solid #fff;
+  transform: rotate(-5deg);
+}
+.door-desc-h {
+  position: absolute; top: 10px; right: 3%;
+  font-size: 14px; font-weight: 800;
+  color: #fff;
+  background: #ff2fa0;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  padding: 6px 16px;
+  transform: rotate(2deg);
+  z-index: 2;
+}
+/* 下=令和の扉（生成り＋粒子質感＋細serif） */
+.door-reiwa {
+  clip-path: polygon(0 56%, 100% 40%, 100% 100%, 0 100%);
+  background: #faf7f2;
+}
+.door-reiwa::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="120" height="120" filter="url(%23n)" opacity="0.05"/></svg>');
   pointer-events: none;
 }
-.attract-slide.active { opacity: 1; transform: scale(1); }
-.attract-big {
-  margin: 0; font-size: 84px; font-weight: 900; color: #fff; line-height: 1.15;
-  text-shadow: 4px 4px 0 #ff2fa0, 8px 8px 0 rgba(0,0,0,.25);
-  animation: attractBob 1.6s ease-in-out infinite;
+.door-en-r {
+  position: absolute; bottom: calc(14% + 120px); right: 12%;
+  font-family: Georgia, serif; font-style: italic;
+  font-size: 13px; letter-spacing: .34em;
+  color: #8a7568;
 }
-.attract-big.small { font-size: 44px; }
-@keyframes attractBob { 0%,100%{ transform: translateY(0) rotate(-1.5deg);} 50%{ transform: translateY(-10px) rotate(1.5deg);} }
-.attract-kira { display: inline-block; animation: pulse 1s infinite; }
-.attract-mid { margin: 0; font-size: 22px; font-weight: 800; color: #fff; line-height: 1.7; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
-.attract-emoji-row { margin: 0; font-size: 40px; letter-spacing: .3em; }
-.attract-tag {
-  margin: 0 0 6px; font-size: 20px; font-weight: 900; color: #fff;
-  padding: 8px 26px; border-radius: 999px; border: 3px solid #fff;
+.door-logo-r {
+  position: absolute; bottom: calc(14% + 44px); right: 9%;
+  font-family: Georgia, "Hiragino Mincho ProN", serif;
+  font-size: 58px; font-weight: 500;
+  letter-spacing: .18em;
+  color: #4a3f38;
+  will-change: transform;
+  animation: floatY 4s ease-in-out infinite;
 }
-.attract-tag.heisei-tag { background: linear-gradient(180deg,#ff8fc7,#ff2fa0); }
-.attract-tag.reiwa-tag { background: linear-gradient(180deg,#cbb9a8,#a8917d); }
-.attract-touch {
-  position: absolute; bottom: 8vh; left: 0; right: 0;
-  text-align: center; font-size: 30px; font-weight: 900; color: #fff;
-  text-shadow: 0 0 18px #ff2fa0, 0 4px 0 rgba(0,0,0,.3);
-  animation: blink 1s infinite;
+.door-sub-r {
+  position: absolute; bottom: calc(14% + 22px); right: 10%;
+  font-family: Georgia, serif; font-style: italic;
+  font-size: 11px; letter-spacing: .3em;
+  color: #8a7568;
+  border-top: 1px solid rgba(74,63,56,.35);
+  padding-top: 6px;
 }
+.door-desc-r {
+  position: absolute; bottom: 16px; left: 4%;
+  font-size: 12px; font-weight: 500; letter-spacing: .14em;
+  color: #8a7568;
+}
+/* 境界の白帯（7°）: アプリ名と誘導。誘導だけは平成の作法で強く点滅（仕様書3-1） */
+.title-band {
+  position: absolute;
+  left: -10%; right: -10%;
+  top: 50%;
+  transform: translateY(-58%) rotate(-6.5deg);
+  background: #ffffff;
+  border-top: 3px solid #ff2fa0;
+  border-bottom: 3px solid #4a3f38;
+  padding: 10px 0 12px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 3;
+}
+.title-band-name {
+  margin: 0;
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  font-size: 24px; font-weight: 800;
+  letter-spacing: .12em;
+  color: #3a1030;
+}
+.title-band-touch {
+  margin: 4px 0 0;
+  font-size: 15px; font-weight: 800;
+  letter-spacing: .16em;
+  color: #ff2fa0;
+  animation: blink .6s steps(1) infinite;
+}
+.title-note {
+  position: absolute;
+  bottom: 8px; right: 12px;
+  margin: 0;
+  color: #8a7568; font-size: 11px;
+  z-index: 3;
+  pointer-events: none;
+}
+/* タッチダウンでその扉の様式が強まる（仕様書3-3） */
+.door:active .door-logo-h { transform: rotate(-5deg) scale(1.05); }
+.door:active .door-logo-r { animation-duration: 1.4s; }
+
+/* モード決定の染まる遷移（仕様書3-3の見せ場） */
+#mode-wipe { position: fixed; inset: 0; z-index: 185; pointer-events: none; }
+#mode-wipe i { position: absolute; opacity: 0; will-change: transform, opacity; }
+/* 平成: 虹シャッター2枚が上下から閉じ、開いて次の画面が現れる */
+#mode-wipe.wipe-heisei i {
+  left: 0; right: 0; height: 50.5%;
+  background: repeating-linear-gradient(90deg,
+     #ff2fa0 0 40px, #ff8a2a 40px 80px, #ffe066 80px 120px,
+     #5cff8f 120px 160px, #5cc8ff 160px 200px, #a06bff 200px 240px);
+}
+#mode-wipe.wipe-heisei .w1 { top: 0; }
+#mode-wipe.wipe-heisei .w2 { bottom: 0; }
+#mode-wipe.wipe-heisei.closing .w1 { opacity: 1; animation: shutTop .38s cubic-bezier(.4,0,.9,.6) forwards; }
+#mode-wipe.wipe-heisei.closing .w2 { opacity: 1; animation: shutBottom .38s cubic-bezier(.4,0,.9,.6) forwards; }
+#mode-wipe.wipe-heisei.opening .w1 { opacity: 1; animation: shutTopOpen .4s ease-out forwards; }
+#mode-wipe.wipe-heisei.opening .w2 { opacity: 1; animation: shutBottomOpen .4s ease-out forwards; }
+@keyframes shutTop { from { transform: translateY(-101%); } to { transform: translateY(0); } }
+@keyframes shutBottom { from { transform: translateY(101%); } to { transform: translateY(0); } }
+@keyframes shutTopOpen { from { transform: translateY(0); } to { transform: translateY(-101%); } }
+@keyframes shutBottomOpen { from { transform: translateY(0); } to { transform: translateY(101%); } }
+/* 令和: 白がふわっと満ちて、ゆっくり引く */
+#mode-wipe.wipe-reiwa .w1 {
+  left: 50%; top: 50%;
+  width: 60vmax; height: 60vmax;
+  margin: -30vmax 0 0 -30vmax;
+  border-radius: 50%;
+  background: #faf7f2;
+}
+#mode-wipe.wipe-reiwa .w2 { display: none; }
+#mode-wipe.wipe-reiwa.closing .w1 { opacity: 1; animation: fillWhite .4s ease-in forwards; }
+#mode-wipe.wipe-reiwa.opening .w1 { opacity: 1; transform: scale(4); animation: fadeWhite .45s ease-out forwards; }
+@keyframes fillWhite { from { transform: scale(0); opacity: .6; } to { transform: scale(4); opacity: 1; } }
+@keyframes fadeWhite { from { opacity: 1; } to { opacity: 0; } }
 
 /* ============ 1. select ============ */
 #screen-select { background: linear-gradient(160deg,#ffe1f3,#e4d4ff); }

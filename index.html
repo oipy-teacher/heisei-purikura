@@ -15,27 +15,26 @@
 
 <div id="app">
 
-  <!-- ============ 0. タイトル画面（モード選択） ============ -->
+  <!-- ============ 0. タイトル画面（モード決定前・対比の顔） ============
+       柄本仕様書 3-1/3-3: 斜め対角線で2分割し、上=平成の扉・下=令和の扉として
+       画面全体を「時代の対比」にする。扉そのものがモード選択ボタン。 -->
   <section id="screen-title" class="screen active">
-    <div class="crt-frame">
-      <div class="sparkle-bg"></div>
-      <h1 class="title-logo">
-        <span class="logo-line1">文化祭スペシャル</span>
-        <span class="logo-line2">プリクラ機</span>
-      </h1>
-      <p class="title-sub">～ 撮って・盛って・落書きして ～</p>
-      <div class="coin-slot">
-        <p class="coin-text">▼ モードをえらんでね ▼</p>
-        <div class="mode-buttons">
-          <button id="btn-mode-heisei" class="mode-btn heisei pulse">
-            <span class="mode-name">平成モード</span>
-            <span class="mode-desc">白肌もガングロも♡<br>懐かしのギャルプリ</span>
-          </button>
-          <button id="btn-mode-reiwa" class="mode-btn reiwa pulse">
-            <span class="mode-name">令和モード</span>
-            <span class="mode-desc">ナチュラル盛れ×くすみカラー<br>今っぽエモプリ</span>
-          </button>
-        </div>
+    <div class="title-split">
+      <button id="btn-mode-heisei" class="door door-heisei">
+        <span class="door-leopard"></span>
+        <span class="door-logo-h" data-text="平成プリクラ">平成プリクラ</span>
+        <span class="door-era-h">1999-2003 STYLE</span>
+        <span class="door-desc-h">白肌もガングロも♡ 懐かしのギャルプリ</span>
+      </button>
+      <button id="btn-mode-reiwa" class="door door-reiwa">
+        <span class="door-en-r">- now -</span>
+        <span class="door-logo-r">令和</span>
+        <span class="door-sub-r">- photo sticker -</span>
+        <span class="door-desc-r">ナチュラル盛れ × くすみカラー</span>
+      </button>
+      <div class="title-band">
+        <p class="title-band-name">文化祭スペシャル プリクラ機</p>
+        <p class="title-band-touch">▼ どっちの時代であそぶ？ ▼</p>
       </div>
       <p class="title-note">※ iPad推奨・カメラを使用します</p>
     </div>
@@ -384,6 +383,8 @@
   <div id="marquee" class="hidden" aria-hidden="true"><span id="marquee-inner"></span></div>
   <!-- 平成: 画面遷移の白フラッシュ -->
   <div id="global-flash" aria-hidden="true"></div>
+  <!-- モード決定の瞬間に画面全体が染まる遷移（平成=虹シャッター／令和=白が満ちる） -->
+  <div id="mode-wipe" aria-hidden="true"><i class="w1"></i><i class="w2"></i></div>
 
 </div>
 

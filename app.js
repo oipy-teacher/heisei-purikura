@@ -587,8 +587,24 @@
     }
   }
 
-  $('#btn-mode-heisei').addEventListener('click', () => enterMode('heisei'));
-  $('#btn-mode-reiwa').addEventListener('click', () => enterMode('reiwa'));
+  /* モード決定の「染まる遷移」（2026-08-12 デザイン刷新・柄本仕様書3-3の見せ場）:
+     平成=虹シャッターが閉じて開く／令和=白がふわっと満ちて引く。
+     閉じている間に enterMode で画面を切り替える。連打はwipingフラグで防ぐ。 */
+  let wiping = false;
+  function modeWipe(mode) {
+    if (wiping) return;
+    wiping = true;
+    const wipe = $('#mode-wipe');
+    wipe.className = 'wipe-' + mode + ' closing';
+    setTimeout(() => {
+      enterMode(mode);
+      wipe.classList.remove('closing');
+      wipe.classList.add('opening');
+      setTimeout(() => { wipe.className = ''; wiping = false; }, 460);
+    }, 380);
+  }
+  $('#btn-mode-heisei').addEventListener('click', () => modeWipe('heisei'));
+  $('#btn-mode-reiwa').addEventListener('click', () => modeWipe('reiwa'));
 
   /* 戻る導線（2026-08-12 オーナー指摘対応）:
      コース選択→モード選択へ戻れる。戻る＝セッションのやり直しなので、
