@@ -607,6 +607,74 @@ body[data-mode="reiwa"] .pen-type-btn.active, body[data-mode="reiwa"] .size-btn.
   cursor: pointer;
 }
 
+/* 落書き見本（Meidy式・2026-08-12） */
+.sample-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.sample-btn {
+  border: 2px solid #eee;
+  border-radius: 10px;
+  background: #fff;
+  padding: 4px;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.sample-btn canvas { display: block; border-radius: 6px; }
+.sample-btn .sample-label { font-size: 10px; font-weight: 800; color: #7a3fb0; }
+body[data-mode="reiwa"] .sample-btn .sample-label { color: #8a7568; }
+
+.name-stamp-btn { margin-top: 8px; width: 100%; }
+.name-input {
+  width: 100%;
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  padding: 10px 12px;
+  margin-bottom: 18px;
+  border: 3px solid #d9c2ee;
+  border-radius: 14px;
+  outline: none;
+  color: #7a3fb0;
+  touch-action: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+body[data-mode="reiwa"] .name-input { border-color: #d8c9b8; color: #8a7568; }
+
+/* 残り時間の中間通知トースト */
+.deco-toast {
+  position: absolute; top: 64px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  margin: 0;
+  background: rgba(255,255,255,.95);
+  color: #ff2fa0;
+  font-size: 18px; font-weight: 900;
+  padding: 12px 26px;
+  border-radius: 999px;
+  border: 3px solid #ff8fc7;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  white-space: nowrap;
+  pointer-events: none;
+}
+body[data-mode="reiwa"] .deco-toast { color: #8a7568; border-color: #cbb9a8; }
+
+/* 終盤カウントダウン演出（最後の10秒） */
+.deco-countdown {
+  position: absolute; inset: 0;
+  z-index: 54;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 190px; font-weight: 900; color: rgba(255,47,160,.55);
+  text-shadow: 0 0 30px rgba(255,255,255,.7);
+  pointer-events: none;
+  animation: decoCountPop 1s ease-out infinite;
+}
+body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
+@keyframes decoCountPop {
+  0% { transform: scale(1.35); opacity: 0; }
+  18% { transform: scale(1); opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .deco-timeup {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;

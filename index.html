@@ -268,12 +268,34 @@
           <div class="tool-group" id="group-text">
             <p class="tool-label">🔤 文字スタンプ</p>
             <div class="text-stamp-row" id="text-stamp-row"></div>
+            <button id="btn-name-stamp" class="btn-small name-stamp-btn">✍️ おなまえスタンプをつくる</button>
+          </div>
+
+          <!-- 落書き見本（現行実機Meidyの「完成見本を選ぶと配置済みになる」型） -->
+          <div class="tool-group" id="group-sample">
+            <p class="tool-label">🖼 らくがき見本（1タップで反映）</p>
+            <div class="sample-row" id="sample-row"></div>
           </div>
         </div>
       </div>
     </div>
     <div id="deco-timeup" class="deco-timeup hidden">
       <p id="deco-timeup-text">⏰ タイムアップ！</p>
+    </div>
+    <!-- 残り時間の中間通知トースト＋終盤カウントダウン演出 -->
+    <p id="deco-toast" class="deco-toast hidden"></p>
+    <div id="deco-countdown" class="deco-countdown hidden"></div>
+
+    <!-- おなまえスタンプの入力モーダル -->
+    <div id="name-modal" class="confirm-modal hidden">
+      <div class="confirm-box">
+        <p class="confirm-text">✍️ おなまえスタンプ<br>なまえを入れてね（10文字まで）</p>
+        <input id="name-input" class="name-input" type="text" maxlength="10" placeholder="なまえ" autocomplete="off">
+        <div class="confirm-buttons">
+          <button id="btn-name-ok" class="btn-main small">スタンプにする！</button>
+          <button id="btn-name-cancel" class="btn-sub">やめる</button>
+        </div>
+      </div>
     </div>
 
     <div id="confirm-modal" class="confirm-modal hidden">

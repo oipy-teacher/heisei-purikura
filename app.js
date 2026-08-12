@@ -35,9 +35,23 @@
       frameStyle: 'motif', // シール全周にモチーフを並べる（初期プリ機のフレーム風）
       penColors: ['#ff2fa0', '#ff8fc7', '#ffef5c', '#5cff8f', '#5cc8ff', '#a06bff', '#ffffff', '#000000'],
       penTypes: ['normal'],
-      stamps: [],
-      drawnStamps: ['dateRetro'], // 写ルンです風の日付焼き込み（時代考証的にもドンピシャ）
-      textStamps: [],
+      /* 落書きの考証（2026-08-12 改訂・era-designerリサーチ準拠）:
+         本機の平成モードはユーロビートBGM＝1999〜2003年ごろの再現。この時代は落書き全盛期で、
+         スタンプには「意味不明なキャラ・笑えるスタンプ」のふざけ・ネタ枠が必ずあった（JAIA20年史）。
+         プリ帳文化の定番文言「我等友情永久不滅成」もこの時代のもの。 */
+      stamps: ['💀', '👽', '🔥', '⚡', '💩', '🐯', '👊', '💋', '🌟', '🍜', '📟', '🎤'],
+      drawnStamps: ['dateRetro', 'sparkleLine', 'heartChalk', 'bubble'], // 日付焼き込みは時代考証的にもドンピシャ
+      textStamps: [
+        { t: '我等友情永久不滅成', style: 'sticker', color: '#ff2fa0' },
+        { t: 'ズッ友だょ…！', style: 'sticker', color: '#a06bff' },
+        { t: 'LOVE', style: 'outline' },
+        { t: '最強', style: 'sticker', color: '#ff2fa0' },
+        { t: 'アゲアゲ⤴', style: 'sticker', color: '#ff8a2a' },
+        { t: 'チョベリグ', style: 'sticker', color: '#5cc8ff' },
+        { t: 'ラブラブ♡', style: 'neon' },
+        { t: '仲良し4EVER', style: 'sticker', color: '#3cae6a' },
+        { t: '太子祭', style: 'sticker', color: '#d94a6a' },
+      ],
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
       presets: [
@@ -3348,6 +3362,9 @@
     if (!op) return;
     if (op.op === 'add') {
       decoObjects.pop();
+    } else if (op.op === 'addMany') {
+      // 落書き見本の一括反映を1操作として巻き戻す
+      decoObjects.splice(Math.max(0, decoObjects.length - op.count), op.count);
     } else if (op.op === 'remove') {
       op.items.slice().sort((a, b) => a.index - b.index).forEach(({ index, obj }) => {
         decoObjects.splice(Math.min(index, decoObjects.length), 0, obj);
@@ -3472,11 +3489,113 @@
     if (group) group.style.display = (conf.textStamps || []).length ? '' : 'none';
   }
 
+  /* ---------- 落書き見本（Meidy式・2026-08-12 新設） ----------
+     現行実機Meidyの「人気クリエイターの完成見本を選ぶと、そのまま配置済みになる」を再現。
+     見本はオブジェクト列を返す関数として持ち、1タップで decoObjects に追加される
+     （初心者救済＋完成度保証。追加は1操作扱いで「もどす」で丸ごと消せる）。
+     配置は写真の顔を隠さないよう、ヘッダー・フッター・四隅の余白ぞいに寄せてある。 */
+  function sampleText(t, style, color, x, y, fontSize, rotDeg) {
+    return {
+      type: 'text', t, style, color, x, y, fontSize,
+      rot: (rotDeg || 0) * Math.PI / 180,
+      w: t.length * fontSize + fontSize * 0.4,
+    };
+  }
+  const DOODLE_SAMPLES = {
+    heisei: [
+      { label: 'ズッ友', build: () => [
+        { type: 'dstamp', id: 'heartChalk', x: 60, y: 132, size: 48 },
+        { type: 'dstamp', id: 'heartChalk', x: 620, y: 132, size: 48 },
+        { type: 'dstamp', id: 'heartChalk', x: 60, y: 815, size: 48 },
+        { type: 'kira', items: [
+          { ch: '✨', x: 180, y: 108, size: 26, rot: 0.4 },
+          { ch: '⭐', x: 340, y: 96, size: 28, rot: -0.3 },
+          { ch: '✨', x: 500, y: 108, size: 26, rot: 0.2 },
+        ] },
+        sampleText('我等友情永久不滅成', 'sticker', '#ff2fa0', 320, 822, 26, -3),
+        { type: 'dstamp', id: 'dateRetro', x: 575, y: 852, size: 62 },
+      ] },
+      { label: 'ラブラブ', build: () => [
+        { type: 'dstamp', id: 'heartSticker', x: 72, y: 140, size: 52 },
+        { type: 'dstamp', id: 'heartGlossy', x: 608, y: 140, size: 52 },
+        sampleText('ラブラブ♡', 'neon', null, 340, 108, 30, 0),
+        { type: 'stamp', char: '💋', x: 615, y: 800, size: 50 },
+        { type: 'dstamp', id: 'heartOutline', x: 78, y: 800, size: 46 },
+        { type: 'dstamp', id: 'dateRetro', x: 340, y: 856, size: 58 },
+      ] },
+      { label: 'アゲアゲ', build: () => [
+        { type: 'dstamp', id: 'sparkleLine', x: 62, y: 130, size: 44 },
+        { type: 'dstamp', id: 'sparkleLine', x: 618, y: 130, size: 44 },
+        { type: 'stamp', char: '🔥', x: 64, y: 815, size: 48 },
+        { type: 'stamp', char: '⚡', x: 616, y: 815, size: 48 },
+        sampleText('最強', 'sticker', '#ff2fa0', 340, 106, 28, 2),
+        sampleText('アゲアゲ⤴', 'sticker', '#ff8a2a', 340, 822, 30, -2),
+      ] },
+    ],
+    reiwa: [
+      { label: 'なかよし', build: () => [
+        sampleText('BFF♡', 'sticker', '#e0498a', 340, 106, 26, -2),
+        { type: 'stamp', char: '🤍', x: 66, y: 132, size: 40 },
+        { type: 'stamp', char: '☁️', x: 614, y: 132, size: 40 },
+        { type: 'dstamp', id: 'bubble', x: 600, y: 792, size: 50 },
+        { type: 'dstamp', id: 'dateCute', x: 340, y: 852, size: 58 },
+      ] },
+      { label: 'エモ', build: () => [
+        { type: 'dstamp', id: 'sparkleLine', x: 70, y: 132, size: 40 },
+        { type: 'dstamp', id: 'sparkleLine', x: 610, y: 132, size: 40 },
+        { type: 'dstamp', id: 'heartOutline', x: 78, y: 800, size: 44 },
+        sampleText('エモい', 'sticker', '#a8917d', 340, 826, 26, 2),
+        { type: 'dstamp', id: 'dateCute', x: 560, y: 858, size: 52 },
+      ] },
+      { label: 'シンプル', build: () => [
+        { type: 'dstamp', id: 'heartLine', x: 60, y: 130, size: 40 },
+        { type: 'dstamp', id: 'heartLine', x: 620, y: 130, size: 40 },
+        { type: 'dstamp', id: 'heartLine', x: 60, y: 818, size: 40 },
+        { type: 'dstamp', id: 'heartLine', x: 620, y: 818, size: 40 },
+        sampleText('Perfect', 'outline', null, 340, 106, 26, -1),
+      ] },
+    ],
+  };
+
+  function buildSampleRow() {
+    const row = $('#sample-row');
+    row.innerHTML = '';
+    const samples = DOODLE_SAMPLES[state.mode] || [];
+    samples.forEach((sample) => {
+      const b = document.createElement('button');
+      b.className = 'sample-btn';
+      const cv = document.createElement('canvas');
+      cv.width = 60; cv.height = 79;
+      const cctx = cv.getContext('2d');
+      cctx.fillStyle = state.mode === 'reiwa' ? '#f4ede4' : '#ffe6f3';
+      cctx.fillRect(0, 0, 60, 79);
+      cctx.save();
+      cctx.scale(60 / SHEET_W, 79 / SHEET_H);
+      sample.build().forEach(o => drawObject(cctx, o));
+      cctx.restore();
+      b.appendChild(cv);
+      const lb = document.createElement('span');
+      lb.className = 'sample-label';
+      lb.textContent = sample.label;
+      b.appendChild(lb);
+      b.addEventListener('click', () => {
+        const objs = sample.build(); // 毎回新しいオブジェクトを作る（なぞり消しと共存させるため）
+        decoObjects.push(...objs);
+        renderDeco();
+        pushUndo({ op: 'addMany', count: objs.length });
+      });
+      row.appendChild(b);
+    });
+    const group = $('#group-sample');
+    if (group) group.style.display = samples.length ? '' : 'none';
+  }
+
   function buildDecoTools() {
     const conf = modeConf();
     buildColorRow();
     buildStampRow();
     buildTextStampRow();
+    buildSampleRow();
     state.penColor = conf.penColors[0];
     // ペン種別（モードごとに使えるものだけ表示。1種類なら行ごと隠す）
     const types = conf.penTypes || ['normal'];
@@ -3696,11 +3815,31 @@
     renderDeco();
   });
 
+  /* ---------- おなまえスタンプ（2026-08-12 新設・実機定番） ----------
+     自分の名前を白フチシール風の文字スタンプにする。入力→シートをタップで配置。 */
+  const nameModal = $('#name-modal');
+  const nameInput = $('#name-input');
+  $('#btn-name-stamp').addEventListener('click', () => {
+    nameInput.value = '';
+    nameModal.classList.remove('hidden');
+    setTimeout(() => nameInput.focus(), 60);
+  });
+  $('#btn-name-cancel').addEventListener('click', () => nameModal.classList.add('hidden'));
+  $('#btn-name-ok').addEventListener('click', () => {
+    const t = nameInput.value.trim();
+    nameModal.classList.add('hidden');
+    if (!t) return;
+    const color = state.mode === 'reiwa' ? '#a8917d' : '#ff2fa0';
+    setTool('textstamp', { t, style: 'sticker', color });
+    showDecoToast('シートをタップして なまえを押してね！');
+  });
+
   /* ===================== できあがり確認 ===================== */
   const confirmModal = $('#confirm-modal');
 
   $('#btn-finish').addEventListener('click', () => {
     if (state.remaining <= 0) return;
+    playSound('decoOwaru'); // 実機の「おわる」ボタンボイス（未着なら無音でスキップ）
     confirmModal.classList.remove('hidden');
   });
   $('#btn-confirm-no').addEventListener('click', () => {
@@ -3714,6 +3853,16 @@
 
   /* ===================== 落書きタイマー ===================== */
   const timerDisplay = $('#timer-display');
+  const decoToastEl = $('#deco-toast');
+  const decoCountdownEl = $('#deco-countdown');
+  let decoToastId = null;
+
+  function showDecoToast(text) {
+    decoToastEl.textContent = text;
+    decoToastEl.classList.remove('hidden');
+    if (decoToastId) clearTimeout(decoToastId);
+    decoToastId = setTimeout(() => decoToastEl.classList.add('hidden'), 2600);
+  }
 
   function startDecoScreen() {
     showScreen('screen-deco');
@@ -3727,6 +3876,9 @@
     state.warningPlayed = false;
     $('#deco-timeup').classList.add('hidden');
     $('#confirm-modal').classList.add('hidden');
+    decoToastEl.classList.add('hidden');
+    decoCountdownEl.classList.add('hidden');
+    nameModal.classList.add('hidden');
     timerDisplay.textContent = formatTime(state.remaining);
     timerDisplay.classList.remove('warn');
 
@@ -3746,17 +3898,30 @@
 
   function startDecoTimer() {
     if (state.timerId) clearInterval(state.timerId);
+    /* 中間通知（2026-08-12 新設）: 現行実機は約200秒の途中で区切りの通知が入る。
+       残り時間が半分になったところで一声＋トースト表示 */
+    const halfPoint = Math.floor(decoSeconds() / 2);
     state.timerId = setInterval(() => {
       state.remaining--;
       timerDisplay.textContent = formatTime(Math.max(0, state.remaining));
+      if (state.remaining === halfPoint) {
+        playSound('decoHalftime');
+        showDecoToast(`⏰ のこり はんぶん！（${formatTime(halfPoint)}）`);
+      }
       if (state.remaining <= 10) {
         timerDisplay.classList.add('warn');
         if (!state.warningPlayed) {
           state.warningPlayed = true;
           playSound('timeWarning');
         }
+        // 終盤カウントダウン演出: 最後の10秒はシート上に大きく数字を出す
+        if (state.remaining > 0) {
+          decoCountdownEl.textContent = String(state.remaining);
+          decoCountdownEl.classList.remove('hidden');
+        }
       }
       if (state.remaining <= 0) {
+        decoCountdownEl.classList.add('hidden');
         clearInterval(state.timerId);
         finishDeco('timeup');
       }
@@ -3765,6 +3930,8 @@
 
   async function finishDeco(reason) {
     drawCanvas.style.pointerEvents = 'none';
+    decoCountdownEl.classList.add('hidden');
+    decoToastEl.classList.add('hidden');
     $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ できあがり！' : '⏰ タイムアップ！';
     $('#deco-timeup').classList.remove('hidden');
     playSound(reason === 'manual' ? 'finish' : 'timeup');
