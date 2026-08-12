@@ -1568,6 +1568,31 @@
     }
   });
 
+  /* 平成考証の写り「〜2006 黄み肌」（2026-08-12 新設・era-designerのリサーチ準拠）:
+     2006年頃までの実機は「黄みがかった肌色・加工感は少なめ・画質は荒い」（4Gamer再現体験記/JAIA20年史）。
+     黄みをソフトライトで乗せ、いったん縮小してから戻すことで当時の低画素感を出す。
+     ctx.filter は使わない（iPad Safari 地雷）。ブレンド合成と縮小拡大のみ。 */
+  let y2kTmp = null;
+  function applyHeiseiY2kTone(canvas) {
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext('2d');
+    // 画質荒め: 55%へ縮小→戻す（バイリニアで少し甘い、当時の200万画素感）
+    if (!y2kTmp) y2kTmp = document.createElement('canvas');
+    const sw = Math.round(w * 0.55), sh = Math.round(h * 0.55);
+    y2kTmp.width = sw; y2kTmp.height = sh;
+    const tctx = y2kTmp.getContext('2d');
+    tctx.imageSmoothingEnabled = true;
+    tctx.drawImage(canvas, 0, 0, sw, sh);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(y2kTmp, 0, 0, sw, sh, 0, 0, w, h);
+    // 黄み方向の色転び＋わずかなコントラスト（蛍光灯下のCCDの絵作り）
+    applyToneFx(ctx, w, h, {
+      warm: { color: '#d9b24a', amt: 0.30 },
+      tan:  { color: '#f2e6bf', amt: 0.14 },
+      contrast: 0.06,
+    });
+  }
+
   // 平成モード用: 盛りUIなしの自動仕上げ（軽い写り補正 + 選択画面で選んだフィルター）
   async function finishHeiseiProcessing() {
     try {
@@ -1577,8 +1602,18 @@
       }
       skinMaskCache.clear();
     } catch (err) { /* 肌検知が使えなくてもフィルターのみで続行 */ }
-    const params = { skin: 25, white: 10, clear: 12, eye: 0, face: 0, cheek: 0, lip: 0, filter: state.beauty.filter };
-    state.processedShots = state.shots.map((shot, i) => applyBeauty(shot, null, params, null, i));
+    /* 写り年代（平成考証）: スタンダードは従来どおりの軽い固定補正。
+       「〜2006 黄み肌」は補正をさらに抑えて（加工感少なめの史実）、黄み転びを後がけする。
+       既存の盛り機能には触れない＝考証オプションとしての共存（2026-08-12 オーナー指示） */
+    const y2k = state.heiseiEra === 'y2k';
+    const params = y2k
+      ? { skin: 12, white: 4, clear: 5, eye: 0, face: 0, cheek: 0, lip: 0, filter: state.beauty.filter }
+      : { skin: 25, white: 10, clear: 12, eye: 0, face: 0, cheek: 0, lip: 0, filter: state.beauty.filter };
+    state.processedShots = state.shots.map((shot, i) => {
+      const out = applyBeauty(shot, null, params, null, i);
+      if (y2k) applyHeiseiY2kTone(out);
+      return out;
+    });
     composeSheet();
     startDecoScreen();
   }
