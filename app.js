@@ -63,16 +63,20 @@
       ],
       defaultPreset: 'shikkari',
       makeup: { cheek: '#ff5f8f', lip: '#ff2f6e' },
-      // 平成の「美白」ブーム: 明るさ強め・彩度は下げて白肌に
-      skinTone: { brightPerUnit: 0.16, desatPerUnit: 0.16 },
-      // fx: bright=白スクリーン合成 / desat=グレー彩度合成 / colorize=カラー合成 / contrast=自己オーバーレイ / warm=ソフトライト
+      // 平成の「美白」ブーム: 明るさ強め・彩度は少し下げて白肌に
+      // （2026-08-12 desat 0.16→0.10: 彩度を落としすぎると血色が消えて灰色に見えるため）
+      skinTone: { brightPerUnit: 0.16, desatPerUnit: 0.10 },
+      /* fx: bright=中間調リフト（白ソフトライト・黒白の点は固定＝曇らない） / desat=グレー彩度合成 /
+         colorize=カラー合成 / contrast=自己オーバーレイ / warm=ソフトライト
+         2026-08-12 再設計: 美白MAXは「白モヤ」でなく「明るく・血色を残して・霞まない」。
+         明度は bright（中間調のみ上がる）、白肌感は控えめの desat、締まりは contrast で出す */
       filters: [
         { id: 'none',   label: 'なし',      fx: {} },
-        { id: 'bihaku', label: '美白MAX',   fx: { bright: 0.30, desat: 0.45 } },
+        { id: 'bihaku', label: '美白MAX',   fx: { bright: 0.85, desat: 0.20, contrast: 0.10 } },
         { id: 'ganguro', label: '日やけギャル', fx: { tan: { color: '#c9926a', amt: 0.5 }, contrast: 0.15, warm: { color: '#d98a4a', amt: 0.2 } } },
-        { id: 'retro',  label: 'レトロ',    fx: { desat: 0.3, warm: { color: '#d9a06a', amt: 0.28 }, bright: 0.06, contrast: 0.12 } },
-        { id: 'sepia',  label: 'セピア',    fx: { desat: 0.9, colorize: { color: '#a97e52', amt: 0.5 }, bright: 0.08 } },
-        { id: 'vivid',  label: 'ビビッド',  fx: { contrast: 0.45, bright: 0.05 } },
+        { id: 'retro',  label: 'レトロ',    fx: { desat: 0.3, warm: { color: '#d9a06a', amt: 0.28 }, bright: 0.14, contrast: 0.12 } },
+        { id: 'sepia',  label: 'セピア',    fx: { desat: 0.9, colorize: { color: '#a97e52', amt: 0.5 }, bright: 0.18 } },
+        { id: 'vivid',  label: 'ビビッド',  fx: { contrast: 0.45, bright: 0.12 } },
         { id: 'showa',  label: '写ルンです', fx: { desat: 0.2, warm: { color: '#c9d4a0', amt: 0.18 }, contrast: 0.2 } },
       ],
       sheet: {
@@ -149,8 +153,8 @@
       clearColorSmooth: true,
       filters: [
         { id: 'none',   label: 'なし',     fx: {} },
-        { id: 'film',   label: 'フィルム', fx: { desat: 0.25, warm: { color: '#d9a06a', amt: 0.20 }, bright: 0.06 } },
-        { id: 'kusumi', label: 'くすみ',   fx: { desat: 0.35, bright: 0.08 } },
+        { id: 'film',   label: 'フィルム', fx: { desat: 0.25, warm: { color: '#d9a06a', amt: 0.20 }, bright: 0.14 } },
+        { id: 'kusumi', label: 'くすみ',   fx: { desat: 0.35, bright: 0.18, contrast: 0.06 } },
         { id: 'mono',   label: 'モノクロ', fx: { desat: 1, contrast: 0.15 } },
       ],
       sheet: {
@@ -1198,15 +1202,15 @@
         ctx.globalAlpha = 1;
       }
       if (whiteS > 0) {
-        // 美白: 白を肌マスク越しにスクリーン合成
+        // 美白: 白を肌マスク越しにソフトライト合成（中間調リフト。スクリーンだと肌が灰色に霞む・2026-08-12再設計）
         layerCtx.clearRect(0, 0, w, h);
         layerCtx.fillStyle = '#ffffff';
         layerCtx.fillRect(0, 0, w, h);
         layerCtx.globalCompositeOperation = 'destination-in';
         layerCtx.drawImage(liveSkinSmall, 0, 0, w, h);
         layerCtx.globalCompositeOperation = 'source-over';
-        ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = Math.min(1, whiteS * conf.skinTone.brightPerUnit * 2.0);
+        ctx.globalCompositeOperation = 'soft-light';
+        ctx.globalAlpha = Math.min(1, whiteS * conf.skinTone.brightPerUnit * 5.0);
         ctx.drawImage(skinLayerCanvas, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
@@ -1300,8 +1304,9 @@
     } else {
       drawCover(liveCleanCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
     }
-    // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現・Safari対応のためスクリーン合成）
-    applyToneFx(liveCleanCtx, SHOT_W, SHOT_H, { bright: 0.07 });
+    // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現）。
+    // この明るさは撮影データにも焼き込まれるため、曇らない中間調リフト（白ソフトライト）で行う
+    applyToneFx(liveCleanCtx, SHOT_W, SHOT_H, { bright: 0.16 });
 
     // --- ライブ用の顔検出（間引き実行。座標系を合わせるため合成後のフレームに対して行う） ---
     if (liveBeauty && faceLandmarkerLive && liveFrameCount % livePerf.detectEvery === 0) {
@@ -2003,8 +2008,12 @@
       ctx.fillRect(0, 0, w, h);
     }
     if (fx.bright) {
-      // 白をスクリーン合成→明るく
-      ctx.globalCompositeOperation = 'screen';
+      /* 明るさ: 白のソフトライト合成＝トーンカーブの中間調リフト（2026-08-12 再設計）。
+         以前は白のスクリーン合成だったが、あれは黒まで一律に浮かせる＝画面全体に
+         白いモヤがかかり「ただ曇っただけ」になる（オーナー指摘）。
+         ソフトライトの白は 黒(0)→0・白(255)→255 を固定したまま中間調だけを
+         持ち上げる（正確には v→v+α(√v−v)）ので、明るくなっても霞まない。 */
+      ctx.globalCompositeOperation = 'soft-light';
       ctx.globalAlpha = Math.min(1, fx.bright);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, w, h);
@@ -2416,7 +2425,7 @@
     const blurred = makeBlurred(base, 5);
     gctx.imageSmoothingEnabled = true;
     gctx.drawImage(blurred, 0, 0, w, h);
-    applyToneFx(gctx, w, h, { bright: 0.18 });
+    applyToneFx(gctx, w, h, { bright: 0.40 }); // 中間調リフト（bright再設計に伴いソフトライト量へ換算）
     gctx.globalCompositeOperation = 'destination-in';
     gctx.drawImage(mask, 0, 0);
     gctx.globalCompositeOperation = 'source-over';
@@ -2535,7 +2544,9 @@
 
         if (whiteS > 0) {
           const layerCtx = getSkinLayer(w, h);
-          // 美白: 白をマスク越しにスクリーン合成（肌だけ白く）
+          /* 美白: 白をマスク越しにソフトライト合成（2026-08-12 再設計）。
+             スクリーン合成は肌の影まで一律に持ち上げて灰色に霞むため、
+             黒点を固定したまま中間調だけ上げるソフトライトへ（明るく・霞まない・血色を残す） */
           layerCtx.globalCompositeOperation = 'source-over';
           layerCtx.clearRect(0, 0, w, h);
           layerCtx.fillStyle = '#ffffff';
@@ -2543,8 +2554,8 @@
           layerCtx.globalCompositeOperation = 'destination-in';
           layerCtx.drawImage(mask, 0, 0);
           layerCtx.globalCompositeOperation = 'source-over';
-          outCtx.globalCompositeOperation = 'screen';
-          outCtx.globalAlpha = Math.min(1, whiteS * tone.brightPerUnit * 2.4);
+          outCtx.globalCompositeOperation = 'soft-light';
+          outCtx.globalAlpha = Math.min(1, whiteS * tone.brightPerUnit * 5.5);
           outCtx.drawImage(skinLayerCanvas, 0, 0);
           outCtx.globalCompositeOperation = 'source-over';
           outCtx.globalAlpha = 1;
@@ -2575,7 +2586,7 @@
           outCtx.restore();
         }
         applyToneFx(outCtx, w, h, {
-          bright: whiteS * tone.brightPerUnit,
+          bright: whiteS * tone.brightPerUnit * 2.5, // ソフトライト量へ換算（2026-08-12 bright再設計）
           desat: whiteS * tone.desatPerUnit,
         });
       }
