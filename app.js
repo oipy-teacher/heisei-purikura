@@ -3666,73 +3666,109 @@
     if (group) group.style.display = (conf.textStamps || []).length ? '' : 'none';
   }
 
-  /* ---------- 落書き見本（Meidy式・2026-08-12 新設） ----------
+  /* ---------- 落書き見本（Meidy式・2026-08-12 新設／2026-08-13 写真セル単位に改修） ----------
      現行実機Meidyの「人気クリエイターの完成見本を選ぶと、そのまま配置済みになる」を再現。
-     見本はオブジェクト列を返す関数として持ち、1タップで decoObjects に追加される
-     （初心者救済＋完成度保証。追加は1操作扱いで「もどす」で丸ごと消せる）。
-     配置は写真の顔を隠さないよう、ヘッダー・フッター・四隅の余白ぞいに寄せてある。 */
-  function sampleText(t, style, color, x, y, fontSize, rotDeg) {
-    return {
-      type: 'text', t, style, color, x, y, fontSize,
-      rot: (rotDeg || 0) * Math.PI / 180,
-      w: t.length * fontSize + fontSize * 0.4,
-    };
+     実機の見本は「1枚1枚の写真」にデザインが載る（実機テスト指摘④）。
+     見本は写真セル内の正規化座標（nx/ny=セル内0〜1・サイズ=セル短辺比）で持ち、
+     1タップでレイアウトの全セルそれぞれに、セルの位置・大きさに合わせて配置する。
+     追加は1操作扱いのままなので「もどす」で丸ごと消せる。
+     配置は写真の顔を隠さないよう、各セルの上下のフチと四隅に寄せてある。 */
+  function sampleCellObjects(items, cell) {
+    const s = Math.min(cell.w, cell.h); // セル短辺。サイズはこれに比例させる
+    return items.map((it) => {
+      const x = cell.x + it.nx * cell.w;
+      const y = cell.y + it.ny * cell.h;
+      if (it.type === 'text') {
+        const fontSize = Math.max(10, it.fs * s);
+        return {
+          type: 'text', t: it.t, style: it.style, color: it.color || null,
+          x, y, fontSize,
+          rot: (it.rotDeg || 0) * Math.PI / 180,
+          w: it.t.length * fontSize + fontSize * 0.4,
+        };
+      }
+      if (it.type === 'kira') {
+        return {
+          type: 'kira',
+          items: it.items.map(k => ({
+            ch: k.ch,
+            x: cell.x + k.nx * cell.w,
+            y: cell.y + k.ny * cell.h,
+            size: Math.max(8, k.fsize * s),
+            rot: k.rot || 0,
+          })),
+        };
+      }
+      // stamp / dstamp
+      const o = { type: it.type, x, y, size: Math.max(10, it.fsize * s) };
+      if (it.type === 'stamp') o.char = it.char; else o.id = it.id;
+      return o;
+    });
   }
   const DOODLE_SAMPLES = {
     heisei: [
-      { label: 'ズッ友', build: () => [
-        { type: 'dstamp', id: 'heartChalk', x: 60, y: 132, size: 48 },
-        { type: 'dstamp', id: 'heartChalk', x: 620, y: 132, size: 48 },
-        { type: 'dstamp', id: 'heartChalk', x: 60, y: 815, size: 48 },
+      { label: 'ズッ友', items: [
+        { type: 'dstamp', id: 'heartChalk', nx: 0.09, ny: 0.13, fsize: 0.16 },
+        { type: 'dstamp', id: 'heartChalk', nx: 0.91, ny: 0.13, fsize: 0.16 },
         { type: 'kira', items: [
-          { ch: '✨', x: 180, y: 108, size: 26, rot: 0.4 },
-          { ch: '⭐', x: 340, y: 96, size: 28, rot: -0.3 },
-          { ch: '✨', x: 500, y: 108, size: 26, rot: 0.2 },
+          { ch: '✨', nx: 0.32, ny: 0.08, fsize: 0.09, rot: 0.4 },
+          { ch: '⭐', nx: 0.50, ny: 0.05, fsize: 0.10, rot: -0.3 },
+          { ch: '✨', nx: 0.68, ny: 0.08, fsize: 0.09, rot: 0.2 },
         ] },
-        sampleText('我等友情永久不滅成', 'sticker', '#ff2fa0', 320, 822, 26, -3),
-        { type: 'dstamp', id: 'dateRetro', x: 575, y: 852, size: 62 },
+        { type: 'dstamp', id: 'heartChalk', nx: 0.09, ny: 0.85, fsize: 0.14 },
+        { type: 'text', t: '我等友情永久不滅成', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.90, fs: 0.075, rotDeg: -3 },
+        { type: 'dstamp', id: 'dateRetro', nx: 0.87, ny: 0.76, fsize: 0.18 },
       ] },
-      { label: 'ラブラブ', build: () => [
-        { type: 'dstamp', id: 'heartSticker', x: 72, y: 140, size: 52 },
-        { type: 'dstamp', id: 'heartGlossy', x: 608, y: 140, size: 52 },
-        sampleText('ラブラブ♡', 'neon', null, 340, 108, 30, 0),
-        { type: 'stamp', char: '💋', x: 615, y: 800, size: 50 },
-        { type: 'dstamp', id: 'heartOutline', x: 78, y: 800, size: 46 },
-        { type: 'dstamp', id: 'dateRetro', x: 340, y: 856, size: 58 },
+      { label: 'ラブラブ', items: [
+        { type: 'dstamp', id: 'heartSticker', nx: 0.10, ny: 0.14, fsize: 0.17 },
+        { type: 'dstamp', id: 'heartGlossy', nx: 0.90, ny: 0.14, fsize: 0.17 },
+        { type: 'text', t: 'ラブラブ♡', style: 'neon', nx: 0.50, ny: 0.10, fs: 0.095, rotDeg: 0 },
+        { type: 'stamp', char: '💋', nx: 0.88, ny: 0.86, fsize: 0.16 },
+        { type: 'dstamp', id: 'heartOutline', nx: 0.12, ny: 0.86, fsize: 0.15 },
+        { type: 'dstamp', id: 'dateRetro', nx: 0.50, ny: 0.93, fsize: 0.17 },
       ] },
-      { label: 'アゲアゲ', build: () => [
-        { type: 'dstamp', id: 'sparkleLine', x: 62, y: 130, size: 44 },
-        { type: 'dstamp', id: 'sparkleLine', x: 618, y: 130, size: 44 },
-        { type: 'stamp', char: '🔥', x: 64, y: 815, size: 48 },
-        { type: 'stamp', char: '⚡', x: 616, y: 815, size: 48 },
-        sampleText('最強', 'sticker', '#ff2fa0', 340, 106, 28, 2),
-        sampleText('アゲアゲ⤴', 'sticker', '#ff8a2a', 340, 822, 30, -2),
+      { label: 'アゲアゲ', items: [
+        { type: 'dstamp', id: 'sparkleLine', nx: 0.09, ny: 0.13, fsize: 0.14 },
+        { type: 'dstamp', id: 'sparkleLine', nx: 0.91, ny: 0.13, fsize: 0.14 },
+        { type: 'stamp', char: '🔥', nx: 0.10, ny: 0.87, fsize: 0.15 },
+        { type: 'stamp', char: '⚡', nx: 0.90, ny: 0.87, fsize: 0.15 },
+        { type: 'text', t: '最強', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.10, fs: 0.10, rotDeg: 2 },
+        { type: 'text', t: 'アゲアゲ⤴', style: 'sticker', color: '#ff8a2a', nx: 0.50, ny: 0.90, fs: 0.095, rotDeg: -2 },
       ] },
     ],
     reiwa: [
-      { label: 'なかよし', build: () => [
-        sampleText('BFF♡', 'sticker', '#e0498a', 340, 106, 26, -2),
-        { type: 'stamp', char: '🤍', x: 66, y: 132, size: 40 },
-        { type: 'stamp', char: '☁️', x: 614, y: 132, size: 40 },
-        { type: 'dstamp', id: 'bubble', x: 600, y: 792, size: 50 },
-        { type: 'dstamp', id: 'dateCute', x: 340, y: 852, size: 58 },
+      { label: 'なかよし', items: [
+        { type: 'text', t: 'BFF♡', style: 'sticker', color: '#e0498a', nx: 0.50, ny: 0.10, fs: 0.095, rotDeg: -2 },
+        { type: 'stamp', char: '🤍', nx: 0.10, ny: 0.13, fsize: 0.13 },
+        { type: 'stamp', char: '☁️', nx: 0.90, ny: 0.13, fsize: 0.13 },
+        { type: 'dstamp', id: 'bubble', nx: 0.88, ny: 0.84, fsize: 0.16 },
+        { type: 'dstamp', id: 'dateCute', nx: 0.50, ny: 0.92, fsize: 0.17 },
       ] },
-      { label: 'エモ', build: () => [
-        { type: 'dstamp', id: 'sparkleLine', x: 70, y: 132, size: 40 },
-        { type: 'dstamp', id: 'sparkleLine', x: 610, y: 132, size: 40 },
-        { type: 'dstamp', id: 'heartOutline', x: 78, y: 800, size: 44 },
-        sampleText('エモい', 'sticker', '#a8917d', 340, 826, 26, 2),
-        { type: 'dstamp', id: 'dateCute', x: 560, y: 858, size: 52 },
+      { label: 'エモ', items: [
+        { type: 'dstamp', id: 'sparkleLine', nx: 0.10, ny: 0.13, fsize: 0.13 },
+        { type: 'dstamp', id: 'sparkleLine', nx: 0.90, ny: 0.13, fsize: 0.13 },
+        { type: 'dstamp', id: 'heartOutline', nx: 0.12, ny: 0.86, fsize: 0.14 },
+        { type: 'text', t: 'エモい', style: 'sticker', color: '#a8917d', nx: 0.50, ny: 0.91, fs: 0.085, rotDeg: 2 },
+        { type: 'dstamp', id: 'dateCute', nx: 0.86, ny: 0.75, fsize: 0.16 },
       ] },
-      { label: 'シンプル', build: () => [
-        { type: 'dstamp', id: 'heartLine', x: 60, y: 130, size: 40 },
-        { type: 'dstamp', id: 'heartLine', x: 620, y: 130, size: 40 },
-        { type: 'dstamp', id: 'heartLine', x: 60, y: 818, size: 40 },
-        { type: 'dstamp', id: 'heartLine', x: 620, y: 818, size: 40 },
-        sampleText('Perfect', 'outline', null, 340, 106, 26, -1),
+      { label: 'シンプル', items: [
+        { type: 'dstamp', id: 'heartLine', nx: 0.09, ny: 0.13, fsize: 0.13 },
+        { type: 'dstamp', id: 'heartLine', nx: 0.91, ny: 0.13, fsize: 0.13 },
+        { type: 'dstamp', id: 'heartLine', nx: 0.09, ny: 0.87, fsize: 0.13 },
+        { type: 'dstamp', id: 'heartLine', nx: 0.91, ny: 0.87, fsize: 0.13 },
+        { type: 'text', t: 'Perfect', style: 'outline', nx: 0.50, ny: 0.10, fs: 0.085, rotDeg: -1 },
       ] },
     ],
   };
+
+  // 見本→現在のレイアウトの全写真セルへ展開（セルごとに位置・サイズを合わせる）
+  function buildSampleObjects(sample) {
+    const objs = [];
+    layoutCells(state.layout).forEach((cell) => {
+      objs.push(...sampleCellObjects(sample.items, cell));
+    });
+    return objs;
+  }
 
   function buildSampleRow() {
     const row = $('#sample-row');
@@ -3748,7 +3784,16 @@
       cctx.fillRect(0, 0, 60, 79);
       cctx.save();
       cctx.scale(60 / SHEET_W, 79 / SHEET_H);
-      sample.build().forEach(o => drawObject(cctx, o));
+      /* プレビューも現在のレイアウトのセル単位で描く（写真1枚ごとに載る見え方が伝わる）。
+         セルの枠線も薄く敷いて「どこが写真か」を示す */
+      layoutCells(state.layout).forEach((cell) => {
+        cctx.save();
+        cctx.strokeStyle = 'rgba(0,0,0,.18)';
+        cctx.lineWidth = 6;
+        cctx.strokeRect(cell.x, cell.y, cell.w, cell.h);
+        cctx.restore();
+      });
+      buildSampleObjects(sample).forEach(o => drawObject(cctx, o));
       cctx.restore();
       b.appendChild(cv);
       const lb = document.createElement('span');
@@ -3756,7 +3801,9 @@
       lb.textContent = sample.label;
       b.appendChild(lb);
       b.addEventListener('click', () => {
-        const objs = sample.build(); // 毎回新しいオブジェクトを作る（なぞり消しと共存させるため）
+        // 毎回新しいオブジェクトを作る（なぞり消しと共存させるため）。
+        // レイアウトの全セルに展開しても1操作扱い＝「もどす」で丸ごと消える
+        const objs = buildSampleObjects(sample);
         decoObjects.push(...objs);
         renderDeco();
         pushUndo({ op: 'addMany', count: objs.length });
