@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#ff8fc7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
@@ -231,8 +232,9 @@
           <span id="timer-display" class="timer-display">3:00</span>
         </div>
         <div class="deco-header-buttons">
-          <button id="btn-undo" class="btn-small">↺ もどす</button>
-          <button id="btn-clear" class="btn-small">🗑 ぜんぶ消す</button>
+          <!-- 令和は線画SVGアイコン・平成は従来の記号/絵文字（柄本仕様書3-7【令】・CSSで出し分け） -->
+          <button id="btn-undo" class="btn-small"><span class="tl-emoji">↺</span><img class="tl-icon" src="assets/reiwa-icon-undo.svg" alt=""> もどす</button>
+          <button id="btn-clear" class="btn-small"><span class="tl-emoji">🗑</span><img class="tl-icon" src="assets/reiwa-icon-eraser.svg" alt=""> ぜんぶ消す</button>
           <button id="btn-finish" class="btn-small finish">✨ できあがり！</button>
         </div>
       </div>
@@ -246,7 +248,7 @@
 
         <div class="deco-toolbar">
           <div class="tool-group">
-            <p class="tool-label">✏️ ペン</p>
+            <p class="tool-label"><span class="tl-emoji">✏️</span><img class="tl-icon" src="assets/reiwa-icon-pen.svg" alt=""> ペン</p>
             <div class="pen-type-row" id="pen-type-row">
               <button class="pen-type-btn active" data-pentype="normal">ふつう</button>
               <button class="pen-type-btn" data-pentype="neon">ネオン</button>
@@ -263,7 +265,7 @@
           </div>
 
           <div class="tool-group" id="group-stamp">
-            <p class="tool-label">✨ スタンプ</p>
+            <p class="tool-label"><span class="tl-emoji">✨</span><img class="tl-icon" src="assets/reiwa-icon-stamp.svg" alt=""> スタンプ</p>
             <div class="size-row" id="stamp-size-row">
               <button class="size-btn" data-stampsize="32">小</button>
               <button class="size-btn active" data-stampsize="48">中</button>

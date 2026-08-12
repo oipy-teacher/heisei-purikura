@@ -585,6 +585,10 @@
     playSound('start');
     startBGM();
     showScreen('screen-select');
+    /* コース選択のスクロール位置を毎回トップへ（2026-08-12 qa-tester検収指摘1）:
+       「もう一回あそぶ」経由だと前の組のスクロール位置が残り、次の組がSTEP途中から
+       見ることになる。表示のたびに明示的にリセットする */
+    $('#screen-select .panel').scrollTop = 0;
     /* コース選択画面の案内（2026-08-12）: 実機の型に合わせた新ボイスを優先。
        ファイル未着時だけ従来の2本（デザイン→フレーム）に落とす */
     if (!soundMissing('courseSelectV2')) {
@@ -623,6 +627,7 @@
   $('#btn-back-title').addEventListener('click', () => {
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
+    delete document.body.dataset.mode; // 前回のモード値を残さない（qa-tester検収指摘6）
     setTheme(null); // タイトルはモード決定前の「対比の画面」なのでテーマを外す
     playBgmSrc(BGM_TITLE);
     showScreen('screen-title');
@@ -1502,6 +1507,7 @@
     btnStartShooting.style.display = 'inline-block';
     $('#btn-back-select').style.display = ''; // 撮影開始前は戻れる
     $('#darkroom').classList.add('hidden'); // 前セッションの現像中表示を消す
+    document.querySelector('.camera-stage').classList.remove('developing'); // 右パネルの非表示も解除（保険）
     previewCanvas.classList.remove('ready');
     video.classList.remove('masked');
 
@@ -1774,8 +1780,11 @@
       // 初代プリ機の「低画素カメラで写りが良く見える」を固定の軽い補正で再現し、そのまま落書きへ
       // 暗室風の「げんぞうちゅう…」演出（柄本仕様書3-6【平】。絵文字はやめCSSでフィルム帯を描く）
       $('#darkroom').classList.remove('hidden');
+      // 現像中は右パネル（のこりポーズ・吹き出し）を消す（qa-tester検収指摘4）
+      document.querySelector('.camera-stage').classList.add('developing');
       await sleep(60); // オーバーレイを描画させてから重い現像処理へ
       await finishHeiseiProcessing();
+      document.querySelector('.camera-stage').classList.remove('developing');
     } else {
       startBeautyScreen();
     }
@@ -4275,6 +4284,7 @@
     decoObjects = [];
     undoStack = [];
     renderDeco();
+    delete document.body.dataset.mode; // 前回のモード値を残さない（qa-tester検収指摘6）
     setTheme(null); // タイトルはモード決定前の「対比の画面」なのでテーマを外す
     playBgmSrc(BGM_TITLE); // タイトルへ戻ったらタイトル曲へ
     showScreen('screen-title');
