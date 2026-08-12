@@ -51,18 +51,30 @@
       </details>
 
       <!-- 以下の各セクションはJSが select-main / advanced-body へ振り分ける -->
+      <!-- 撮影コース選択（1997年以降の実機は「アップ／全身」等のコースを最初に選ぶ型） -->
       <div class="sel-section" id="sel-shotmode">
-        <h2 class="step-heading" data-title="どうやって撮る？"></h2>
+        <h2 class="step-heading" data-title="コースをえらんでね"></h2>
         <div class="shotmode-row">
           <button class="shotmode-btn active" data-shotmode="bust">
-            <span class="shotmode-name">📱 バストアップ</span>
-            <span class="shotmode-note">手に持って自撮り。いつもの写り</span>
+            <span class="shotmode-name">📱 アップコース</span>
+            <span class="shotmode-note">手に持って自撮り。顔メインのいつもの写り</span>
           </button>
           <button class="shotmode-btn" data-shotmode="full">
-            <span class="shotmode-name">🧍 全身モード</span>
+            <span class="shotmode-name">🧍 全身コース</span>
             <span class="shotmode-note">三脚にセット。うしろのカメラで全身を撮るよ</span>
           </button>
         </div>
+      </div>
+      <!-- BGM選択（楽曲を選べる機種があった、という1997年以降の実機の型） -->
+      <div class="sel-section" id="sel-bgm">
+        <h2 class="step-heading" data-title="BGMをえらんでね"></h2>
+        <div id="bgm-row" class="preset-row select-filters"></div>
+      </div>
+      <!-- うつりの年代（平成考証: 〜2006年ごろは黄み肌・加工感少なめが史実） -->
+      <div class="sel-section" id="sel-eratone">
+        <h2 class="step-heading" data-title="うつりの年代（平成考証）"></h2>
+        <div id="eratone-row" class="preset-row select-filters"></div>
+        <p class="eratone-note">「〜2006 黄み肌」は当時の実機の写りを再現：黄みがかった肌・加工ひかえめ・ちょっと粗い画質</p>
       </div>
       <div class="sel-section" id="sel-layout">
         <h2 class="step-heading" data-title="ぶんかつ（レイアウト）をえらんでね"></h2>

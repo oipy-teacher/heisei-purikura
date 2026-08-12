@@ -19,8 +19,8 @@
         { id: 'lavender', label: 'ラベンダー', color: '#e0c3ff' },
         { id: 'peach',    label: 'ピーチ',     color: '#ffc9a8' },
       ],
-      // 初代プリント倶楽部(1995)は落書き機能なし・フレーム選択が主役だった時代考証に基づき、
-      // 平成モードはフレーム充実＋フィルター＋シンプルペンのみの構成
+      // 初代プリント倶楽部(1995)は「9種類の背景から1つ選んでボタンを押す」だけの機械だった
+      // （JAIA20年史）。フレーム選択が主役、という考証に基づき9種そろえる
       frames: [
         { id: 'heart',   label: 'ハート',   emoji: '💗' },
         { id: 'star',    label: 'スター',   emoji: '⭐' },
@@ -29,6 +29,7 @@
         { id: 'kirakira', label: 'キラキラ', emoji: '✨' },
         { id: 'ichigo',  label: 'いちご',   emoji: '🍓' },
         { id: 'onpu',    label: 'おんぷ',   emoji: '🎵' },
+        { id: 'usagi',   label: 'うさぎ',   emoji: '🐰' },
         { id: 'plain',   label: 'シンプル', emoji: '' },
       ],
       frameStyle: 'motif', // シール全周にモチーフを並べる（初期プリ機のフレーム風）
@@ -240,6 +241,8 @@
     frame: MODES.heisei.frames[0],
     layout: LAYOUTS[0],
     shotMode: 'bust',    // bust = 手持ち自撮り（前面カメラ） / full = 三脚・全身（背面カメラ）
+    bgmChoice: 'auto',   // BGM選択（1997年以降の実機の型・2026-08-12）。auto = モードおまかせ
+    heiseiEra: 'standard', // 平成モードの写り年代。standard | y2k（〜2006の黄み肌・加工ひかえめ）
     chromaOn: false,
     liveBeautyOn: true,  // 令和モードのライブ盛れプレビュー（2026-07-31新設）
     stream: null,
@@ -386,13 +389,23 @@
 
   const BGM_TITLE = 'audio/bgm_title.mp3';
 
+  /* BGM選択（2026-08-12 新設）。楽曲を選べる機種があったのが1997年以降の実機の型。
+     'auto' はモードおまかせ（従来どおり平成=ユーロビート／令和=ローファイ）。 */
+  const BGM_TRACKS = [
+    { id: 'auto', label: '♪ おまかせ', src: null },
+    { id: 'euro', label: 'ユーロビート', src: 'audio/bgm.mp3' },
+    { id: 'lofi', label: 'ローファイ', src: 'audio/bgm_reiwa.mp3' },
+    { id: 'pop',  label: 'ポップ', src: 'audio/bgm_title.mp3' },
+  ];
+
   function playBgmSrc(src) {
     if (!bgmAudio.src.endsWith(src)) bgmAudio.src = src;
     bgmAudio.currentTime = 0;
     bgmAudio.play().catch(() => {});
   }
   function startBGM() {
-    playBgmSrc(modeConf().bgm);
+    const track = BGM_TRACKS.find(t => t.id === state.bgmChoice);
+    playBgmSrc((track && track.src) || modeConf().bgm);
   }
   function stopBGM() {
     bgmAudio.pause();
@@ -507,10 +520,16 @@
     playSound('start');
     startBGM();
     showScreen('screen-select');
-    playSound('selectCurtain');
-    setTimeout(() => {
-      if (screens['screen-select'].classList.contains('active')) playSound('selectFrame');
-    }, 2700);
+    /* コース選択画面の案内（2026-08-12）: 実機の型に合わせた新ボイスを優先。
+       ファイル未着時だけ従来の2本（デザイン→フレーム）に落とす */
+    if (!soundMissing('courseSelectV2')) {
+      playSound('courseSelectV2');
+    } else {
+      playSound('selectCurtain');
+      setTimeout(() => {
+        if (screens['screen-select'].classList.contains('active')) playSound('selectFrame');
+      }, 2700);
+    }
   }
 
   $('#btn-mode-heisei').addEventListener('click', () => enterMode('heisei'));
@@ -617,21 +636,64 @@
     });
   }
 
+  // BGM選択チップ（選ぶとその場で試聴＝BGMが切り替わる）
+  function buildBgmRow() {
+    const row = $('#bgm-row');
+    row.innerHTML = '';
+    BGM_TRACKS.forEach(t => {
+      const b = document.createElement('button');
+      b.className = 'preset-btn' + (t.id === state.bgmChoice ? ' active' : '');
+      b.textContent = t.label;
+      b.addEventListener('click', () => {
+        state.bgmChoice = t.id;
+        row.querySelectorAll('.preset-btn').forEach(x => x.classList.toggle('active', x === b));
+        startBGM(); // その場で試聴
+      });
+      row.appendChild(b);
+    });
+  }
+
+  // うつりの年代（平成考証・2026-08-12）。〜2006年ごろの実機は黄み肌・加工感少なめが史実
+  const ERA_TONES = [
+    { id: 'standard', label: 'スタンダード' },
+    { id: 'y2k',      label: '〜2006 黄み肌' },
+  ];
+  function buildEraToneRow() {
+    const row = $('#eratone-row');
+    row.innerHTML = '';
+    ERA_TONES.forEach(t => {
+      const b = document.createElement('button');
+      b.className = 'preset-btn' + (t.id === state.heiseiEra ? ' active' : '');
+      b.textContent = t.label;
+      b.addEventListener('click', () => {
+        state.heiseiEra = t.id;
+        row.querySelectorAll('.preset-btn').forEach(x => x.classList.toggle('active', x === b));
+      });
+      row.appendChild(b);
+    });
+  }
+
   function buildSelectGrids() {
     const conf = modeConf();
     buildLayoutList();
     buildChoiceGrid($('#curtain-list'), conf.curtains, 'curtain', (item) => { state.curtain = item; });
     buildChoiceGrid($('#frame-list'), conf.frames, 'frame', (item) => { state.frame = item; });
     buildSelectFilterRow();
+    buildBgmRow();
+    buildEraToneRow();
+
+    // 「うつりの年代」は平成モード専用（令和は現行機の写りなので年代選択なし）
+    $('#sel-eratone').style.display = state.mode === 'heisei' ? '' : 'none';
 
     /* モード別にセクションを並べ替える:
-       平成 = フレーム＋フィルターがデフォ（初代プリ機の流れ）。分割・カラー・デジタル背景は「こだわり設定」へ
-       令和 = 分割・カラー・フレームがデフォ。デジタル背景は「こだわり設定」へ */
+       平成 = コース＋フレーム＋フィルター＋BGMがデフォ（初代〜中期プリ機の流れ）。
+              分割・カラー・年代・デジタル背景は「こだわり設定」へ
+       令和 = コース＋分割・カラー・フレームがデフォ。フィルター・BGM・デジタル背景は「こだわり設定」へ */
     const main = $('#select-main');
     const adv = $('#advanced-body');
     const order = state.mode === 'heisei'
-      ? { main: ['sel-shotmode', 'sel-frame', 'sel-filter'], adv: ['sel-layout', 'sel-curtain', 'sel-chroma'] }
-      : { main: ['sel-shotmode', 'sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-chroma'] };
+      ? { main: ['sel-shotmode', 'sel-frame', 'sel-filter', 'sel-bgm'], adv: ['sel-eratone', 'sel-layout', 'sel-curtain', 'sel-chroma'] }
+      : { main: ['sel-shotmode', 'sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-bgm', 'sel-eratone', 'sel-chroma'] };
     order.main.forEach(id => main.appendChild($('#' + id)));
     order.adv.forEach(id => adv.appendChild($('#' + id)));
     $('#sel-advanced').open = false;
