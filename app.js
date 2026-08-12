@@ -415,6 +415,7 @@
   function playSound(key) {
     const a = sounds[key];
     if (!a || soundMissing(key)) return;
+    a.muted = false; // unlockAudioのミュート解錠と同時になっても本物の再生が消音されないように（2026-08-13）
     a.currentTime = 0;
     a.play().catch(() => { /* 自動再生がブロックされた場合は無視 */ });
   }
@@ -488,6 +489,7 @@
   ];
 
   function playBgmSrc(src) {
+    bgmAudio.muted = false; // unlockAudioの解錠と同時になっても消音・巻き添えpauseされないように（2026-08-13）
     if (!bgmAudio.src.endsWith(src)) bgmAudio.src = src;
     bgmAudio.currentTime = 0;
     bgmAudio.play().catch(() => {});
@@ -524,9 +526,13 @@
     [...Object.values(sounds), bgmAudio].forEach((a) => {
       a.muted = true;
       a.play().then(() => {
-        a.pause();
-        a.currentTime = 0;
-        a.muted = false;
+        /* 解錠中に本物の再生（playSound/startBGM）が始まっていたら、そちらを止めない。
+           本物の再生は muted=false で始まるので、まだミュートのものだけが解錠用の空再生 */
+        if (a.muted) {
+          a.pause();
+          a.currentTime = 0;
+          a.muted = false;
+        }
       }).catch(() => { a.muted = false; });
     });
   }
