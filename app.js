@@ -3974,6 +3974,8 @@
     nameModal.classList.add('hidden');
     timerDisplay.textContent = formatTime(state.remaining);
     timerDisplay.classList.remove('warn');
+    timerDisplay.parentElement.classList.remove('alarm', 'warn-box');
+    document.documentElement.style.setProperty('--deco-p', '100%');
 
     /* タイマーは「客が『らくがきスタート』を押した瞬間」から走らせる（2026-07-26 オーナー裁定）。
        撮影ルームから出て、別の場所へ移動して、座るまでの間に持ち時間が溶けるのを防ぐため。 */
@@ -3994,15 +3996,21 @@
     /* 中間通知（2026-08-12 新設）: 現行実機は約200秒の途中で区切りの通知が入る。
        残り時間が半分になったところで一声＋トースト表示 */
     const halfPoint = Math.floor(decoSeconds() / 2);
+    const total = decoSeconds();
     state.timerId = setInterval(() => {
       state.remaining--;
       timerDisplay.textContent = formatTime(Math.max(0, state.remaining));
+      // 令和: 円形プログレスリング用の残量%（CSS変数。conic-gradientが描く）
+      document.documentElement.style.setProperty('--deco-p', ((Math.max(0, state.remaining) / total) * 100).toFixed(1) + '%');
+      // 平成: 残り30秒から目覚まし時計のベルが震える（柄本仕様書3-7）
+      if (state.remaining === 30) timerDisplay.parentElement.classList.add('alarm');
       if (state.remaining === halfPoint) {
         playSound('decoHalftime');
         showDecoToast(`⏰ のこり はんぶん！（${formatTime(halfPoint)}）`);
       }
       if (state.remaining <= 10) {
         timerDisplay.classList.add('warn');
+        timerDisplay.parentElement.classList.add('warn-box');
         if (!state.warningPlayed) {
           state.warningPlayed = true;
           playSound('timeWarning');
@@ -4271,6 +4279,18 @@
     applyBeauty,
     startAttract,
     stopAttract,
+    // デザイン確認用: ダミー写真の入った落書き/プリント画面へ直行（カメラ不要）
+    gotoDeco(toPrint) {
+      document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
+      composeSheet();
+      if (toPrint) {
+        composeFinal();
+        showScreen('screen-print');
+        startPrintSequence();
+      } else {
+        startDecoScreen();
+      }
+    },
     // 実機模倣アップデート（2026-08-12）の出力系をカメラ無しで検証する:
     // ダミー4枚を撮影済み扱いにして、黄み肌トーン・16分割・たて長コラージュを生成する
     testNewOutputs() {

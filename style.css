@@ -1411,3 +1411,222 @@ body.theme-reiwa #screen-select .btn-main {
 }
 /* フレーム9種の3×3はセルが大きくなりすぎるため高さを詰める（正方形をやめる） */
 body.theme-heisei #frame-list .choice-item { aspect-ratio: auto; padding: 14px 0; }
+
+/* ================================================
+   段階3: 落書き画面（仕様書 3-7）
+   ================================================ */
+/* ---- 平成: 文房具箱 ---- */
+body.theme-heisei #screen-deco {
+  background: var(--h-dots) 0 0 / 26px 26px, #ff8fc7;
+}
+body.theme-heisei .deco-wrap { padding-bottom: 46px; } /* 下端テロップぶんの余白 */
+body.theme-heisei .deco-toolbar {
+  background: var(--h-checker) 0 0 / 32px 32px;
+  border: 4px solid var(--h-pink);
+  border-radius: 14px;
+}
+body.theme-heisei .tool-group {
+  background: rgba(255,255,255,.92);
+  border-radius: 10px;
+  padding: 10px;
+}
+body.theme-heisei .tool-label { color: var(--h-ink); font-weight: 800; }
+/* ペン色: ペン軸形（縦長カプセル＋先端の三角ペン先）。選択中は4px飛び出す */
+body.theme-heisei .color-swatch {
+  width: 26px; height: 44px;
+  border-radius: 13px 13px 6px 6px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(58,16,48,.35);
+  position: relative;
+  transition: transform .12s ease;
+}
+body.theme-heisei .color-swatch::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: -8px;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid rgba(58,16,48,.55); /* ペン先（黒芯） */
+}
+body.theme-heisei .color-swatch.selected {
+  transform: translateY(-4px);
+  box-shadow: 0 0 0 2px var(--h-ink);
+}
+/* スタンプ欄: シール台紙風（白地＋切り取り線の破線） */
+body.theme-heisei .stamp-row,
+body.theme-heisei .text-stamp-row,
+body.theme-heisei .sample-row {
+  background: #fff;
+  border: 2px dashed var(--h-pink);
+  border-radius: 8px;
+  padding: 8px;
+}
+body.theme-heisei .stamp-btn,
+body.theme-heisei .text-stamp-btn,
+body.theme-heisei .sample-btn { border: 2px dashed #e8cede; }
+body.theme-heisei .text-stamp-btn { color: var(--h-pink); }
+body.theme-heisei .tool-btn,
+body.theme-heisei .pen-type-btn,
+body.theme-heisei .size-btn {
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-pink);
+  border-radius: 999px;
+  color: var(--h-ink);
+}
+body.theme-heisei .tool-btn.active,
+body.theme-heisei .pen-type-btn.active,
+body.theme-heisei .size-btn.active {
+  background: var(--h-pink);
+  color: #fff;
+  animation: hBlink 1s steps(1) infinite;
+}
+/* 残り時間: 目覚まし時計形（丸ベル2つ＋足）。残り30秒からベルが震える */
+body.theme-heisei #screen-deco .timer-box {
+  position: relative;
+  border: 4px solid var(--h-ink);
+  border-radius: 999px;
+  background: #fff;
+  will-change: transform;
+}
+body.theme-heisei #screen-deco .timer-box::before,
+body.theme-heisei #screen-deco .timer-box::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  width: 16px; height: 10px;
+  border-radius: 8px 8px 0 0;
+  background: var(--h-ink);
+}
+body.theme-heisei #screen-deco .timer-box::before { left: 14px; transform: rotate(-24deg); }
+body.theme-heisei #screen-deco .timer-box::after { right: 14px; transform: rotate(24deg); }
+body.theme-heisei #screen-deco .timer-box.alarm { animation: bellShake .22s linear infinite; }
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(6deg); }
+  75% { transform: rotate(-6deg); }
+}
+body.theme-heisei .timer-label { color: var(--h-ink); }
+body.theme-heisei .timer-display { color: var(--h-pink); }
+/* キャンバスの虹帯額縁 */
+body.theme-heisei #sheet-canvas {
+  border: 10px solid transparent;
+  border-image: repeating-linear-gradient(90deg,
+     #ff2fa0 0 40px, #ff8a2a 40px 80px, #ffe066 80px 120px,
+     #5cff8f 120px 160px, #5cc8ff 160px 200px, #a06bff 200px 240px) 10;
+  border-radius: 0;
+}
+body.theme-heisei .btn-small {
+  background: var(--h-purple);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-pink);
+  border-radius: 999px;
+}
+body.theme-heisei .btn-small.finish {
+  background: var(--h-yellow);
+  color: var(--h-ink);
+  animation: hBlink 1s steps(1) infinite;
+}
+body.theme-heisei .deco-gate-inner,
+body.theme-heisei .confirm-box {
+  border: 4px solid var(--h-pink);
+  border-radius: 18px;
+}
+body.theme-heisei .deco-gate-title,
+body.theme-heisei .confirm-text { color: var(--h-ink); }
+body.theme-heisei .deco-toast { color: var(--h-ink); border-color: var(--h-pink); }
+
+/* ---- 令和: 生成りのトレー ---- */
+body.theme-reiwa #screen-deco { background: var(--r-paper); }
+body.theme-reiwa #screen-deco::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: var(--r-grain);
+  pointer-events: none;
+  z-index: 0;
+}
+body.theme-reiwa .deco-wrap { position: relative; z-index: 1; }
+body.theme-reiwa .deco-toolbar {
+  background: #fefcf9;
+  border: 1px solid rgba(74,63,56,.25);
+  border-radius: 4px;
+}
+body.theme-reiwa .tool-group {
+  border-bottom: 1px solid rgba(74,63,56,.18);
+  padding-bottom: 12px;
+}
+body.theme-reiwa .tool-group:last-child { border-bottom: none; }
+body.theme-reiwa .tool-label { color: var(--r-ink); font-weight: 600; letter-spacing: .1em; }
+body.theme-reiwa .tool-btn,
+body.theme-reiwa .pen-type-btn,
+body.theme-reiwa .size-btn {
+  border: 1px solid rgba(74,63,56,.4);
+  border-radius: 4px;
+  color: var(--r-ink);
+  transition: background .3s ease, color .3s ease;
+}
+body.theme-reiwa .tool-btn.active,
+body.theme-reiwa .pen-type-btn.active,
+body.theme-reiwa .size-btn.active {
+  background: var(--r-accent);
+  border-color: var(--r-accent);
+  color: #fff;
+}
+body.theme-reiwa .stamp-btn,
+body.theme-reiwa .text-stamp-btn,
+body.theme-reiwa .sample-btn {
+  border: 1px solid rgba(74,63,56,.25);
+  border-radius: 4px;
+  background: #fefcf9;
+}
+body.theme-reiwa .text-stamp-btn { color: var(--r-ink); }
+body.theme-reiwa .color-swatch { border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(74,63,56,.35); }
+body.theme-reiwa .color-swatch.selected { box-shadow: 0 0 0 2px var(--r-accent); }
+/* 残り時間: 細字＋円形プログレスリング（1px罫線风）。10秒でリングがアクセント色に */
+body.theme-reiwa #screen-deco .timer-box {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  position: relative;
+  padding-left: 46px;
+}
+body.theme-reiwa #screen-deco .timer-box::before {
+  content: '';
+  position: absolute;
+  left: 4px; top: 50%;
+  width: 32px; height: 32px;
+  margin-top: -16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--r-beige) var(--deco-p, 100%), transparent 0);
+  -webkit-mask: radial-gradient(circle 16px at center, transparent 13px, #000 13.5px);
+  mask: radial-gradient(circle 16px at center, transparent 13px, #000 13.5px);
+}
+body.theme-reiwa #screen-deco .timer-box.warn-box::before {
+  background: conic-gradient(var(--r-accent) var(--deco-p, 100%), transparent 0);
+}
+body.theme-reiwa .timer-label { color: var(--r-brown); font-weight: 600; }
+body.theme-reiwa .timer-display { color: var(--r-ink); font-weight: 500; }
+body.theme-reiwa .timer-display.warn { color: var(--r-accent); animation: none; }
+body.theme-reiwa #sheet-canvas { border: 8px solid #fff; border-radius: 2px; box-shadow: 0 4px 14px rgba(74,63,56,.18); }
+body.theme-reiwa .btn-small {
+  background: var(--r-paper);
+  color: var(--r-ink);
+  border: 1px solid rgba(74,63,56,.45);
+  border-radius: 4px;
+}
+body.theme-reiwa .btn-small.finish {
+  background: var(--r-accent);
+  color: #fff;
+  border-color: var(--r-accent);
+}
+body.theme-reiwa .deco-gate-inner,
+body.theme-reiwa .confirm-box {
+  background: var(--r-paper);
+  border: 1px solid rgba(74,63,56,.3);
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(74,63,56,.2);
+}
+body.theme-reiwa .deco-gate-title,
+body.theme-reiwa .confirm-text { color: var(--r-ink); }
+body.theme-reiwa .deco-toast { color: var(--r-ink); border-color: var(--r-beige); }
+body.theme-reiwa .deco-countdown { font-weight: 500; }
