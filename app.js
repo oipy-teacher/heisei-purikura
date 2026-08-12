@@ -514,7 +514,12 @@
   }, true);
 
   // iOS Safari 対策：最初のユーザー操作のタイミングで全音声を一度ミュート再生し、以降のタイマー発火の再生を許可させる
+  /* 1回だけ実行する（2026-08-13）: 2回目以降に走ると、ミュート再生→pause の後始末が
+     直前に鳴らし始めた本物の音声（courseSelectV2等）を巻き添えで止めるレースになるため */
+  let audioUnlocked = false;
   function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
     [...Object.values(sounds), bgmAudio].forEach((a) => {
       a.muted = true;
       a.play().then(() => {
@@ -616,22 +621,28 @@
     applyShotMode();
     buildDecoTools();
     unlockAudio();
-    playSound('start');
     startBGM();
     showScreen('screen-select');
     /* コース選択のスクロール位置を毎回トップへ（2026-08-12 qa-tester検収指摘1）:
        「もう一回あそぶ」経由だと前の組のスクロール位置が残り、次の組がSTEP途中から
        見ることになる。表示のたびに明示的にリセットする */
     $('#screen-select .panel').scrollTop = 0;
-    /* コース選択画面の案内（2026-08-12）: 実機の型に合わせた新ボイスを優先。
-       ファイル未着時だけ従来の2本（デザイン→フレーム）に落とす */
+    /* コース選択画面の案内（2026-08-12・2026-08-13改修）: 音声は必ず1本ずつ。
+       以前はモード決定音声（start）と新ボイス（courseSelectV2）を同時に鳴らしていて
+       実機テストで「2種類の声がダブる」と指摘された。新ボイスがあるときは
+       旧アナウンス（start / selectCurtain / selectFrame）を一切鳴らさず、
+       ファイル未着時だけ従来の3本を「終わってから次」の順送りで鳴らす */
     if (!soundMissing('courseSelectV2')) {
       playSound('courseSelectV2');
     } else {
-      playSound('selectCurtain');
+      playSound('start');
+      const startMs = soundDurationMs('start') || 1300;
+      setTimeout(() => {
+        if (screens['screen-select'].classList.contains('active')) playSound('selectCurtain');
+      }, startMs + 250);
       setTimeout(() => {
         if (screens['screen-select'].classList.contains('active')) playSound('selectFrame');
-      }, 2700);
+      }, startMs + 250 + (soundDurationMs('selectCurtain') || 1700) + 250);
     }
   }
 
