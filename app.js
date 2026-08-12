@@ -278,6 +278,8 @@
   function showScreen(id) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[id].classList.add('active');
+    // タイトルへ戻ったら待機デモのアイドル計測を仕掛け直す（関数はこの後で定義される）
+    if (id === 'screen-title' && typeof armAttractIdle === 'function') armAttractIdle();
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -421,6 +423,73 @@
       }).catch(() => { a.muted = false; });
     });
   }
+
+  /* ===================== 0-. 待機デモ（アトラクト画面・2026-08-12 新設） =====================
+     実機は客がいない間も派手なデモ映像＋呼び込み音声が回り続ける（JAIA20年史の考証）。
+     タイトル画面のまま ATTRACT_IDLE_MS 触られなかったら開始し、タッチで即タイトルへ戻る。 */
+  const ATTRACT_IDLE_MS = 45000;      // 無操作からデモ開始までの時間
+  const ATTRACT_SLIDE_MS = 4200;      // スライド1枚の表示時間
+  const ATTRACT_CALL_GAP_MS = 3500;   // 呼び込み音声のリピート間隔
+
+  const attractOverlay = $('#attract-overlay');
+  const attractSlides = document.querySelectorAll('.attract-slide');
+  let attractIdleId = null;
+  let attractSlideId = null;
+  let attractCallId = null;
+  let attractOn = false;
+  let attractSlideIdx = 0;
+
+  function startAttract() {
+    if (attractOn || !screens['screen-title'].classList.contains('active')) return;
+    attractOn = true;
+    attractSlideIdx = 0;
+    attractSlides.forEach((s, i) => s.classList.toggle('active', i === 0));
+    attractOverlay.classList.remove('hidden');
+    attractSlideId = setInterval(() => {
+      attractSlideIdx = (attractSlideIdx + 1) % attractSlides.length;
+      attractSlides.forEach((s, i) => s.classList.toggle('active', i === attractSlideIdx));
+    }, ATTRACT_SLIDE_MS);
+    // 呼び込み音声（ファイル未着ならスキップ）。連呼しすぎないよう間隔を空けてループ
+    playSound('attractCall');
+  }
+
+  function stopAttract() {
+    if (!attractOn) return;
+    attractOn = false;
+    attractOverlay.classList.add('hidden');
+    if (attractSlideId) { clearInterval(attractSlideId); attractSlideId = null; }
+    if (attractCallId) { clearTimeout(attractCallId); attractCallId = null; }
+    const call = sounds.attractCall;
+    if (call) { call.pause(); call.currentTime = 0; }
+  }
+
+  if (sounds.attractCall) {
+    sounds.attractCall.addEventListener('ended', () => {
+      if (!attractOn) return;
+      attractCallId = setTimeout(() => { if (attractOn) playSound('attractCall'); }, ATTRACT_CALL_GAP_MS);
+    });
+  }
+
+  function armAttractIdle() {
+    if (attractIdleId) clearTimeout(attractIdleId);
+    attractIdleId = null;
+    if (!screens['screen-title'].classList.contains('active')) return;
+    attractIdleId = setTimeout(startAttract, ATTRACT_IDLE_MS);
+  }
+
+  // どこかを触るたびにアイドル計測をやり直す
+  document.addEventListener('pointerdown', () => {
+    if (attractOn) return; // デモ解除は click 側で行う（下のボタンへのタッチ化けを防ぐ）
+    armAttractIdle();
+  }, true);
+  /* デモ中のタッチはタイトルへ戻すだけ。pointerdown で消すと同じタッチの click が
+     下のモードボタンに落ちてしまうため、click のタイミングで消して伝播も止める */
+  attractOverlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopAttract();
+    armAttractIdle();
+  });
+  armAttractIdle();
 
   /* ===================== 0. タイトル（モード選択） ===================== */
   function enterMode(mode) {

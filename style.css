@@ -166,6 +166,54 @@ html, body {
 .mode-btn.pulse { animation: pulse 1.4s infinite; }
 .mode-btn.reiwa.pulse { animation-delay: .7s; }
 
+/* ============ 待機デモ（アトラクト） ============ */
+.attract-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: linear-gradient(300deg, #ff2fa0, #a06bff, #5aa9ff, #ff8fc7, #ffe066);
+  background-size: 400% 400%;
+  animation: attractBg 8s ease infinite;
+  cursor: pointer;
+}
+@keyframes attractBg {
+  0%,100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.attract-slides { position: relative; width: min(92vw, 700px); height: 46vh; }
+.attract-slide {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px; text-align: center;
+  opacity: 0; transform: scale(.94);
+  transition: opacity .6s ease, transform .6s ease;
+  pointer-events: none;
+}
+.attract-slide.active { opacity: 1; transform: scale(1); }
+.attract-big {
+  margin: 0; font-size: 84px; font-weight: 900; color: #fff; line-height: 1.15;
+  text-shadow: 4px 4px 0 #ff2fa0, 8px 8px 0 rgba(0,0,0,.25);
+  animation: attractBob 1.6s ease-in-out infinite;
+}
+.attract-big.small { font-size: 44px; }
+@keyframes attractBob { 0%,100%{ transform: translateY(0) rotate(-1.5deg);} 50%{ transform: translateY(-10px) rotate(1.5deg);} }
+.attract-kira { display: inline-block; animation: pulse 1s infinite; }
+.attract-mid { margin: 0; font-size: 22px; font-weight: 800; color: #fff; line-height: 1.7; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.attract-emoji-row { margin: 0; font-size: 40px; letter-spacing: .3em; }
+.attract-tag {
+  margin: 0 0 6px; font-size: 20px; font-weight: 900; color: #fff;
+  padding: 8px 26px; border-radius: 999px; border: 3px solid #fff;
+}
+.attract-tag.heisei-tag { background: linear-gradient(180deg,#ff8fc7,#ff2fa0); }
+.attract-tag.reiwa-tag { background: linear-gradient(180deg,#cbb9a8,#a8917d); }
+.attract-touch {
+  position: absolute; bottom: 8vh; left: 0; right: 0;
+  text-align: center; font-size: 30px; font-weight: 900; color: #fff;
+  text-shadow: 0 0 18px #ff2fa0, 0 4px 0 rgba(0,0,0,.3);
+  animation: blink 1s infinite;
+}
+
 /* ============ 1. select ============ */
 #screen-select { background: linear-gradient(160deg,#ffe1f3,#e4d4ff); }
 .panel {
