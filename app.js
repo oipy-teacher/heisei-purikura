@@ -513,7 +513,17 @@
     attractSlides.forEach((s, i) => s.classList.toggle('active', i === 0));
     attractOverlay.classList.remove('hidden');
     attractSlideId = setInterval(() => {
+      const prev = attractSlideIdx;
       attractSlideIdx = (attractSlideIdx + 1) % attractSlides.length;
+      /* 時代が切り替わったと目で分かる遷移（柄本仕様書3-2）:
+         平成様式→令和様式(1→2) は白フラッシュ／令和様式→対比(2→3) はカットイン */
+      if (prev === 1 && attractSlideIdx === 2) {
+        const fl = $('#global-flash');
+        fl.classList.remove('go');
+        void fl.offsetWidth;
+        fl.classList.add('go');
+      }
+      attractOverlay.classList.toggle('cut', prev === 2 && attractSlideIdx === 3);
       attractSlides.forEach((s, i) => s.classList.toggle('active', i === attractSlideIdx));
     }, ATTRACT_SLIDE_MS);
     // 呼び込み音声（ファイル未着ならスキップ）。連呼しすぎないよう間隔を空けてループ

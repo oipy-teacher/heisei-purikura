@@ -348,31 +348,35 @@
   <!-- ============ 待機デモ（アトラクト画面） ============
        実機の「客がいない間も派手なデモが回り続ける」を再現。
        タイトル画面のまま一定時間タッチが無いと表示され、タッチで戻る。 -->
+  <!-- 柄本仕様書3-2: スライドごとに様式を切り替える（対比→平成→令和→対比→対比） -->
   <div id="attract-overlay" class="attract-overlay hidden">
     <div class="attract-slides">
-      <div class="attract-slide active">
-        <p class="attract-big">プリクラ<span class="attract-kira">✨</span></p>
-        <p class="attract-mid">撮って・盛って・落書きして</p>
-        <p class="attract-emoji-row">📸 💕 ✍️ 🎀 ⭐</p>
+      <div class="attract-slide as-split active">
+        <p class="as-h-logo" data-text="平成プリクラ">平成プリクラ</p>
+        <p class="as-r-logo">令和 <span class="as-r-cap">- photo sticker -</span></p>
+        <p class="as-band-copy">撮って・盛って・落書きして</p>
       </div>
-      <div class="attract-slide">
-        <p class="attract-tag heisei-tag">平成モード</p>
-        <p class="attract-big small">白肌もガングロも♡</p>
-        <p class="attract-mid">ユーロビートで懐かしのギャルプリ！<br>らくがきは勝負の3分間⏰</p>
+      <div class="attract-slide as-heisei">
+        <p class="as-tag-h">平成モード</p>
+        <p class="as-h-logo big" data-text="白肌もガングロも♡">白肌もガングロも♡</p>
+        <p class="as-mid-h">ユーロビートで懐かしのギャルプリ！<br>らくがきは 勝負の３ぷんかん！</p>
+        <div class="as-ticker"><span>むりょうたいけん！ぶんかさいスペシャル！　プリはともだちとはんぶんこ！　むりょうたいけん！ぶんかさいスペシャル！　プリはともだちとはんぶんこ！　</span></div>
       </div>
-      <div class="attract-slide">
-        <p class="attract-tag reiwa-tag">令和モード</p>
-        <p class="attract-big small">ナチュラル盛れ×くすみカラー</p>
-        <p class="attract-mid">ライブ盛れで「撮る前から盛れてる」<br>今っぽエモプリ🤍</p>
+      <div class="attract-slide as-reiwa">
+        <p class="as-cap-r">- now -</p>
+        <p class="as-logo-r">令和モード</p>
+        <p class="as-mid-r">ナチュラル盛れ × くすみカラー<br>ライブ盛れで「撮る前から盛れてる」</p>
+        <p class="as-cap-r under">- natural / film / mood -</p>
       </div>
-      <div class="attract-slide">
-        <p class="attract-big small">シールは えらべる ぶんかつ！</p>
-        <p class="attract-emoji-row">🎞 16分割も！ まるMIXも！</p>
-        <p class="attract-mid">たて長ver.でストーリーにも 📱</p>
+      <div class="attract-slide as-split">
+        <p class="as-h-logo" data-text="16分割も！">16分割も！</p>
+        <p class="as-r-logo">たて長ver.も <span class="as-r-cap">- for stories -</span></p>
+        <p class="as-band-copy">シールは えらべる ぶんかつ</p>
       </div>
-      <div class="attract-slide">
-        <p class="attract-big">友＋<span class="attract-kira">💗</span></p>
-        <p class="attract-mid">我等友情永久不滅成——<br>今日の思い出、シールにして持って帰ろ！</p>
+      <div class="attract-slide as-split">
+        <p class="as-h-logo" data-text="我等友情永久不滅成">我等友情永久不滅成</p>
+        <p class="as-r-logo">おもいでを つれてかえろう <span class="as-r-cap">- memories -</span></p>
+        <p class="as-band-copy">今日の思い出、シールにして持って帰ろ！</p>
       </div>
     </div>
     <p class="attract-touch">👆 タッチしてスタート！</p>
