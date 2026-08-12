@@ -551,6 +551,17 @@
   $('#btn-mode-heisei').addEventListener('click', () => enterMode('heisei'));
   $('#btn-mode-reiwa').addEventListener('click', () => enterMode('reiwa'));
 
+  /* 戻る導線（2026-08-12 オーナー指摘対応）:
+     コース選択→モード選択へ戻れる。戻る＝セッションのやり直しなので、
+     BGM/写り年代は「もう一回あそぶ」と同じく初期値へ戻す（次のモードへ持ち越さない）。
+     カーテン・フレーム等は enterMode が毎回リセットするので触らなくてよい。 */
+  $('#btn-back-title').addEventListener('click', () => {
+    state.bgmChoice = 'auto';
+    state.heiseiEra = 'standard';
+    playBgmSrc(BGM_TITLE);
+    showScreen('screen-title');
+  });
+
   /* ===================== 1. 選択画面 ===================== */
   function buildChoiceGrid(container, items, kind, onSelect) {
     container.innerHTML = '';
@@ -771,6 +782,13 @@
   $('#btn-to-camera').addEventListener('click', async () => {
     showScreen('screen-camera');
     await startCamera();
+  });
+
+  /* 撮影画面→コース選択へ戻る（撮影開始前だけ。開始後は実機同様戻れない）。
+     選択内容はそのまま残す＝選び直しに来ただけなのでリセットしない */
+  $('#btn-back-select').addEventListener('click', () => {
+    stopCamera();
+    showScreen('screen-select');
   });
 
   /* ===================== MediaPipe 共通 ===================== */
@@ -1406,6 +1424,7 @@
     $('#shots-left').textContent = NUM_SHOTS;
     btnStartShooting.disabled = false;
     btnStartShooting.style.display = 'inline-block';
+    $('#btn-back-select').style.display = ''; // 撮影開始前は戻れる
     previewCanvas.classList.remove('ready');
     video.classList.remove('masked');
 
@@ -1598,6 +1617,7 @@
   btnStartShooting.addEventListener('click', async () => {
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
+    $('#btn-back-select').style.display = 'none'; // 撮影開始後は実機同様戻れない
     const poseGuideEl = $('#pose-guide');
     if (state.shotMode === 'full') {
       poseGuideEl.textContent = 'じゅんびちゅう…';
