@@ -268,6 +268,7 @@
     stream: null,
     shots: [],           // 撮影した生の4枚
     processedShots: [],  // 盛り加工後の4枚
+    photoPick: null,     // シールに載せる写真の並び（shotsのインデックス列・2026-08-13新設）。nullなら撮影順
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
     beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, cheek: 45, lip: 40, filter: 'none' },
@@ -1544,6 +1545,7 @@
     state.shots = [];
     state.processedShots = [];
     state.faceData = [];
+    state.photoPick = null; // シール写真えらびは撮り直しのたびに白紙へ（2026-08-13）
     state.skinConf = [];
     skinMaskCache.clear();
     segEMA = null; // 前回セッションのマスク残像を消す
@@ -3091,12 +3093,19 @@
 
     // 写真をレイアウトに合わせて配置（盛り加工済みを優先。セル数が写真より多い場合は繰り返し=16分割の再現）
     const shots = state.processedShots.length ? state.processedShots : state.shots;
+    /* シールに載せる写真の並び（2026-08-13 実機テスト指摘対応）:
+       2枚ワイド等でどの写真が載るか選べるよう、photoPick（選んだ順のインデックス列）を
+       優先する。未選択なら従来どおり撮影順 */
+    const pick = (state.photoPick && state.photoPick.length)
+      ? state.photoPick.filter(idx => idx < shots.length)
+      : null;
+    const order = (pick && pick.length) ? pick : shots.map((_, idx) => idx);
     const cells = layoutCells(state.layout);
     const radius = state.layout.radius;
     const pad = Math.min(6, state.layout.gap * 0.3);
     const isCircle = state.layout.shape === 'circle';
     cells.forEach((cell, i) => {
-      const shotCanvas = shots[i % shots.length];
+      const shotCanvas = shots[order[i % order.length]];
       if (!shotCanvas) return;
       const { x, y, w: cw, h: chh } = cell;
       // 円形セルは正円（短辺基準）
@@ -4026,6 +4035,69 @@
     decoToastId = setTimeout(() => decoToastEl.classList.add('hidden'), 2600);
   }
 
+  /* ---------- シールに載せる写真えらび（2026-08-13 実機テスト指摘対応） ----------
+     2枚ワイド/6分割などで「4枚のどれがシールに載るか」が選べなかった。
+     らくがきスタート前のゲートにサムネイルを並べ、タップで選ぶ（選んだ順に並ぶ）。
+     デフォルトは撮影順＝従来と同じ。タイマー開始前なので持ち時間は減らない。 */
+  function buildPhotoPick() {
+    const row = $('#photo-pick');
+    if (!row) return;
+    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    if (!state.photoPick || !state.photoPick.length) state.photoPick = shots.map((_, i) => i);
+    state.photoPick = state.photoPick.filter(i => i < shots.length);
+    row.innerHTML = '';
+    shots.forEach((shot, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pp-item';
+      b.dataset.idx = String(i);
+      const cv = document.createElement('canvas');
+      cv.width = 96; cv.height = 72;
+      drawCover(cv.getContext('2d'), shot, 0, 0, 96, 72);
+      b.appendChild(cv);
+      const num = document.createElement('span');
+      num.className = 'pp-num';
+      b.appendChild(num);
+      b.addEventListener('click', () => {
+        const at = state.photoPick.indexOf(i);
+        if (at >= 0) {
+          if (state.photoPick.length <= 1) return; // 最低1枚は残す（真っ白なシールを防ぐ）
+          state.photoPick.splice(at, 1);
+        } else {
+          state.photoPick.push(i);
+        }
+        composeSheet();       // 後ろのシールにその場で反映（選んだ結果が見える）
+        refreshPhotoPick();
+      });
+      row.appendChild(b);
+    });
+    refreshPhotoPick();
+  }
+
+  function refreshPhotoPick() {
+    const row = $('#photo-pick');
+    if (!row) return;
+    const cellCount = layoutCells(state.layout).length; // このレイアウトのマス数
+    Array.from(row.children).forEach((b) => {
+      const i = Number(b.dataset.idx);
+      const at = state.photoPick.indexOf(i);
+      const on = at >= 0;
+      b.classList.toggle('on', on);
+      // 選んだ順がマス数を超えた分（このレイアウトでは載らない）は半点灯で知らせる
+      b.classList.toggle('spare', on && at >= cellCount);
+      b.querySelector('.pp-num').textContent = on ? String(at + 1) : '';
+    });
+    const hint = $('#photo-pick-hint');
+    if (!hint) return;
+    if (cellCount < state.photoPick.length) {
+      hint.textContent = `このレイアウトには えらんだ じゅんに ${cellCount}まいが のるよ`;
+    } else if (cellCount > state.photoPick.length) {
+      hint.textContent = `えらんだ ${state.photoPick.length}まいが じゅんばんに くりかえし ならぶよ`;
+    } else {
+      hint.textContent = 'えらんだ じゅんばんに ならぶよ';
+    }
+  }
+
   function startDecoScreen() {
     showScreen('screen-deco');
     drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
@@ -4051,6 +4123,7 @@
        撮影ルームから出て、別の場所へ移動して、座るまでの間に持ち時間が溶けるのを防ぐため。 */
     if (state.timerId) clearInterval(state.timerId);
     drawCanvas.style.pointerEvents = 'none';
+    buildPhotoPick(); // シールに載せる写真えらび（タイマー開始前に済ませる）
     $('#deco-start-gate').classList.remove('hidden');
   }
 
@@ -4305,6 +4378,7 @@
     state.shots = [];
     state.processedShots = [];
     state.faceData = [];
+    state.photoPick = null; // シール写真えらびも次の客のためにリセット（2026-08-13）
     // 次の客のために選択系もまっさらへ（2026-08-12 qa-tester指摘。無人運用では前の客の設定が残ると事故）
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
