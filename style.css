@@ -128,7 +128,9 @@ body[data-mode="reiwa"] .btn-back { color: #ab9a8a; background: #f6f1ea; border-
 .door-logo-h {
   position: absolute; top: 16%; left: 8%;
   font-family: "Hiragino Maru Gothic ProN", sans-serif;
-  font-size: 64px; font-weight: 800;
+  /* 端末幅で流動（スマホ縦でロゴが折り返して「ラ」が落ちるのを防ぐ・2026-08-12） */
+  font-size: clamp(30px, 8.5vw, 64px); font-weight: 800;
+  white-space: nowrap;
   color: #ff2fa0;
   transform: rotate(-5deg);
   letter-spacing: .02em;
@@ -141,10 +143,11 @@ body[data-mode="reiwa"] .btn-back { color: #ab9a8a; background: #f6f1ea; border-
   position: absolute; inset: 0;
   z-index: -1;
 }
-.door-logo-h::after { -webkit-text-stroke: 10px #ffffff; color: #fff; }
-.door-logo-h::before { -webkit-text-stroke: 18px #a06bff; color: #a06bff; z-index: -2; }
+/* フチはフォントサイズ比例（px固定だと縮小時に文字が潰れる） */
+.door-logo-h::after { -webkit-text-stroke: .16em #ffffff; color: #fff; }
+.door-logo-h::before { -webkit-text-stroke: .28em #a06bff; color: #a06bff; z-index: -2; }
 .door-era-h {
-  position: absolute; top: calc(16% + 92px); left: 10%;
+  position: absolute; top: calc(16% + min(12vw, 92px)); left: 10%;
   font-size: 14px; font-weight: 800; letter-spacing: .3em;
   color: #3a1030;
   background: #ffe066;
@@ -183,7 +186,8 @@ body[data-mode="reiwa"] .btn-back { color: #ab9a8a; background: #f6f1ea; border-
 .door-logo-r {
   position: absolute; bottom: calc(14% + 44px); right: 9%;
   font-family: Georgia, "Hiragino Mincho ProN", serif;
-  font-size: 58px; font-weight: 500;
+  font-size: clamp(34px, 7vw, 58px); font-weight: 500;
+  white-space: nowrap;
   letter-spacing: .18em;
   color: #4a3f38;
   will-change: transform;
@@ -219,7 +223,8 @@ body[data-mode="reiwa"] .btn-back { color: #ab9a8a; background: #f6f1ea; border-
 .title-band-name {
   margin: 0;
   font-family: "Hiragino Maru Gothic ProN", sans-serif;
-  font-size: 24px; font-weight: 800;
+  font-size: clamp(15px, 3.8vw, 24px); font-weight: 800;
+  white-space: nowrap;
   letter-spacing: .12em;
   color: #3a1030;
 }
@@ -1678,7 +1683,15 @@ body.theme-heisei .cd-ch {
 }
 body.theme-heisei .cd-ch:nth-child(odd) { transform: rotate(-7deg); }
 body.theme-heisei .cd-ch:nth-child(even) { transform: rotate(6deg); }
-body.theme-heisei .cam-caption { font-weight: 800; }
+/* 「のこり◯ポーズ！」: 白文字の隙間から背景の白ドットが透けて横線に見えるため、濃地カプセルで受ける（2026-08-12） */
+body.theme-heisei .cam-caption {
+  font-weight: 800;
+  width: fit-content;
+  margin-left: auto; margin-right: auto;
+  background: rgba(58,16,48,.78);
+  border-radius: 999px;
+  padding: 4px 18px;
+}
 body.theme-heisei .shot-dot.done { background: var(--h-yellow); }
 /* 現像中の暗室（仕様書3-6【平】） */
 .darkroom {
@@ -2037,7 +2050,8 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
   position: absolute; top: 14%; left: 8%;
   margin: 0;
   font-family: "Hiragino Maru Gothic ProN", sans-serif;
-  font-size: 52px; font-weight: 800;
+  font-size: clamp(26px, 6vw, 52px); font-weight: 800;
+  white-space: nowrap;
   color: #ff2fa0;
   transform: rotate(-5deg);
 }
@@ -2046,13 +2060,14 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
   position: absolute; inset: 0;
   z-index: -1;
 }
-.as-h-logo::after { -webkit-text-stroke: 9px #fff; color: #fff; }
-.as-h-logo::before { -webkit-text-stroke: 16px #a06bff; color: #a06bff; z-index: -2; }
+.as-h-logo::after { -webkit-text-stroke: .17em #fff; color: #fff; }
+.as-h-logo::before { -webkit-text-stroke: .3em #a06bff; color: #a06bff; z-index: -2; }
 .as-r-logo {
   position: absolute; bottom: 16%; right: 9%;
   margin: 0;
   font-family: Georgia, "Hiragino Mincho ProN", serif;
-  font-size: 34px;
+  font-size: clamp(22px, 4vw, 34px);
+  white-space: nowrap;
   letter-spacing: .16em;
   color: #4a3f38;
   will-change: transform;
@@ -2075,7 +2090,8 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
   border-bottom: 3px solid #4a3f38;
   padding: 12px 0;
   font-family: "Hiragino Maru Gothic ProN", sans-serif;
-  font-size: 22px; font-weight: 800;
+  font-size: clamp(14px, 3vw, 22px); font-weight: 800;
+  white-space: nowrap;
   letter-spacing: .14em;
   color: #3a1030;
 }
@@ -2192,14 +2208,48 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
   transform: translateX(-50%);
   white-space: nowrap;
   font-family: "Hiragino Maru Gothic ProN", sans-serif;
-  font-size: 30px; font-weight: 800;
+  font-size: clamp(19px, 4.6vw, 30px); font-weight: 800;
+  white-space: nowrap;
   color: #ff2fa0;
   background: #fff;
   border: 4px solid #ff2fa0;
   border-radius: 999px;
-  padding: 12px 40px;
+  padding: clamp(8px, 1.8vw, 12px) clamp(22px, 4.8vw, 40px);
   box-shadow: 0 0 0 3px #fff, 0 6px 18px rgba(58,16,48,.35);
   animation: attractTouchBlink .6s steps(1) infinite;
   z-index: 5;
 }
 @keyframes attractTouchBlink { 50% { opacity: .45; } }
+
+/* ================================================================
+   レスポンシブ調整（2026-08-12 オーナー指摘「端末を問わず文字列がずれない」対応）
+   基準ビューポート: スマホ縦 390x844 / スマホ横 844x390 / iPad 縦横
+   ================================================================ */
+
+/* ボタン内の文字は折り返さない（縮んだとき縦書きのように崩れるのを防ぐ） */
+.btn-main, .btn-sub, .btn-small, .btn-back { white-space: nowrap; }
+.timer-label { white-space: nowrap; }
+
+/* プリント画面: 縦が足りない端末では縮めず縦スクロールで全部に届くようにする */
+#screen-print { overflow-y: auto; }
+.print-stage { margin: auto; padding: 10px 0 16px; }
+
+@media (max-width: 600px) {
+  /* 落書きヘッダー: タイマーとボタン3つが1列に入らない幅では折り返す */
+  .deco-header { flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .deco-header-buttons { display: flex; gap: 6px; }
+  .btn-small { font-size: 12px; padding: 7px 10px; }
+  .timer-display { font-size: 22px; }
+  /* 主要ボタンの文字を1行に収める */
+  .btn-main { font-size: 18px; padding: 12px 22px; }
+  /* 盛りチェック: 見出しとタイマーを折り返し、左上の小英字キャプションと重ねない */
+  .beauty-header { flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .beauty-heading { font-size: 17px; }
+  body.theme-reiwa .beauty-wrap { padding-top: 28px; }
+  body.theme-reiwa .deco-wrap { padding-top: 28px; }
+}
+
+/* 高さの低い端末（スマホ横）: 平成扉の年代票は帯と重なるため飾りとして省略 */
+@media (max-height: 520px) {
+  .door-era-h { display: none; }
+}
