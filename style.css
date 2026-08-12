@@ -767,6 +767,7 @@ body[data-mode="reiwa"] .pen-type-btn.active, body[data-mode="reiwa"] .size-btn.
 .slider-val { color: #ff2fa0; }
 .slider-group input[type="range"] { width: 100%; }
 #btn-beauty-done { margin-top: auto; font-size: 18px; padding: 14px 20px; }
+.btn-sub.apply-all { font-size: 14px; padding: 12px 16px; }
 
 /* ============ 令和モードテーマ ============ */
 body[data-mode="reiwa"] #screen-select { background: linear-gradient(160deg,#f7f3ee,#e9e2d8); }

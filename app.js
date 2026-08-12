@@ -2550,6 +2550,23 @@
   const sliderCheek = $('#slider-cheek');
   const sliderLip = $('#slider-lip');
 
+  /* ---------- 1枚ごとの盛り設定（2026-08-12 新設） ----------
+     現行実機FLASHの「1枚の設定を全枚数にワンタッチ反映」を成立させるため、
+     盛りパラメータをショットごとに持つ。盛り画面に入った時点で state.beauty（撮影時の
+     ライブ盛れ設定）を4枚分に複製し、以降のUI操作は「いま選択中の1枚」にだけ効く。
+     _preset / _level はUI表示用のメモで、盛り処理そのものには影響しない。 */
+  function curBeauty() {
+    return (state.beautyShots && state.beautyShots[state.beautySelected]) || state.beauty;
+  }
+
+  /* 盛れ感レベル（現行実機Misélの80%/100%/120%三段階の型・2026-08-12）。
+     選択中プリセットの値に倍率をかける。 */
+  const MORIAGE_LEVELS = [
+    { id: 'l80',  label: 'ナチュラル 80%',   f: 0.8 },
+    { id: 'l100', label: 'スタンダード 100%', f: 1.0 },
+    { id: 'l120', label: 'しっかり 120%',    f: 1.2 },
+  ];
+
   let beautyRenderQueued = false;
 
   function queueBeautyRender() {
@@ -2569,45 +2586,82 @@
     const idx = state.beautySelected;
     const src = state.shots[idx];
     if (!src) return;
+    const p = curBeauty();
     const faces = state.faceData[idx];
     const skinConfRef = state.skinConf[idx] || null;
-    if (warpCache.idx !== idx || warpCache.eye !== state.beauty.eye || warpCache.face !== state.beauty.face
+    if (warpCache.idx !== idx || warpCache.eye !== p.eye || warpCache.face !== p.face
         || warpCache.facesRef !== faces || warpCache.skinConfRef !== skinConfRef) {
-      warpCache.canvas = warpShot(src, faces, state.beauty.eye / 100, state.beauty.face / 100);
-      const mask = getSkinMask(idx, src, faces, state.beauty.eye / 100);
+      warpCache.canvas = warpShot(src, faces, p.eye / 100, p.face / 100);
+      const mask = getSkinMask(idx, src, faces, p.eye / 100);
       warpCache.base = (mask && !maskIsEmpty(mask)) ? buildBeautyBase(warpCache.canvas, mask) : null;
       warpCache.idx = idx;
-      warpCache.eye = state.beauty.eye;
-      warpCache.face = state.beauty.face;
+      warpCache.eye = p.eye;
+      warpCache.face = p.face;
       warpCache.facesRef = faces;
       warpCache.skinConfRef = skinConfRef;
     }
-    const result = applyBeauty(src, faces, state.beauty, warpCache.canvas, idx, warpCache.base);
+    const result = applyBeauty(src, faces, p, warpCache.canvas, idx, warpCache.base);
     beautyCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     beautyCtx.drawImage(result, 0, 0);
   }
 
   function syncSliders() {
-    sliderSkin.value = state.beauty.skin;
-    sliderWhite.value = state.beauty.white || 0;
-    sliderClear.value = state.beauty.clear || 0;
-    sliderEye.value = state.beauty.eye;
-    sliderFace.value = state.beauty.face;
-    sliderCheek.value = state.beauty.cheek || 0;
-    sliderLip.value = state.beauty.lip || 0;
-    $('#val-skin').textContent = state.beauty.skin;
-    $('#val-white').textContent = state.beauty.white || 0;
-    $('#val-clear').textContent = state.beauty.clear || 0;
-    $('#val-eye').textContent = state.beauty.eye;
-    $('#val-face').textContent = state.beauty.face;
-    $('#val-cheek').textContent = state.beauty.cheek || 0;
-    $('#val-lip').textContent = state.beauty.lip || 0;
+    const p = curBeauty();
+    sliderSkin.value = p.skin;
+    sliderWhite.value = p.white || 0;
+    sliderClear.value = p.clear || 0;
+    sliderEye.value = p.eye;
+    sliderFace.value = p.face;
+    sliderCheek.value = p.cheek || 0;
+    sliderLip.value = p.lip || 0;
+    $('#val-skin').textContent = p.skin;
+    $('#val-white').textContent = p.white || 0;
+    $('#val-clear').textContent = p.clear || 0;
+    $('#val-eye').textContent = p.eye;
+    $('#val-face').textContent = p.face;
+    $('#val-cheek').textContent = p.cheek || 0;
+    $('#val-lip').textContent = p.lip || 0;
   }
 
   function markPresetActive(presetId) {
     document.querySelectorAll('#beauty-preset-row .preset-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.preset === presetId);
     });
+  }
+
+  function markLevelActive(levelId) {
+    document.querySelectorAll('#beauty-level-row .preset-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.level === levelId);
+    });
+  }
+
+  function markFilterActive(filterId) {
+    document.querySelectorAll('#filter-row .preset-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === filterId);
+    });
+  }
+
+  // ショット切り替え・一括反映のあとに、選択中の1枚の設定をUI全体へ反映する
+  function syncBeautyUIFromCur() {
+    const p = curBeauty();
+    syncSliders();
+    markPresetActive(p._preset || '');
+    markLevelActive(p._level || '');
+    markFilterActive(p.filter);
+  }
+
+  // プリセット値（＋盛れ感レベル倍率）を選択中の1枚に書き込む
+  function applyPresetToCur(preset, factor) {
+    const p = curBeauty();
+    const f = factor || 1;
+    const clamp = (v) => Math.max(0, Math.min(100, Math.round(v * f)));
+    p.skin = clamp(preset.skin);
+    p.white = clamp(preset.white);
+    p.clear = clamp(preset.clear);
+    p.eye = clamp(preset.eye);
+    p.face = clamp(preset.face);
+    p.cheek = clamp(preset.cheek);
+    p.lip = clamp(preset.lip);
   }
 
   function buildBeautyControls() {
@@ -2621,35 +2675,51 @@
       b.dataset.preset = p.id;
       b.textContent = p.label;
       b.addEventListener('click', () => {
-        state.beauty.skin = p.skin;
-        state.beauty.white = p.white;
-        state.beauty.clear = p.clear;
-        state.beauty.eye = p.eye;
-        state.beauty.face = p.face;
-        state.beauty.cheek = p.cheek;
-        state.beauty.lip = p.lip;
-        syncSliders();
-        markPresetActive(p.id);
+        const cur = curBeauty();
+        cur._preset = p.id;
+        cur._level = 'l100';
+        applyPresetToCur(p, 1);
+        syncBeautyUIFromCur();
         queueBeautyRender();
       });
       presetRow.appendChild(b);
+    });
+    // 盛れ感レベル（Misél式 80/100/120%。選択中プリセットに倍率をかける）
+    const levelRow = $('#beauty-level-row');
+    levelRow.innerHTML = '';
+    MORIAGE_LEVELS.forEach(lv => {
+      const b = document.createElement('button');
+      b.className = 'preset-btn' + (lv.id === 'l100' ? ' active' : '');
+      b.dataset.level = lv.id;
+      b.textContent = lv.label;
+      b.addEventListener('click', () => {
+        const cur = curBeauty();
+        const basePreset = conf.presets.find(x => x.id === (cur._preset || conf.defaultPreset)) || conf.presets[0];
+        cur._preset = basePreset.id;
+        cur._level = lv.id;
+        applyPresetToCur(basePreset, lv.f);
+        playSoundOr('moriageSelect', 'seDecide');
+        syncBeautyUIFromCur();
+        queueBeautyRender();
+      });
+      levelRow.appendChild(b);
     });
     // フィルター
     const filterRow = $('#filter-row');
     filterRow.innerHTML = '';
     conf.filters.forEach(f => {
       const b = document.createElement('button');
-      b.className = 'preset-btn' + (f.id === state.beauty.filter ? ' active' : '');
+      b.className = 'preset-btn' + (f.id === curBeauty().filter ? ' active' : '');
       b.dataset.filter = f.id;
       b.textContent = f.label;
       b.addEventListener('click', () => {
-        state.beauty.filter = f.id;
-        filterRow.querySelectorAll('.preset-btn').forEach(x => x.classList.toggle('active', x.dataset.filter === f.id));
+        curBeauty().filter = f.id;
+        markFilterActive(f.id);
         queueBeautyRender();
       });
       filterRow.appendChild(b);
     });
-    // ショット切り替えタブ
+    // ショット切り替えタブ（1枚ごとに設定を持つので、切り替え時はその1枚の設定をUIへ）
     const tabs = $('#beauty-shot-tabs');
     tabs.innerHTML = '';
     for (let i = 0; i < NUM_SHOTS; i++) {
@@ -2659,17 +2729,33 @@
       b.addEventListener('click', () => {
         state.beautySelected = i;
         tabs.querySelectorAll('.beauty-shot-tab').forEach((t, ti) => t.classList.toggle('active', ti === i));
+        syncBeautyUIFromCur();
         queueBeautyRender();
       });
       tabs.appendChild(b);
     }
   }
 
+  /* 一括反映（FLASH式・2026-08-12）: いま見ている1枚の盛り設定を4枚全部へコピーする */
+  $('#btn-beauty-apply-all').addEventListener('click', () => {
+    if (!state.beautyShots) return;
+    const src = curBeauty();
+    state.beautyShots = state.beautyShots.map(() => ({ ...src }));
+    playSoundOr('moriageSelect', 'seDecide');
+    beautyFaceNote.textContent = '💫 全部の写真にこの設定を反映したよ！';
+    beautyFaceNote.classList.remove('hidden');
+    setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
+  });
+
   [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
     el.addEventListener('input', () => {
-      state.beauty[key] = Number(el.value);
+      const cur = curBeauty();
+      cur[key] = Number(el.value);
+      cur._preset = '';
+      cur._level = '';
       $('#val-' + key).textContent = el.value;
       markPresetActive(''); // 手動調整したらプリセット選択を解除
+      markLevelActive('');
       queueBeautyRender();
     });
   });
@@ -2711,10 +2797,20 @@
     state.beautySelected = 0;
     state.beautyRemaining = BEAUTY_SECONDS;
     state.beautyWarned = false;
+    /* 1枚ごとの盛り設定を初期化: 撮影時のライブ盛れ設定（state.beauty）を4枚分に複製。
+       撮影時の設定がどのプリセットと一致するかを調べてUIメモも入れておく */
+    const conf = modeConf();
+    const matched = conf.presets.find(p =>
+      ['skin', 'white', 'clear', 'eye', 'face', 'cheek', 'lip'].every(k => state.beauty[k] === p[k]));
+    state.beautyShots = Array.from({ length: NUM_SHOTS }, () => ({
+      ...state.beauty,
+      _preset: matched ? matched.id : '',
+      _level: matched ? 'l100' : '',
+    }));
     beautyFaceNote.textContent = '👀 顔を検出中…';
     beautyFaceNote.classList.remove('hidden');
     buildBeautyControls();
-    syncSliders();
+    syncBeautyUIFromCur();
     beautyTimerDisplay.textContent = formatTime(state.beautyRemaining);
     beautyTimerDisplay.classList.remove('warn');
     queueBeautyRender(); // まずは美肌+フィルターのみで即表示
@@ -2745,8 +2841,9 @@
     if (beautyFinished) return;
     beautyFinished = true;
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
-    // 全ショットに現在のパラメータを適用
-    state.processedShots = state.shots.map((shot, i) => applyBeauty(shot, state.faceData[i], state.beauty, null, i));
+    // 各ショットに「その1枚の」パラメータを適用（2026-08-12: 1枚ごとの盛り設定に対応）
+    state.processedShots = state.shots.map((shot, i) =>
+      applyBeauty(shot, state.faceData[i], (state.beautyShots && state.beautyShots[i]) || state.beauty, null, i));
     composeSheet();
     startDecoScreen();
     beautyFinished = false;
