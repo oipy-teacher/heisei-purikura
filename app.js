@@ -4073,10 +4073,10 @@
       const pw = 470, ph = 353, padT = 16, padS = 16, padB = 52;
       const cardW = pw + padS * 2, cardH = ph + padT + padB;
       const centers = [
-        { x: 278, y: 330 + cardH / 2, rot: -3 },
-        { x: 802, y: 380 + cardH / 2, rot: 2.5 },
-        { x: 278, y: 900 + cardH / 2, rot: 2 },
-        { x: 802, y: 950 + cardH / 2, rot: -2.5 },
+        { x: 278, y: 400 + cardH / 2, rot: -3 },
+        { x: 802, y: 450 + cardH / 2, rot: 2.5 },
+        { x: 278, y: 990 + cardH / 2, rot: 2 },
+        { x: 802, y: 1040 + cardH / 2, rot: -2.5 },
       ];
       centers.forEach((pos, i) => {
         const shot = shots[i % shots.length];
@@ -4164,6 +4164,43 @@
   window.__puriDebug = {
     buildSkinMask,
     applyBeauty,
+    startAttract,
+    stopAttract,
+    // 実機模倣アップデート（2026-08-12）の出力系をカメラ無しで検証する:
+    // ダミー4枚を撮影済み扱いにして、黄み肌トーン・16分割・たて長コラージュを生成する
+    testNewOutputs() {
+      const mk = (hue) => {
+        const c = document.createElement('canvas');
+        c.width = SHOT_W; c.height = SHOT_H;
+        const x = c.getContext('2d');
+        x.fillStyle = `hsl(${hue},70%,72%)`;
+        x.fillRect(0, 0, SHOT_W, SHOT_H);
+        x.fillStyle = '#fff';
+        x.beginPath();
+        x.arc(SHOT_W / 2, SHOT_H / 2, 120, 0, Math.PI * 2);
+        x.fill();
+        return c;
+      };
+      state.shots = [mk(0), mk(90), mk(180), mk(270)];
+      state.processedShots = state.shots.slice();
+      const y2k = mk(30);
+      applyHeiseiY2kTone(y2k);
+      const s16 = composeSixteenRetro();
+      const story = composeStoryCollage();
+      document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
+      [y2k, s16, story].forEach((cv, i) => {
+        cv.className = 'debug-canvas';
+        cv.style.cssText = `position:fixed;z-index:9999;left:${i * 33.5}vw;bottom:0;height:44vh;border:2px solid #0f0;background:#333;`;
+        document.body.appendChild(cv);
+      });
+      return {
+        s16: [s16.width, s16.height],
+        story: [story.width, story.height],
+        s16Len: s16.toDataURL('image/png').length,
+        storyLen: story.toDataURL('image/png').length,
+        y2kLen: y2k.toDataURL('image/png').length,
+      };
+    },
     // 実顔画像でのエンドツーエンド検証: URL→顔検出→ML肌マスク→盛り適用
     async testOnImage(url, params) {
       await Promise.all([initFaceLandmarker(), initSkinSegmenter()]);
