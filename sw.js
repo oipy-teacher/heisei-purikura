@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v6'; // 2026-08-12 デザイン刷新のSVG素材7点をプリキャッシュ（qa-tester検収指摘3）
+const CACHE_NAME = 'purikura-v7'; // 2026-08-12 使用感改善（オッケー確認の撤去・フィルター再設計・レスポンシブ対応）
 
 const PRECACHE = [
   '.',
@@ -45,7 +45,6 @@ const PRECACHE = [
   'audio/intro_shot3.mp3',
   'audio/intro_shot4.mp3',
   'audio/moriage_select.mp3',
-  'audio/ok_check.mp3',
   'audio/pose_01.mp3',
   'audio/pose_02.mp3',
   'audio/pose_03.mp3',

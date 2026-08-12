@@ -385,7 +385,6 @@
     pose4: 'audio/pose_04.mp3',
     pose5: 'audio/pose_05.mp3',
     pose6: 'audio/pose_06.mp3',
-    okCheck: 'audio/ok_check.mp3',                // 「この画像でオッケー？！」
     moriageSelect: 'audio/moriage_select.mp3',    // 盛れ感レベル選択
     decoOwaru: 'audio/doodle_owaru.mp3',          // 落書き「おわる」ボタン
     decoHalftime: 'audio/doodle_halftime.mp3',    // 落書き残り時間の中間通知
@@ -1632,7 +1631,7 @@
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
       await playSoundAwait(step.key);
-      await sleep(240); // 無音カット済みクリップは短いので、テンポが速くなりすぎないよう間を取る
+      await sleep(160); // 無音カット済みクリップの間。実機の矢継ぎ早に合わせて短め（2026-08-12 テンポ改善）
       countdownEl.style.opacity = '0';
       await sleep(60);
     }
@@ -1683,41 +1682,6 @@
     note.remove();
   }
 
-  /* ---------- 「この画像でオッケー？！」チェック（2026-08-12 新設） ----------
-     現行実機の「3、2、1…この画像でオッケー？！」を再現。撮影直後の1枚を見せて
-     タップで採用/撮り直しを選ばせる。プリクラ機は無人運用なので、
-     OK_CHECK_AUTO_SECONDS 何も押されなければ自動で採用して先へ進む（行列を止めない）。
-     撮り直しは1ショットにつき1回まで（4枚全自動のテンポを崩さないための上限）。 */
-  const OK_CHECK_AUTO_SECONDS = 8;
-  const okCheckEl = $('#ok-check');
-  const btnOkYes = $('#btn-ok-yes');
-  const btnOkRetake = $('#btn-ok-retake');
-  const okAutoNote = $('#ok-auto-note');
-
-  function askOkCheck(canRetake) {
-    return new Promise((resolve) => {
-      playSound('okCheck');
-      btnOkRetake.style.display = canRetake ? '' : 'none';
-      okCheckEl.classList.remove('hidden');
-      let remain = OK_CHECK_AUTO_SECONDS;
-      okAutoNote.textContent = `なにも押さないと あと${remain}秒で自動オッケー！`;
-      const done = (ok) => {
-        clearInterval(iv);
-        btnOkYes.onclick = null;
-        btnOkRetake.onclick = null;
-        okCheckEl.classList.add('hidden');
-        resolve(ok);
-      };
-      const iv = setInterval(() => {
-        remain--;
-        if (remain <= 0) { done(true); return; }
-        okAutoNote.textContent = `なにも押さないと あと${remain}秒で自動オッケー！`;
-      }, 1000);
-      btnOkYes.onclick = () => done(true);
-      btnOkRetake.onclick = () => done(false);
-    });
-  }
-
   btnStartShooting.addEventListener('click', async () => {
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
@@ -1729,48 +1693,38 @@
       setPoseGuide('かわいく決めてね💕');
     }
     resetPoseOrder();
+    /* 実機のテンポ: 撮ったら次へ矢継ぎ早に流れる。確認・撮り直しは無し
+       （2026-08-12 オーナー指摘対応で「この画像でオッケー？！」確認を撤去。
+       　柄本リサーチどおり、実機は撮影中に立ち止まる操作を挟まない） */
     for (let i = 0; i < NUM_SHOTS; i++) {
-      let retakes = 0;
-      for (;;) {
-        setPoseGuide(POSE_GUIDES[i] || 'かわいく決めてね💕');
-        await runCountdown(i, { skipIntro: retakes > 0, poseKey: nextPoseKey() });
-        const shot = captureFrame();
-        playSound('seShutter');
-        await flash();
+      setPoseGuide(POSE_GUIDES[i] || 'かわいく決めてね💕');
+      /* 前置きボイス（「◯枚目いくよー」）は1枚目だけ。2枚目以降はポーズ提案ボイスが
+         そのまま号令になる（毎枚2秒前後の前置きはテンポを殺す・実機は矢継ぎ早） */
+      await runCountdown(i, { skipIntro: i > 0, poseKey: nextPoseKey() });
+      const shot = captureFrame();
+      playSound('seShutter');
+      await flash();
 
-        // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）
-        previewRunning = false;
-        previewCtx.save();
-        // 前面カメラのときは画面表示がCSSで左右反転されるため、事前に反転して相殺する。
-        // 背面カメラ（全身モード）はCSS反転も無効なので、そのまま描く。
-        if (state.shotMode !== 'full') {
-          previewCtx.translate(SHOT_W, 0);
-          previewCtx.scale(-1, 1);
-        }
-        previewCtx.drawImage(shot, 0, 0);
-        previewCtx.restore();
-        // ライブ盛れ中は、チラ見せも盛れた見た目で（無加工に戻ると「あれ？」となるため）
-        if (liveBeautyWanted()) renderLiveBeauty(previewCtx);
-        await sleep(500);
-
-        // 「この画像でオッケー？！」（無人運用のため無操作なら自動採用・撮り直しは1回まで）
-        const ok = await askOkCheck(retakes < 1);
-        if (ok) {
-          state.shots.push(shot);
-          shotIndicator.children[i].classList.add('done');
-          $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
-          break;
-        }
-        retakes++;
-        setPoseGuide('もういっかい！');
-        previewRunning = true;
-        previewLoop();
-        await sleep(400);
+      // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）→ すぐ次のポーズへ
+      previewRunning = false;
+      previewCtx.save();
+      // 前面カメラのときは画面表示がCSSで左右反転されるため、事前に反転して相殺する。
+      // 背面カメラ（全身モード）はCSS反転も無効なので、そのまま描く。
+      if (state.shotMode !== 'full') {
+        previewCtx.translate(SHOT_W, 0);
+        previewCtx.scale(-1, 1);
       }
+      previewCtx.drawImage(shot, 0, 0);
+      previewCtx.restore();
+      // ライブ盛れ中は、チラ見せも盛れた見た目で（無加工に戻ると「あれ？」となるため）
+      if (liveBeautyWanted()) renderLiveBeauty(previewCtx);
+      state.shots.push(shot);
+      shotIndicator.children[i].classList.add('done');
+      $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
+      await sleep(500); // チラ見せの間（これが「撮れた！」の余韻。長くしない）
       if (i < NUM_SHOTS - 1) {
         previewRunning = true;
         previewLoop();
-        await sleep(300);
       }
     }
     setPoseGuide('かわいく決めてね💕');
@@ -4291,7 +4245,7 @@
   });
 
   /* ===================== 効果音（タッチ/決定） ===================== */
-  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish', 'btn-ok-yes'];
+  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish'];
   document.addEventListener('click', (e) => {
     const el = e.target.closest('button, .choice-item, .layout-item, .color-swatch');
     if (!el) return;

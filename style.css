@@ -494,23 +494,6 @@ body[data-mode="reiwa"] .deco-gate-title { color: #8a7568; }
 .shot-dot { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.35); border: 2px solid #fff; }
 .shot-dot.done { background: #ff2fa0; }
 
-/* 撮影直後の「この画像でオッケー？！」確認（現行実機の型・2026-08-12） */
-.ok-check {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 14px 12px 12px;
-  background: linear-gradient(0deg, rgba(0,0,0,.68), rgba(0,0,0,.35) 75%, transparent);
-}
-.ok-check-title {
-  margin: 0; font-size: 24px; font-weight: 900; color: #fff;
-  text-shadow: 0 0 14px #ff2fa0, 0 2px 0 rgba(0,0,0,.4);
-  animation: pulse 1s infinite;
-}
-body[data-mode="reiwa"] .ok-check-title { text-shadow: 0 0 14px #cbb9a8, 0 2px 0 rgba(0,0,0,.4); }
-.ok-check-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-.ok-check .btn-sub { background: rgba(255,255,255,.92); }
-.ok-auto-note { margin: 0; font-size: 12px; font-weight: 800; color: #ffe27a; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
-
 .camera-side { color: #fff; text-align: center; min-width: 220px; }
 .cam-caption { font-size: 20px; font-weight: 800; margin: 6px 0; }
 .cam-caption.small { font-size: 14px; opacity: .85; margin-bottom: 18px; }
@@ -1695,19 +1678,6 @@ body.theme-heisei .cd-ch {
 }
 body.theme-heisei .cd-ch:nth-child(odd) { transform: rotate(-7deg); }
 body.theme-heisei .cd-ch:nth-child(even) { transform: rotate(6deg); }
-/* オッケー確認: シール台紙風の白角枠＋ピンクカプセル点滅／青カプセル（仕様書3-5【平】） */
-body.theme-heisei .ok-check {
-  background: rgba(58,16,48,.72);
-  border-top: 6px solid #fff;
-}
-body.theme-heisei .ok-check-title {
-  color: #fff;
-  font-family: "Hiragino Maru Gothic ProN", sans-serif;
-  transform: rotate(-2deg);
-  text-shadow: 0 0 14px var(--h-pink), 0 2px 0 rgba(0,0,0,.4);
-}
-body.theme-heisei .ok-check .btn-main { animation: hBlink 1s steps(1) infinite; }
-body.theme-heisei .ok-check .btn-sub { background: var(--h-blue); color: #fff; }
 body.theme-heisei .cam-caption { font-weight: 800; }
 body.theme-heisei .shot-dot.done { background: var(--h-yellow); }
 /* 現像中の暗室（仕様書3-6【平】） */
@@ -1809,19 +1779,6 @@ body.theme-reiwa .live-note, body.theme-reiwa .segmenter-status { color: var(--r
 body.theme-reiwa .cam-error { color: var(--r-accent); }
 body.theme-reiwa .shot-dot { border-color: rgba(74,63,56,.5); background: rgba(255,255,255,.6); }
 body.theme-reiwa .shot-dot.done { background: var(--r-accent); }
-/* オッケー確認: ポラロイド風の下部帯＋浅丸角ボタン */
-body.theme-reiwa .ok-check {
-  background: linear-gradient(0deg, rgba(250,247,242,.94), rgba(250,247,242,.78) 75%, transparent);
-}
-body.theme-reiwa .ok-check-title {
-  color: var(--r-ink);
-  font-weight: 600;
-  letter-spacing: .12em;
-  animation: none;
-  text-shadow: none;
-}
-body.theme-reiwa .ok-check .btn-main { animation: none; }
-body.theme-reiwa .ok-auto-note { color: var(--r-brown); text-shadow: none; }
 body.theme-reiwa .prep-note { color: var(--r-ink); text-shadow: none; }
 
 /* ---- 令和: 盛り調整画面（仕様書3-6【令】） ---- */
