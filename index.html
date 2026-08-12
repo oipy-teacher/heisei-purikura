@@ -321,6 +321,11 @@
     <div class="print-stage" id="print-stage">
       <p id="print-progress" class="print-progress">🖨 プリント中…　シールが出てくるよ！</p>
       <div class="printer-slot" id="printer-slot">
+        <!-- 平成のみ表示: 排出口を「機械の顔」にする部品（虹帯・ネジ頭・とりだしぐちラベル） -->
+        <span class="print-rainbow" aria-hidden="true"><i></i></span>
+        <span class="printer-screw left" aria-hidden="true"></span>
+        <span class="printer-screw right" aria-hidden="true"></span>
+        <span class="printer-label" aria-hidden="true">▼ とりだしぐち ▼</span>
         <div class="print-sheet-wrap">
           <canvas id="final-canvas"></canvas>
         </div>

@@ -4109,6 +4109,10 @@
   const printStage = $('#print-stage');
   let printReadyId = null;
   function startPrintSequence() {
+    // 文言もテーマで着せ替え（令和は小英字のフェード明滅・柄本仕様書3-8）
+    $('#print-progress').textContent = document.body.classList.contains('theme-reiwa')
+      ? 'printing ...'
+      : '🖨 プリント中…　シールが出てくるよ！';
     printStage.classList.remove('ready');
     printStage.classList.add('printing');
     playSound('printOut');
