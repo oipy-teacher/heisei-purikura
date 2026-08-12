@@ -2,10 +2,12 @@
   'use strict';
 
   /* ===================== モード定義 =====================
-     平成モード: 2000年代のプリ機を再現。白肌・デカ目（2007年頃に代名詞化）・
-                 ハデ盛り落書き・ギャル文化の文字スタンプ。
+     平成モード: 1999〜2003年頃（ユーロビート/パラパラ世代）のプリ機を再現。
+                 盛り調整UIは無い時代（デカ目は2007年「美人-プレミアム-」以降）なので
+                 固定の軽い補正のみ。落書き全盛・ふざけスタンプ・ギャル文化の文字スタンプ。
+                 「〜2006 黄み肌」を選ぶと当時の写り（黄み肌・加工感少なめ・画質荒め）になる。
      令和モード: 現行プリ機のトレンドを再現。ナチュラル盛れ・盛れ感選択
-                 （無加工風/ナチュ盛れ/プリ盛れ）・くすみカラー・シンプル志向。 */
+                 （無加工風/ナチュ盛れ/プリ盛れ＋80/100/120%レベル）・くすみカラー・シンプル志向。 */
   const MODES = {
     heisei: {
       label: '平成モード',
@@ -654,7 +656,11 @@
   function buildBgmRow() {
     const row = $('#bgm-row');
     row.innerHTML = '';
-    BGM_TRACKS.forEach(t => {
+    /* 時代考証（2026-08-12 era-designer指摘）: ローファイは2010年代の音なので
+       平成モードの選択肢には出さない。前セッションでlofiを選んだまま平成に入った場合はおまかせへ戻す */
+    const tracks = state.mode === 'heisei' ? BGM_TRACKS.filter(t => t.id !== 'lofi') : BGM_TRACKS;
+    if (state.mode === 'heisei' && state.bgmChoice === 'lofi') state.bgmChoice = 'auto';
+    tracks.forEach(t => {
       const b = document.createElement('button');
       b.className = 'preset-btn' + (t.id === state.bgmChoice ? ' active' : '');
       b.textContent = t.label;
@@ -3874,6 +3880,7 @@
     setTool('pen');
     state.remaining = decoSeconds();
     state.warningPlayed = false;
+    decoFinished = false;
     $('#deco-timeup').classList.add('hidden');
     $('#confirm-modal').classList.add('hidden');
     decoToastEl.classList.add('hidden');
@@ -3928,7 +3935,14 @@
     }, 1000);
   }
 
+  /* 二重実行ガード（2026-08-12 qa-tester指摘）:
+     タイムアップの演出中（約1.4秒）に「おわる」確認モーダルの「はい」が押せてしまい、
+     finishDeco が2回走る窓があった。発火したら確認モーダルを強制的に閉じ、2回目は無視する */
+  let decoFinished = false;
   async function finishDeco(reason) {
+    if (decoFinished) return;
+    decoFinished = true;
+    confirmModal.classList.add('hidden');
     drawCanvas.style.pointerEvents = 'none';
     decoCountdownEl.classList.add('hidden');
     decoToastEl.classList.add('hidden');
@@ -4004,7 +4018,8 @@
     ctx.textAlign = 'center';
     ctx.font = '900 30px -apple-system, sans-serif';
     ctx.fillStyle = '#ff2fa0';
-    ctx.fillText('★ Print Club ★', SHEET_W / 2, 52);
+    // 「プリント倶楽部/Print Club」はセガの登録商標のため自前の名称を使う（2026-08-12 era-designer指摘）
+    ctx.fillText('★ 太子プリ ★', SHEET_W / 2, 52);
 
     const shots = state.processedShots.length ? state.processedShots : state.shots;
     if (shots.length) {
@@ -4122,6 +4137,9 @@
     state.shots = [];
     state.processedShots = [];
     state.faceData = [];
+    // 次の客のために選択系もまっさらへ（2026-08-12 qa-tester指摘。無人運用では前の客の設定が残ると事故）
+    state.bgmChoice = 'auto';
+    state.heiseiEra = 'standard';
     decoObjects = [];
     undoStack = [];
     renderDeco();

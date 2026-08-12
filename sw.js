@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v4'; // 2026-08-12 実機模倣アップデート（待機デモ・ポーズボイス・盛れ感レベル・排出演出ほか）
+const CACHE_NAME = 'purikura-v5'; // 2026-08-12 実機模倣アップデート＋音声のプリキャッシュ（qa-tester指摘）
 
 const PRECACHE = [
   '.',
@@ -11,6 +11,43 @@ const PRECACHE = [
   'manifest.json',
   'icon-180.png',
   'icon-512.png',
+  // 音声・BGM（会場のWi-Fiが不安定でもボイスが欠けないよう全てプリキャッシュ）
+  'audio/01_start.mp3',
+  'audio/02_select_curtain.mp3',
+  'audio/03_select_frame.mp3',
+  'audio/08_deco_start.mp3',
+  'audio/09_time_warning.mp3',
+  'audio/10_timeup.mp3',
+  'audio/11_finish.mp3',
+  'audio/12_save.mp3',
+  'audio/13_beauty.mp3',
+  'audio/attract_call.mp3',
+  'audio/bgm.mp3',
+  'audio/bgm_reiwa.mp3',
+  'audio/bgm_title.mp3',
+  'audio/count_1.mp3',
+  'audio/count_2.mp3',
+  'audio/count_3.mp3',
+  'audio/count_hai.mp3',
+  'audio/course_select_v2.mp3',
+  'audio/doodle_halftime.mp3',
+  'audio/doodle_owaru.mp3',
+  'audio/intro_shot1.mp3',
+  'audio/intro_shot2.mp3',
+  'audio/intro_shot3.mp3',
+  'audio/intro_shot4.mp3',
+  'audio/moriage_select.mp3',
+  'audio/ok_check.mp3',
+  'audio/pose_01.mp3',
+  'audio/pose_02.mp3',
+  'audio/pose_03.mp3',
+  'audio/pose_04.mp3',
+  'audio/pose_05.mp3',
+  'audio/pose_06.mp3',
+  'audio/print_out.mp3',
+  'audio/se_decide.mp3',
+  'audio/se_shutter.mp3',
+  'audio/se_tap.mp3',
 ];
 
 self.addEventListener('install', (e) => {
