@@ -54,7 +54,7 @@
       <!-- 以下の各セクションはJSが select-main / advanced-body へ振り分ける -->
       <!-- 撮影コース選択（1997年以降の実機は「アップ／全身」等のコースを最初に選ぶ型） -->
       <div class="sel-section" id="sel-shotmode">
-        <h2 class="step-heading" data-title="コースをえらんでね"></h2>
+        <h2 class="step-heading" data-title="コースをえらんでね" data-en="course"></h2>
         <div class="shotmode-row">
           <button class="shotmode-btn active" data-shotmode="bust">
             <span class="shotmode-name">📱 アップコース</span>
@@ -68,29 +68,29 @@
       </div>
       <!-- BGM選択（楽曲を選べる機種があった、という1997年以降の実機の型） -->
       <div class="sel-section" id="sel-bgm">
-        <h2 class="step-heading" data-title="BGMをえらんでね"></h2>
+        <h2 class="step-heading" data-title="BGMをえらんでね" data-en="music"></h2>
         <div id="bgm-row" class="preset-row select-filters"></div>
       </div>
       <!-- うつりの年代（平成考証: 〜2006年ごろは黄み肌・加工感少なめが史実） -->
       <div class="sel-section" id="sel-eratone">
-        <h2 class="step-heading" data-title="うつりの年代（平成考証）"></h2>
+        <h2 class="step-heading" data-title="うつりの年代（平成考証）" data-en="era"></h2>
         <div id="eratone-row" class="preset-row select-filters"></div>
         <p class="eratone-note">「〜2006 黄み肌」は当時の実機の写りを再現：黄みがかった肌・加工ひかえめ・ちょっと粗い画質</p>
       </div>
       <div class="sel-section" id="sel-layout">
-        <h2 class="step-heading" data-title="ぶんかつ（レイアウト）をえらんでね"></h2>
+        <h2 class="step-heading" data-title="ぶんかつ（レイアウト）をえらんでね" data-en="layout"></h2>
         <div id="layout-list" class="layout-grid"></div>
       </div>
       <div class="sel-section" id="sel-curtain">
-        <h2 class="step-heading" data-title="シールのカラーをえらんでね"></h2>
+        <h2 class="step-heading" data-title="シールのカラーをえらんでね" data-en="color"></h2>
         <div id="curtain-list" class="choice-grid"></div>
       </div>
       <div class="sel-section" id="sel-frame">
-        <h2 class="step-heading" data-title="フレームをえらんでね"></h2>
+        <h2 class="step-heading" data-title="フレームをえらんでね" data-en="frame"></h2>
         <div id="frame-list" class="choice-grid"></div>
       </div>
       <div class="sel-section" id="sel-filter">
-        <h2 class="step-heading" data-title="うつり（フィルター）をえらんでね"></h2>
+        <h2 class="step-heading" data-title="うつり（フィルター）をえらんでね" data-en="filter"></h2>
         <div id="select-filter-row" class="preset-row select-filters"></div>
       </div>
       <div class="sel-section" id="sel-chroma">
@@ -367,6 +367,23 @@
     </div>
     <p class="attract-touch">👆 タッチしてスタート！</p>
   </div>
+
+  <!-- ============ テーマ演出レイヤー（2026-08-12 デザイン刷新・柄本仕様書） ============ -->
+  <!-- 平成: 外周の虹帯額縁（「機械の中にいる」感の芯） -->
+  <div id="theme-frame" aria-hidden="true"></div>
+  <!-- 平成: 4角星キラキラ（柄本SVG素材・固定位置8個・時間差でポップ） -->
+  <div id="sparkle-layer" aria-hidden="true">
+    <i class="spark sa"></i><i class="spark sb"></i><i class="spark sa"></i><i class="spark sb"></i>
+    <i class="spark sa"></i><i class="spark sb"></i><i class="spark sa"></i><i class="spark sb"></i>
+  </div>
+  <!-- 令和: 光の粒（白丸ぼけがゆっくり上昇） -->
+  <div id="particle-layer" aria-hidden="true">
+    <i></i><i></i><i></i><i></i><i></i>
+  </div>
+  <!-- 平成: 電光テロップ（画面下端・右→左） -->
+  <div id="marquee" class="hidden" aria-hidden="true"><span id="marquee-inner"></span></div>
+  <!-- 平成: 画面遷移の白フラッシュ -->
+  <div id="global-flash" aria-hidden="true"></div>
 
 </div>
 

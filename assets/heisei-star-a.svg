@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- 平成キラキラ 4角星A（白・ピンクフチ）。上の腕が少し長く、右の腕が少し短い＝手の癖。
+       キラキラ演出（同時8個まで・scaleアニメ）に使う。絵文字✨の代替。 -->
+  <path d="M31 2 Q35 25 59 31 Q36 36 32 61 Q28 37 4 33 Q27 27 31 2 Z"
+        fill="#ffffff" stroke="#ff2fa0" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M45 10 Q46 15 51 16 Q46 18 45 23 Q43 18 39 17 Q44 15 45 10 Z" fill="#ffe066"/>
+</svg>

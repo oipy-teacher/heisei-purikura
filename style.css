@@ -940,3 +940,436 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .beauty-main { flex-direction: column; }
   .beauty-controls { max-width: none; }
 }
+
+/* ================================================================
+   テーマ層（2026-08-12 デザイン全面刷新・柄本仕様書準拠）
+   body.theme-heisei / body.theme-reiwa で全装飾を着せ替える。
+   段階1: テーマ基盤（トークン・外周額縁・キラキラ/粒子/テロップ・コース選択の再スキン）
+   ================================================================ */
+
+/* ---- デザイントークン ---- */
+body.theme-heisei {
+  --h-pink: #ff2fa0;
+  --h-yellow: #ffe066;
+  --h-blue: #5cc8ff;
+  --h-purple: #a06bff;
+  --h-lime: #5cff8f;
+  --h-orange: #ff8a2a;
+  --h-ink: #3a1030;
+  --h-rainbow: repeating-linear-gradient(90deg,
+     #ff2fa0 0 40px, #ff8a2a 40px 80px, #ffe066 80px 120px,
+     #5cff8f 120px 160px, #5cc8ff 160px 200px, #a06bff 200px 240px);
+  --h-dots: radial-gradient(circle at 50% 50%, #ffffff 5px, transparent 5.5px);
+  --h-checker: repeating-conic-gradient(#ffe066 0% 25%, #ffffff 0% 50%);
+}
+body.theme-reiwa {
+  --r-paper: #faf7f2;
+  --r-ink: #4a3f38;
+  --r-brown: #8a7568;
+  --r-beige: #e8ddd0;
+  --r-pink: #e8b4b8;
+  --r-sage: #b7c4b1;
+  --r-blue: #aebfd0;
+  --r-accent: #c98a8f;
+  --r-grain: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="120" height="120" filter="url(%23n)" opacity="0.05"/></svg>');
+}
+
+/* ---- 外周の額縁 ---- */
+#theme-frame { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 150; }
+body.theme-heisei #theme-frame {
+  /* 平成: 虹ストライプの帯12px。「機械の中にいる」感の芯（仕様書1-c） */
+  display: block;
+  border: 12px solid transparent;
+  border-image: repeating-linear-gradient(90deg,
+     #ff2fa0 0 40px, #ff8a2a 40px 80px, #ffe066 80px 120px,
+     #5cff8f 120px 160px, #5cc8ff 160px 200px, #a06bff 200px 240px) 12;
+}
+body.theme-reiwa #theme-frame {
+  /* 令和: 額縁なし。かわりに上下の細罫線と左上の小さなロゴタイプ（仕様書2-c） */
+  display: block;
+  border-top: 1px solid rgba(74,63,56,.35);
+  border-bottom: 1px solid rgba(74,63,56,.35);
+  margin: 10px 0;
+  inset: 0;
+}
+body.theme-reiwa #theme-frame::before {
+  content: 'purikura  \2014  photo sticker';
+  position: absolute;
+  top: 8px; left: 22px;
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: .28em;
+  color: var(--r-brown);
+}
+
+/* ---- 平成: 4角星キラキラ（柄本SVG・同時8個・固定位置=手癖） ---- */
+#sparkle-layer { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+body.theme-heisei #sparkle-layer { display: block; }
+#sparkle-layer .spark {
+  position: absolute;
+  width: 34px; height: 34px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(.2);
+  will-change: transform, opacity;
+  animation: sparkPop 3.6s ease-in-out infinite;
+}
+#sparkle-layer .sa { background-image: url('assets/heisei-star-a.svg'); }
+#sparkle-layer .sb { background-image: url('assets/heisei-star-b.svg'); width: 26px; height: 26px; }
+/* 位置と時間差は固定値（乱数で毎回変えない・仕様書0-3） */
+#sparkle-layer .spark:nth-child(1) { left: 6%;  top: 14%; animation-delay: 0s; }
+#sparkle-layer .spark:nth-child(2) { left: 88%; top: 9%;  animation-delay: .7s; }
+#sparkle-layer .spark:nth-child(3) { left: 74%; top: 78%; animation-delay: 1.3s; }
+#sparkle-layer .spark:nth-child(4) { left: 12%; top: 66%; animation-delay: 1.9s; }
+#sparkle-layer .spark:nth-child(5) { left: 46%; top: 6%;  animation-delay: 2.4s; }
+#sparkle-layer .spark:nth-child(6) { left: 30%; top: 86%; animation-delay: 2.9s; }
+#sparkle-layer .spark:nth-child(7) { left: 94%; top: 46%; animation-delay: 3.2s; width: 44px; height: 44px; }
+#sparkle-layer .spark:nth-child(8) { left: 3%;  top: 40%; animation-delay: 1.6s; }
+@keyframes sparkPop {
+  0%, 55% { opacity: 0; transform: scale(.2) rotate(0deg); }
+  62% { opacity: 1; transform: scale(1.1) rotate(14deg); }
+  72% { opacity: 1; transform: scale(.92) rotate(8deg); }
+  84%, 100% { opacity: 0; transform: scale(.2) rotate(0deg); }
+}
+
+/* ---- 令和: 光の粒（白丸ぼけ・ゆっくり上昇） ---- */
+#particle-layer { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+body.theme-reiwa #particle-layer { display: block; }
+#particle-layer i {
+  position: absolute;
+  bottom: -20px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: riseGlow 9s linear infinite;
+}
+#particle-layer i:nth-child(1) { left: 12%; width: 10px; height: 10px; animation-delay: 0s; }
+#particle-layer i:nth-child(2) { left: 34%; width: 6px;  height: 6px;  animation-delay: 2.2s; animation-duration: 11s; }
+#particle-layer i:nth-child(3) { left: 58%; width: 14px; height: 14px; animation-delay: 4.4s; }
+#particle-layer i:nth-child(4) { left: 76%; width: 8px;  height: 8px;  animation-delay: 6.1s; animation-duration: 10s; }
+#particle-layer i:nth-child(5) { left: 90%; width: 11px; height: 11px; animation-delay: 7.6s; }
+@keyframes riseGlow {
+  0% { transform: translateY(0); opacity: 0; }
+  12% { opacity: .15; }
+  80% { opacity: .12; }
+  100% { transform: translateY(-92vh); opacity: 0; }
+}
+
+/* ---- 平成: 電光テロップ（画面下端・右→左） ---- */
+#marquee {
+  position: fixed;
+  left: 12px; right: 12px; bottom: 12px;
+  z-index: 155;
+  overflow: hidden;
+  background: var(--h-ink, #3a1030);
+  height: 34px;
+  display: flex;
+  align-items: center;
+}
+body:not(.theme-heisei) #marquee { display: none; }
+#marquee-inner {
+  display: inline-block;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: .1em;
+  color: var(--h-yellow, #ffe066);
+  will-change: transform;
+  animation: marqueeRun 18s linear infinite;
+}
+@keyframes marqueeRun {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ---- 平成: 画面遷移の白フラッシュ＋横スライド ---- */
+#global-flash {
+  position: fixed; inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 190;
+}
+#global-flash.go { animation: gFlash .18s ease-out; }
+@keyframes gFlash { 0% { opacity: 0; } 30% { opacity: .9; } 100% { opacity: 0; } }
+body.theme-heisei .screen.active { animation: screenInH .3s ease-out; }
+@keyframes screenInH {
+  from { opacity: .6; transform: translateX(46px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* 令和はクロスフェード（フラッシュしない） */
+body.theme-reiwa .screen.active { animation: screenInR .35s ease; }
+@keyframes screenInR { from { opacity: 0; } to { opacity: 1; } }
+body.theme-reiwa #global-flash { display: none; }
+
+/* ================================================
+   平成テーマ: コース選択画面（仕様書 3-4【平】）
+   ================================================ */
+body.theme-heisei #screen-select {
+  /* ピンクドット地（白玉10px/間隔26px相当） */
+  background: var(--h-dots) 0 0 / 26px 26px, #ff8fc7;
+}
+body.theme-heisei .panel {
+  border: 4px solid var(--h-pink);
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 rgba(58,16,48,.35);
+  padding-bottom: 56px; /* 下端テロップと重ならない余白 */
+}
+/* STEP見出し: 黄色地の帯に紫黒文字・-3°（仕様書3-4） */
+body.theme-heisei .step-heading {
+  display: inline-block;
+  background: var(--h-yellow);
+  color: var(--h-ink);
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  padding: 8px 26px;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-pink);
+  transform: rotate(-3deg);
+  margin: 18px 0 12px;
+}
+/* ボタン: カプセル型・単色原色・白フチ3px＋色フチ2pxの2重フチ（仕様書1-c） */
+body.theme-heisei .btn-main {
+  background: var(--h-pink);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-purple), 0 6px 0 #c22876;
+  border-radius: 999px;
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+body.theme-heisei .btn-main:active { box-shadow: 0 0 0 2px var(--h-purple), 0 2px 0 #c22876; }
+body.theme-heisei .btn-main.pulse,
+body.theme-heisei .mode-btn.pulse { animation: hBlink 1s steps(1) infinite; }
+@keyframes hBlink { 0%, 100% { opacity: 1; } 50% { opacity: .75; } }
+body.theme-heisei .btn-sub,
+body.theme-heisei .btn-back {
+  background: var(--h-blue);
+  color: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-purple);
+  border-radius: 999px;
+  font-weight: 800;
+}
+/* 選択カード: 白地＋太いピンク破線フチ、選択中は実線化＋「コレ！」バッジ（仕様書1-c） */
+body.theme-heisei .choice-item,
+body.theme-heisei .layout-item,
+body.theme-heisei .shotmode-btn {
+  border: 3px dashed var(--h-pink);
+  background: #fff;
+  position: relative;
+}
+body.theme-heisei .shotmode-btn { color: var(--h-ink); }
+body.theme-heisei .choice-item.selected,
+body.theme-heisei .layout-item.selected,
+body.theme-heisei .shotmode-btn.active {
+  border-style: solid;
+  border-color: var(--h-pink);
+  transform: scale(1.05);
+}
+body.theme-heisei .choice-item.selected::after,
+body.theme-heisei .layout-item.selected::after,
+body.theme-heisei .shotmode-btn.active::after {
+  content: 'コレ！';
+  position: absolute;
+  top: -12px; right: -10px;
+  background: var(--h-pink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+/* フレーム9種: 3×3を固定配列の傾きで崩す（-6,+2,-3,+5,-2,+4,-5,+3,0°・仕様書3-4） */
+body.theme-heisei #frame-list { grid-template-columns: repeat(3, 1fr); }
+body.theme-heisei #frame-list .choice-item:nth-child(1) { transform: rotate(-6deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(2) { transform: rotate(2deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(3) { transform: rotate(-3deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(4) { transform: rotate(5deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(5) { transform: rotate(-2deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(6) { transform: rotate(4deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(7) { transform: rotate(-5deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(8) { transform: rotate(3deg); }
+body.theme-heisei #frame-list .choice-item:nth-child(9) { transform: rotate(0deg); }
+body.theme-heisei #frame-list .choice-item.selected { transform: scale(1.08) rotate(0deg); }
+/* プリセット系チップ */
+body.theme-heisei .preset-btn {
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-pink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--h-ink);
+  font-weight: 800;
+}
+body.theme-heisei .preset-btn.active {
+  background: var(--h-pink);
+  color: #fff;
+  animation: hBlink 1s steps(1) infinite;
+}
+/* BGMボタン: カセットテープ型（左に丸穴2つ・仕様書3-4） */
+body.theme-heisei #bgm-row .preset-btn {
+  border-radius: 8px;
+  padding-left: 40px;
+  position: relative;
+  background: var(--h-yellow);
+}
+body.theme-heisei #bgm-row .preset-btn::before {
+  content: '';
+  position: absolute;
+  left: 12px; top: 50%;
+  width: 8px; height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--h-ink);
+  box-shadow: 14px 0 0 var(--h-ink);
+}
+body.theme-heisei #bgm-row .preset-btn.active { background: var(--h-pink); color: #fff; }
+/* こだわり設定: ガチャガチャのフタ風（仕様書3-4） */
+body.theme-heisei .sel-advanced {
+  background: var(--h-checker) 0 0 / 32px 32px;
+  border: 3px solid var(--h-pink);
+  border-radius: 16px 16px 24px 24px;
+}
+body.theme-heisei .sel-advanced summary { color: var(--h-ink); font-weight: 800; }
+body.theme-heisei .chroma-row { background: #fff; border-color: var(--h-pink); }
+body.theme-heisei .chroma-title { color: var(--h-ink); }
+body.theme-heisei .eratone-note { color: var(--h-ink); opacity: .75; }
+body.theme-heisei .layout-item .layout-label,
+body.theme-heisei .choice-item { color: var(--h-ink); }
+
+/* ================================================
+   令和テーマ: コース選択画面（仕様書 3-4【令】）
+   ================================================ */
+body.theme-reiwa #screen-select {
+  background: var(--r-paper);
+}
+body.theme-reiwa #screen-select::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: var(--r-grain);
+  pointer-events: none;
+}
+body.theme-reiwa .panel {
+  background: var(--r-paper);
+  box-shadow: none;
+  border: 1px solid rgba(74,63,56,.22);
+  border-radius: 4px;
+  position: relative;
+  z-index: 1;
+}
+/* 見出し: 細罫線区切り＋小英字キャプション（01 / course） */
+body.theme-reiwa .step-heading {
+  color: var(--r-ink);
+  font-weight: 600;
+  letter-spacing: .14em;
+  border-top: 1px solid rgba(74,63,56,.25);
+  padding-top: 16px;
+  margin-top: 22px;
+  position: relative;
+}
+body.theme-reiwa .step-heading[data-num]::before {
+  content: attr(data-num) ' / ' attr(data-en);
+  display: block;
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 9px;
+  letter-spacing: .3em;
+  color: var(--r-brown);
+  margin-bottom: 4px;
+  text-transform: lowercase;
+}
+/* ボタン: 浅い丸角2〜4px・生成り地・1px墨茶罫線（仕様書2-c） */
+body.theme-reiwa .btn-main {
+  background: var(--r-accent);
+  border: 1px solid var(--r-accent);
+  border-radius: 4px;
+  box-shadow: none;
+  font-weight: 600;
+  letter-spacing: .12em;
+  transition: background .3s ease;
+}
+body.theme-reiwa .btn-main:active { transform: translateY(1px); box-shadow: none; }
+body.theme-reiwa .btn-main.pulse { animation: none; }
+body.theme-reiwa .btn-sub,
+body.theme-reiwa .btn-back {
+  background: var(--r-paper);
+  color: var(--r-ink);
+  border: 1px solid rgba(74,63,56,.45);
+  border-radius: 4px;
+  font-weight: 600;
+}
+body.theme-reiwa .choice-item,
+body.theme-reiwa .layout-item,
+body.theme-reiwa .shotmode-btn {
+  border: 1px solid rgba(74,63,56,.3);
+  border-radius: 4px;
+  background: #fefcf9;
+  transition: border-color .3s ease, background .3s ease;
+}
+body.theme-reiwa .shotmode-btn { color: var(--r-ink); }
+body.theme-reiwa .choice-item.selected,
+body.theme-reiwa .layout-item.selected,
+body.theme-reiwa .shotmode-btn.active {
+  border: 2px solid var(--r-accent);
+  transform: none;
+}
+body.theme-reiwa .preset-btn {
+  border: 1px solid rgba(74,63,56,.4);
+  border-radius: 4px;
+  background: var(--r-paper);
+  color: var(--r-ink);
+  font-weight: 600;
+  transition: background .3s ease, color .3s ease;
+}
+body.theme-reiwa .preset-btn.active {
+  background: var(--r-accent);
+  border-color: var(--r-accent);
+  color: #fff;
+  animation: none;
+}
+/* BGM試聴中: 小さなレコード円がゆっくり回転（仕様書3-4【令】） */
+body.theme-reiwa #bgm-row .preset-btn.active {
+  position: relative;
+  padding-left: 34px;
+}
+body.theme-reiwa #bgm-row .preset-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 10px; top: 50%;
+  width: 14px; height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #fff;
+  /* レコードの溝: 白地に細リングと中心穴 */
+  box-shadow: inset 0 0 0 2px var(--r-accent), inset 0 0 0 5px #fff, inset 0 0 0 6px var(--r-accent);
+  will-change: transform;
+  animation: recordSpin 3s linear infinite;
+}
+@keyframes recordSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+body.theme-reiwa .sel-advanced {
+  background: #fefcf9;
+  border: 1px dashed rgba(74,63,56,.35);
+  border-radius: 4px;
+}
+body.theme-reiwa .sel-advanced summary { color: var(--r-ink); }
+body.theme-reiwa .chroma-row { background: #fefcf9; border: 1px dashed rgba(74,63,56,.35); border-radius: 4px; }
+body.theme-reiwa .chroma-title { color: var(--r-ink); }
+body.theme-reiwa .eratone-note { color: var(--r-brown); }
+/* フロート: 画面のどこか1要素がゆっくり上下（仕様書2-d。選択画面ではOKボタン） */
+body.theme-reiwa #screen-select .btn-main {
+  animation: floatY 4s ease-in-out infinite;
+}
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+/* フレーム9種の3×3はセルが大きくなりすぎるため高さを詰める（正方形をやめる） */
+body.theme-heisei #frame-list .choice-item { aspect-ratio: auto; padding: 14px 0; }

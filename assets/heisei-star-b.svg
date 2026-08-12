@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- 平成キラキラ 4角星B（黄・紫黒フチ・少し傾いた小玉つき）。Aと混ぜて使うと量産感が消える。 -->
+  <path d="M23 3 Q26 19 44 24 Q27 27 24 45 Q21 28 3 25 Q20 21 23 3 Z"
+        fill="#ffe066" stroke="#3a1030" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M37 34 C36 31 39 29 42 30 C45 32 44 36 40 36 C38 36 38 36 37 34 Z" fill="#ffffff" stroke="#3a1030" stroke-width="2"/>
+</svg>

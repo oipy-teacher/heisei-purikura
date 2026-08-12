@@ -299,6 +299,44 @@
     screens[id].classList.add('active');
     // タイトルへ戻ったら待機デモのアイドル計測を仕掛け直す（関数はこの後で定義される）
     if (id === 'screen-title' && typeof armAttractIdle === 'function') armAttractIdle();
+    if (typeof updateThemeFx === 'function') updateThemeFx(id);
+  }
+
+  /* ===================== テーマ演出（2026-08-12 デザイン刷新・柄本仕様書 §0/1-d/2-d） =====================
+     見た目の着せ替えは body.theme-heisei / body.theme-reiwa のCSSが担う。
+     ここでは「画面ごとのテロップ文言」と「平成の遷移フラッシュ」だけをJSで面倒を見る。 */
+  const MARQUEE_TEXTS = {
+    'screen-select': 'コースをえらんでね！　らくがきは３ぷんしょうぶ！　プリはともだちとはんぶんこ！　シールはプリちょうにはろう！　',
+    'screen-deco': 'らくがきは３ぷんしょうぶ！　あまったよはくは うめつくせ！　スタンプれんだ かいきん！　我等友情永久不滅成！　',
+  };
+
+  function setTheme(mode) {
+    document.body.classList.remove('theme-heisei', 'theme-reiwa');
+    if (mode) document.body.classList.add('theme-' + mode);
+  }
+
+  function updateThemeFx(screenId) {
+    const isHeisei = document.body.classList.contains('theme-heisei');
+    // 電光テロップ（平成のみ・選択/落書き画面に常設）
+    const mq = $('#marquee');
+    if (mq) {
+      const text = isHeisei ? MARQUEE_TEXTS[screenId] : null;
+      if (text) {
+        $('#marquee-inner').textContent = text + text; // 2周ぶん並べて切れ目なくループ
+        mq.classList.remove('hidden');
+      } else {
+        mq.classList.add('hidden');
+      }
+    }
+    // 平成の画面遷移は「横スライド＋一瞬の白フラッシュ」（令和はCSS側でクロスフェード）
+    if (isHeisei) {
+      const fl = $('#global-flash');
+      if (fl) {
+        fl.classList.remove('go');
+        void fl.offsetWidth; // アニメを打ち直すためのreflow
+        fl.classList.add('go');
+      }
+    }
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -524,6 +562,7 @@
   function enterMode(mode) {
     state.mode = mode;
     document.body.dataset.mode = mode;
+    setTheme(mode); // 画面の着せ替え（2026-08-12 デザイン刷新）
     const conf = modeConf();
     state.curtain = conf.curtains[0];
     state.frame = conf.frames[0];
@@ -558,6 +597,7 @@
   $('#btn-back-title').addEventListener('click', () => {
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
+    setTheme(null); // タイトルはモード決定前の「対比の画面」なのでテーマを外す
     playBgmSrc(BGM_TITLE);
     showScreen('screen-title');
   });
@@ -729,15 +769,25 @@
     order.adv.forEach(id => adv.appendChild($('#' + id)));
     $('#sel-advanced').open = false;
 
-    // メイン側だけ STEP番号を振る（こだわり側は素の見出し）
+    /* メイン側だけ番号を振る（こだわり側は素の見出し）。
+       番号の様式はテーマで変える（柄本仕様書 3-4）:
+       平成 = 「STEP 1. 〜」の黄帯見出し ／ 令和 = 小英字キャプション「01 / course」をCSSで上に添える */
     let step = 1;
     order.main.forEach(id => {
       const h = $('#' + id).querySelector('.step-heading');
-      if (h) h.textContent = `STEP ${step++}. ${h.dataset.title}`;
+      if (!h) return;
+      if (state.mode === 'heisei') {
+        h.textContent = `STEP ${step}. ${h.dataset.title}`;
+        h.removeAttribute('data-num');
+      } else {
+        h.textContent = h.dataset.title;
+        h.dataset.num = String(step).padStart(2, '0');
+      }
+      step++;
     });
     order.adv.forEach(id => {
       const h = $('#' + id).querySelector('.step-heading');
-      if (h) h.textContent = h.dataset.title;
+      if (h) { h.textContent = h.dataset.title; h.removeAttribute('data-num'); }
     });
   }
 
@@ -4163,6 +4213,7 @@
     decoObjects = [];
     undoStack = [];
     renderDeco();
+    setTheme(null); // タイトルはモード決定前の「対比の画面」なのでテーマを外す
     playBgmSrc(BGM_TITLE); // タイトルへ戻ったらタイトル曲へ
     showScreen('screen-title');
   });
