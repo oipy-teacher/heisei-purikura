@@ -1491,6 +1491,7 @@
     btnStartShooting.disabled = false;
     btnStartShooting.style.display = 'inline-block';
     $('#btn-back-select').style.display = ''; // 撮影開始前は戻れる
+    $('#darkroom').classList.add('hidden'); // 前セッションの現像中表示を消す
     previewCanvas.classList.remove('ready');
     video.classList.remove('masked');
 
@@ -1581,16 +1582,37 @@
     return poseOrder[poseOrderIdx++];
   }
 
+  /* ポーズ提案の吹き出し（2026-08-12 デザイン刷新・柄本仕様書3-5）:
+     文言が変わるたびにポンと出る（平成）／静かにフェードイン（令和）。CSSがテーマ別に演出する */
+  function setPoseGuide(text) {
+    const el = $('#pose-guide');
+    el.textContent = text;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+  }
+
   async function runCountdown(shotIndex, opts) {
     const { skipIntro = false, poseKey = null } = opts || {};
+    const isHeiseiTheme = document.body.classList.contains('theme-heisei');
     // 前置き（1枚目いくよー等）。撮り直しのときは飛ばしてテンポを保つ
     if (!skipIntro) await playSoundAwait('introShot' + (shotIndex + 1));
     // ポーズ提案ボイス（ファイル未着なら黙ってスキップ）
     if (poseKey) await playSoundAwait(poseKey);
     for (const step of COUNTDOWN_STEPS) {
-      countdownEl.textContent = step.label;
+      // 数字は1文字ごとのspanに分解（平成: 互い違いの傾き＝柄本仕様書3-5。文言は内部定数なので安全）
+      countdownEl.innerHTML = [...step.label].map(c => `<span class="cd-ch">${c}</span>`).join('');
       countdownEl.style.opacity = '1';
       countdownEl.style.transform = 'scale(1.15)';
+      // 平成: 数字が出るたび一瞬の白フラッシュ
+      if (isHeiseiTheme) {
+        flashCanvas.style.transition = 'none';
+        flashCanvas.style.opacity = '0.35';
+        setTimeout(() => {
+          flashCanvas.style.transition = 'opacity .12s ease';
+          flashCanvas.style.opacity = '0';
+        }, 50);
+      }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
       await playSoundAwait(step.key);
@@ -1686,15 +1708,15 @@
     $('#btn-back-select').style.display = 'none'; // 撮影開始後は実機同様戻れない
     const poseGuideEl = $('#pose-guide');
     if (state.shotMode === 'full') {
-      poseGuideEl.textContent = 'じゅんびちゅう…';
+      setPoseGuide('じゅんびちゅう…');
       await runPrepCountdown();
-      poseGuideEl.textContent = 'かわいく決めてね💕';
+      setPoseGuide('かわいく決めてね💕');
     }
     resetPoseOrder();
     for (let i = 0; i < NUM_SHOTS; i++) {
       let retakes = 0;
       for (;;) {
-        poseGuideEl.textContent = POSE_GUIDES[i] || 'かわいく決めてね💕';
+        setPoseGuide(POSE_GUIDES[i] || 'かわいく決めてね💕');
         await runCountdown(i, { skipIntro: retakes > 0, poseKey: nextPoseKey() });
         const shot = captureFrame();
         playSound('seShutter');
@@ -1724,7 +1746,7 @@
           break;
         }
         retakes++;
-        poseGuideEl.textContent = 'もういっかい！';
+        setPoseGuide('もういっかい！');
         previewRunning = true;
         previewLoop();
         await sleep(400);
@@ -1735,12 +1757,14 @@
         await sleep(300);
       }
     }
-    poseGuideEl.textContent = 'かわいく決めてね💕';
+    setPoseGuide('かわいく決めてね💕');
     stopCamera();
     if (state.mode === 'heisei') {
       // 平成モードに盛り調整（デカ目・美肌スライダー等）は存在しない時代。
       // 初代プリ機の「低画素カメラで写りが良く見える」を固定の軽い補正で再現し、そのまま落書きへ
-      poseGuideEl.textContent = '現像中…📸';
+      // 暗室風の「げんぞうちゅう…」演出（柄本仕様書3-6【平】。絵文字はやめCSSでフィルム帯を描く）
+      $('#darkroom').classList.remove('hidden');
+      await sleep(60); // オーバーレイを描画させてから重い現像処理へ
       await finishHeiseiProcessing();
     } else {
       startBeautyScreen();

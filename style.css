@@ -1630,3 +1630,233 @@ body.theme-reiwa .deco-gate-title,
 body.theme-reiwa .confirm-text { color: var(--r-ink); }
 body.theme-reiwa .deco-toast { color: var(--r-ink); border-color: var(--r-beige); }
 body.theme-reiwa .deco-countdown { font-weight: 500; }
+
+/* ================================================
+   段階4: 撮影画面・現像中・盛り画面（仕様書 3-5 / 3-6）
+   ================================================ */
+/* ---- 平成: 撮影画面 ---- */
+body.theme-heisei #screen-camera {
+  background: var(--h-dots) 0 0 / 26px 26px, #3a1030;
+}
+body.theme-heisei .camera-viewport {
+  /* ファインダーを虹帯で額装（仕様書3-5【平】） */
+  border: 10px solid transparent;
+  border-image: repeating-linear-gradient(90deg,
+     #ff2fa0 0 40px, #ff8a2a 40px 80px, #ffe066 80px 120px,
+     #5cff8f 120px 160px, #5cc8ff 160px 200px, #a06bff 200px 240px) 10;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* ポーズ提案: 吹き出し形（しっぽ付き・白地・ピンクフチ・-4°）でポンと出る */
+body.theme-heisei #pose-guide {
+  position: relative;
+  display: inline-block;
+  background: #fff;
+  color: var(--h-ink);
+  border: 3px solid var(--h-pink);
+  border-radius: 16px;
+  padding: 10px 18px;
+  font-weight: 800;
+  font-size: 15px;
+  transform: rotate(-4deg);
+  opacity: 1;
+  margin-bottom: 18px;
+}
+body.theme-heisei #pose-guide::after {
+  content: '';
+  position: absolute;
+  bottom: -12px; left: 26px;
+  border: 7px solid transparent;
+  border-top: 10px solid var(--h-pink);
+}
+body.theme-heisei #pose-guide.pop { animation: bubblePop .25s ease-out; }
+@keyframes bubblePop {
+  0% { transform: rotate(-4deg) scale(.8); }
+  60% { transform: rotate(-4deg) scale(1.05); }
+  100% { transform: rotate(-4deg) scale(1); }
+}
+/* カウントダウン: 極太白フチ＋1文字ごと互い違いの傾き */
+body.theme-heisei .countdown-num { font-size: 130px; }
+body.theme-heisei .cd-ch {
+  display: inline-block;
+  color: var(--h-pink);
+  -webkit-text-stroke: 4px #fff;
+  text-shadow: 0 6px 0 rgba(58,16,48,.4);
+}
+body.theme-heisei .cd-ch:nth-child(odd) { transform: rotate(-7deg); }
+body.theme-heisei .cd-ch:nth-child(even) { transform: rotate(6deg); }
+/* オッケー確認: シール台紙風の白角枠＋ピンクカプセル点滅／青カプセル（仕様書3-5【平】） */
+body.theme-heisei .ok-check {
+  background: rgba(58,16,48,.72);
+  border-top: 6px solid #fff;
+}
+body.theme-heisei .ok-check-title {
+  color: #fff;
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  transform: rotate(-2deg);
+  text-shadow: 0 0 14px var(--h-pink), 0 2px 0 rgba(0,0,0,.4);
+}
+body.theme-heisei .ok-check .btn-main { animation: hBlink 1s steps(1) infinite; }
+body.theme-heisei .ok-check .btn-sub { background: var(--h-blue); color: #fff; }
+body.theme-heisei .cam-caption { font-weight: 800; }
+body.theme-heisei .shot-dot.done { background: var(--h-yellow); }
+/* 現像中の暗室（仕様書3-6【平】） */
+.darkroom {
+  position: absolute; inset: 0;
+  z-index: 25;
+  background: #2a0b24;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  overflow: hidden;
+}
+.darkroom-film {
+  display: block;
+  width: 100%;
+  height: 34px;
+  overflow: hidden;
+  position: relative;
+}
+.darkroom-film i {
+  position: absolute; top: 0; left: 0;
+  width: 200%; height: 100%;
+  /* フィルムのパーフォレーション（穴あき帯）。白角穴を等間隔に */
+  background:
+    repeating-linear-gradient(90deg, transparent 0 10px, #f5f0e8 10px 26px, transparent 26px 36px) 0 50% / 36px 14px repeat-x,
+    #1a0616;
+  will-change: transform;
+  animation: filmRun 1.6s linear infinite;
+}
+.darkroom-film.bottom i { animation-direction: reverse; }
+@keyframes filmRun { from { transform: translateX(0); } to { transform: translateX(-36px); } }
+.darkroom-text {
+  margin: 0;
+  position: relative;
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+  font-size: 34px; font-weight: 800;
+  color: #ff8fc7;
+  animation: blink 1.2s steps(1) infinite;
+}
+.darkroom-text::before {
+  content: attr(data-text);
+  position: absolute; inset: 0;
+  -webkit-text-stroke: 8px #fff;
+  color: #fff;
+  z-index: -1;
+}
+
+/* ---- 令和: 撮影画面 ---- */
+body.theme-reiwa #screen-camera { background: var(--r-paper); }
+body.theme-reiwa #screen-camera::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: var(--r-grain);
+  pointer-events: none;
+}
+body.theme-reiwa .camera-stage { position: relative; z-index: 1; }
+body.theme-reiwa .camera-viewport {
+  border: 6px solid #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 6px 22px rgba(74,63,56,.22);
+}
+body.theme-reiwa .cam-caption { color: var(--r-ink); font-weight: 600; letter-spacing: .1em; }
+/* ポーズ提案: 下部に静かにフェードイン（生成り半透明帯・細字） */
+body.theme-reiwa #pose-guide {
+  background: rgba(250,247,242,.85);
+  color: var(--r-ink);
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: 500;
+  letter-spacing: .12em;
+  opacity: 1;
+}
+body.theme-reiwa #pose-guide.pop { animation: softFade .6s ease; }
+@keyframes softFade { from { opacity: 0; } to { opacity: 1; } }
+/* カウントダウン: 右下に小さめ・細字・拡大しない（仕様書3-5【令】） */
+body.theme-reiwa .countdown-num {
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 26px 18px 0;
+  font-size: 64px;
+  font-weight: 500;
+  font-family: Georgia, serif;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(74,63,56,.5);
+}
+body.theme-reiwa .countdown-num { transform: none !important; }
+body.theme-reiwa .live-toggle.on { background: var(--r-paper); color: var(--r-ink); box-shadow: none; }
+body.theme-reiwa .live-toggle { border-color: rgba(74,63,56,.4); color: var(--r-ink); }
+body.theme-reiwa .live-preset-btn { border-color: rgba(74,63,56,.4); color: var(--r-ink); }
+body.theme-reiwa .live-preset-btn.active { background: var(--r-accent); color: #fff; }
+body.theme-reiwa .live-note, body.theme-reiwa .segmenter-status { color: var(--r-brown); }
+body.theme-reiwa .cam-error { color: var(--r-accent); }
+body.theme-reiwa .shot-dot { border-color: rgba(74,63,56,.5); background: rgba(255,255,255,.6); }
+body.theme-reiwa .shot-dot.done { background: var(--r-accent); }
+/* オッケー確認: ポラロイド風の下部帯＋浅丸角ボタン */
+body.theme-reiwa .ok-check {
+  background: linear-gradient(0deg, rgba(250,247,242,.94), rgba(250,247,242,.78) 75%, transparent);
+}
+body.theme-reiwa .ok-check-title {
+  color: var(--r-ink);
+  font-weight: 600;
+  letter-spacing: .12em;
+  animation: none;
+  text-shadow: none;
+}
+body.theme-reiwa .ok-check .btn-main { animation: none; }
+body.theme-reiwa .ok-auto-note { color: var(--r-brown); text-shadow: none; }
+body.theme-reiwa .prep-note { color: var(--r-ink); text-shadow: none; }
+
+/* ---- 令和: 盛り調整画面（仕様書3-6【令】） ---- */
+body.theme-reiwa #screen-beauty { background: var(--r-paper); }
+body.theme-reiwa #screen-beauty::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: var(--r-grain);
+  pointer-events: none;
+  z-index: 0;
+}
+body.theme-reiwa .beauty-wrap { position: relative; z-index: 1; }
+body.theme-reiwa .beauty-heading {
+  color: var(--r-ink);
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: .14em;
+}
+body.theme-reiwa .beauty-controls {
+  background: #fefcf9;
+  border: 1px solid rgba(74,63,56,.25);
+  border-radius: 4px;
+}
+body.theme-reiwa #beauty-canvas { border: 8px solid #fff; border-radius: 2px; box-shadow: 0 6px 20px rgba(74,63,56,.2); }
+/* 盛れ感レベル: ポラ風カード（傾き±2°・小英字添え） */
+body.theme-reiwa #beauty-level-row .preset-btn {
+  background: #fff;
+  border: 1px solid rgba(74,63,56,.25);
+  border-radius: 2px;
+  padding: 14px 6px 18px;
+  box-shadow: 0 2px 8px rgba(74,63,56,.14);
+  position: relative;
+}
+body.theme-reiwa #beauty-level-row .preset-btn:nth-child(1) { transform: rotate(-2deg); }
+body.theme-reiwa #beauty-level-row .preset-btn:nth-child(2) { transform: rotate(1deg); }
+body.theme-reiwa #beauty-level-row .preset-btn:nth-child(3) { transform: rotate(2deg); }
+body.theme-reiwa #beauty-level-row .preset-btn.active {
+  background: var(--r-accent);
+  color: #fff;
+  border-color: var(--r-accent);
+}
+/* スライダー: 丸つまみをアクセント色に */
+body.theme-reiwa input[type="range"] { accent-color: var(--r-accent); }
+body.theme-reiwa .beauty-shot-tab {
+  border-radius: 4px;
+  border: 1px solid rgba(74,63,56,.35);
+  background: rgba(250,247,242,.85);
+  color: var(--r-ink);
+}
+body.theme-reiwa .beauty-shot-tab.active { background: var(--r-accent); border-color: var(--r-accent); }
+body.theme-reiwa .beauty-face-note { background: rgba(250,247,242,.95); color: var(--r-ink); }
+body.theme-reiwa .btn-sub.apply-all { width: 100%; }
