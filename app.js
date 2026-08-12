@@ -424,17 +424,48 @@
     if (fallbackKey) playSound(fallbackKey);
   }
 
+  /* 音声が鳴らせない環境の印（2026-08-12 検見の実測指摘対応）。
+     以前は保険タイムアウト4秒×6クリップで、無音環境だと4枚撮影が96秒に化けた。
+     一度でも「再生失敗」か「endedが来ない」を検知したら、そのセッションの残りは
+     音声待ちをやめて見た目のリズムだけで進む（撮影開始・もう一回あそぶ、でリセット）。 */
+  let voiceGaveUp = false;
+
+  // クリップの実測長（ms）。メタデータ未取得なら0
+  function soundDurationMs(key) {
+    const a = sounds[key];
+    const d = a && isFinite(a.duration) ? a.duration * 1000 : 0;
+    return d > 0 ? d : 0;
+  }
+
   // 撮影カウントダウン用：セリフの再生が実際に終わるまで待つ（＝見た目とボイスを完全に同期させる）
-  function playSoundAwait(key) {
+  // nominalMs は音声が使えない環境での「見た目の間」（無音でもテンポが速すぎ/遅すぎにならない値）
+  function playSoundAwait(key, nominalMs = 700) {
     const a = sounds[key];
     if (!a || soundMissing(key)) return Promise.resolve();
+    if (voiceGaveUp) {
+      // 鳴るかもしれないので再生自体は試すが、待ちは固定時間（96秒化の再発防止）
+      try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+      return sleep(nominalMs);
+    }
     return new Promise((resolve) => {
       let done = false;
-      const finish = () => { if (done) return; done = true; a.removeEventListener('ended', finish); resolve(); };
-      a.addEventListener('ended', finish);
+      let timer = null;
+      const finish = (failed) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        a.removeEventListener('ended', onEnded);
+        if (failed) voiceGaveUp = true;
+        resolve();
+      };
+      const onEnded = () => finish(false);
+      a.addEventListener('ended', onEnded);
       a.currentTime = 0;
-      a.play().catch(finish);
-      setTimeout(finish, 4000); // 保険
+      a.play().catch(() => finish(true));
+      // 保険: クリップ実測長+350ms・長さ不明なら1.5秒（旧4秒は無音環境で1枚25秒に化けた）。
+      // 実測長より長くは待たないので、正常時にセリフを切ることはない
+      const clip = soundDurationMs(key);
+      timer = setTimeout(() => finish(true), clip ? clip + 350 : 1500);
     });
   }
 
@@ -1612,14 +1643,27 @@
     el.classList.add('pop');
   }
 
+  // 絶対時刻まで待つ（相対sleepの積み残しでリズムが延びない）
+  function sleepUntil(t) {
+    const d = t - performance.now();
+    return d > 0 ? sleep(d) : Promise.resolve();
+  }
+
   async function runCountdown(shotIndex, opts) {
     const { skipIntro = false, poseKey = null } = opts || {};
     const isHeiseiTheme = document.body.classList.contains('theme-heisei');
     // 前置き（1枚目いくよー等）。撮り直しのときは飛ばしてテンポを保つ
-    if (!skipIntro) await playSoundAwait('introShot' + (shotIndex + 1));
+    if (!skipIntro) await playSoundAwait('introShot' + (shotIndex + 1), 1100);
     // ポーズ提案ボイス（ファイル未着なら黙ってスキップ）
-    if (poseKey) await playSoundAwait(poseKey);
+    if (poseKey) await playSoundAwait(poseKey, 1300);
+    /* 数字のリズムは固定タイマー基準（2026-08-12 検見の実測指摘対応）:
+       以前は音声の ended イベント待ちだったため、令和のライブ盛れ負荷で配達が遅れると
+       0.7秒間隔が1.0〜1.2秒に延びていた。1歩の枠を「クリップ実測長＋固定の間合い」で
+       先に決め、絶対時刻で消化する。数字表示と同時に音声を開始するので同期は保たれ、
+       クリップ実測長ぶんは必ず待つのでセリフが切れることもない（＝秒数決め打ちとは違う）。 */
+    let base = performance.now();
     for (const step of COUNTDOWN_STEPS) {
+      const clipMs = soundDurationMs(step.key) || 430; // count_3〜hai は実測0.31〜0.48秒
       // 数字は1文字ごとのspanに分解（平成: 互い違いの傾き＝柄本仕様書3-5。文言は内部定数なので安全）
       countdownEl.innerHTML = [...step.label].map(c => `<span class="cd-ch">${c}</span>`).join('');
       countdownEl.style.opacity = '1';
@@ -1633,12 +1677,18 @@
           flashCanvas.style.opacity = '0';
         }, 50);
       }
+      // 音声は数字表示と同時に開始（endedは待たない。失敗したら以降のセッションは無音進行）
+      const a = sounds[step.key];
+      if (a && !soundMissing(step.key) && !voiceGaveUp) {
+        try { a.currentTime = 0; a.play().catch(() => { voiceGaveUp = true; }); } catch (e) {}
+      }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
-      await playSoundAwait(step.key);
-      await sleep(160); // 無音カット済みクリップの間。実機の矢継ぎ早に合わせて短め（2026-08-12 テンポ改善）
+      base += 60 + clipMs + 160; // 従来の間合い（60ms立ち上がり＋クリップ＋160ms間）を固定枠に
+      await sleepUntil(base);
       countdownEl.style.opacity = '0';
-      await sleep(60);
+      base += 60;
+      await sleepUntil(base);
     }
   }
 
@@ -1688,6 +1738,7 @@
   }
 
   btnStartShooting.addEventListener('click', async () => {
+    voiceGaveUp = false; // 環境は直っていることがある。撮影のたびに音声へ再挑戦する
     btnStartShooting.disabled = true;
     btnStartShooting.style.display = 'none';
     $('#btn-back-select').style.display = 'none'; // 撮影開始後は実機同様戻れない
@@ -4246,6 +4297,7 @@
     // 次の客のために選択系もまっさらへ（2026-08-12 qa-tester指摘。無人運用では前の客の設定が残ると事故）
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
+    voiceGaveUp = false; // 次の客は音声から仕切り直す
     decoObjects = [];
     undoStack = [];
     renderDeco();
