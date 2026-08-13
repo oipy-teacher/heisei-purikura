@@ -2683,19 +2683,24 @@
         const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
         if (cheekS > 0) {
           // 頬の中心（205/425）にふんわり円形グラデーション
+          /* 2026-08-13 実機テスト要望: 100%でも「ほんのり」だったため効きを約2倍に再スケール
+             （旧: 単層 alpha cheekS*0.32 → 新: 芯0.38+外周0.24の2層で中心合計約0.62。
+             最近のチーク流行に合わせ、MAXでははっきり分かる濃さ。単層でalphaだけ上げると
+             縁が急に切れて円が見えるため、半径違いの2層で外へ柔らかく減衰させる） */
           [lm[205], lm[425]].forEach((pt) => {
             const c = lmToPx(pt, w, h);
-            const r = fw * 0.17;
-            const grad = outCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-            grad.addColorStop(0, conf.makeup.cheek);
-            grad.addColorStop(1, 'rgba(255,255,255,0)');
-            outCtx.save();
-            outCtx.globalAlpha = cheekS * 0.32;
-            outCtx.fillStyle = grad;
-            outCtx.beginPath();
-            outCtx.arc(c.x, c.y, r, 0, Math.PI * 2);
-            outCtx.fill();
-            outCtx.restore();
+            [{ r: fw * 0.17, a: cheekS * 0.38 }, { r: fw * 0.24, a: cheekS * 0.24 }].forEach(({ r, a }) => {
+              const grad = outCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+              grad.addColorStop(0, conf.makeup.cheek);
+              grad.addColorStop(1, 'rgba(255,255,255,0)');
+              outCtx.save();
+              outCtx.globalAlpha = Math.min(1, a);
+              outCtx.fillStyle = grad;
+              outCtx.beginPath();
+              outCtx.arc(c.x, c.y, r, 0, Math.PI * 2);
+              outCtx.fill();
+              outCtx.restore();
+            });
           });
         }
         if (lipS > 0) {
