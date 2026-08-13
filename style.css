@@ -13,7 +13,23 @@ html, body {
   background: #1a0f2e;
   font-family: -apple-system, "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
   touch-action: none;
+  /* 🚨 iOS/WKWebView（LINEなどのアプリ内ブラウザ）では -webkit- 付きでないと効かない。
+     無印だけだと長押しで文字が選択され、選択メニューが出る
+     （2026-08-14 モニター指摘「落書き中にテキスト選択されてしまう」の原因）。
+     長押し保存モーダルの画像だけは .save-box img 側で明示的に解除している。 */
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+}
+/* iOSのバウンススクロール（ゴムのように画面全体が動く）を止める。
+   アプリ内ブラウザでは overflow:hidden だけでは止まらないことがあるため body を固定する。
+   スクロールが要る入れ物（ツールバー等）は個別に overflow-y:auto を持つので影響しない。 */
+body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
 }
 
 #app {
@@ -999,6 +1015,67 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
 }
 .slider-val { color: #ff2fa0; }
 .slider-group input[type="range"] { width: 100%; }
+
+/* ===== 調節バーを指で扱える大きさにする（2026-08-14 モニター指摘
+   「感度が悪い、バーが小さすぎるのかも」）=====
+   既定の range はつまみが12〜16px程度しかなく、スマホでは狙って掴めない。
+   見た目のつまみを28px・当たり判定を44px（指で押せる最小の目安）まで広げ、
+   トラックも太くして「今どこにいるか」が離れていても分かるようにする。
+   落書きのペン太さバーにも同じ作法を効かせる（両モード共通の操作性）。 */
+.slider-group input[type="range"],
+#pen-size {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 44px;          /* 当たり判定。見た目の高さはトラックとつまみで作る */
+  background: transparent;
+  margin: 0;
+  touch-action: pan-y;   /* 縦スクロールは殺さず、横のドラッグはバーが受け取る */
+  cursor: pointer;
+}
+.slider-group input[type="range"]::-webkit-slider-runnable-track,
+#pen-size::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.14);
+}
+.slider-group input[type="range"]::-moz-range-track,
+#pen-size::-moz-range-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.14);
+}
+.slider-group input[type="range"]::-webkit-slider-thumb,
+#pen-size::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px; height: 28px;
+  margin-top: -8px;      /* 12pxのトラックの中心へ */
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #ff2fa0;
+  box-shadow: 0 2px 6px rgba(0,0,0,.3);
+}
+.slider-group input[type="range"]::-moz-range-thumb,
+#pen-size::-moz-range-thumb {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #ff2fa0;
+  box-shadow: 0 2px 6px rgba(0,0,0,.3);
+}
+/* 令和はテーマ色のつまみ（平成は上のピンクのまま＝当時の機械の色味） */
+body.theme-reiwa .slider-group input[type="range"]::-webkit-slider-thumb,
+body.theme-reiwa #pen-size::-webkit-slider-thumb { border-color: var(--r-accent); }
+body.theme-reiwa .slider-group input[type="range"]::-moz-range-thumb,
+body.theme-reiwa #pen-size::-moz-range-thumb { border-color: var(--r-accent); }
+/* 現在値は離れていても読める大きさに（変化が体感で分かるように） */
+.slider-val {
+  font-size: 17px;
+  font-weight: 900;
+  min-width: 2.2em;
+  display: inline-block;
+  text-align: right;
+}
 #btn-beauty-done { margin-top: auto; font-size: 18px; padding: 14px 20px; }
 .btn-sub.apply-all { font-size: 14px; padding: 12px 16px; }
 

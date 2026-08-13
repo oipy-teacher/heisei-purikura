@@ -142,7 +142,9 @@
       presets: [
         { id: 'mukakou', label: '無加工風',   skin: 20, white: 0,  clear: 15, eye: 5,  face: 5,  nose: 5,  cheek: 10, lip: 10 },
         { id: 'natural', label: 'ナチュ盛れ', skin: 45, white: 10, clear: 40, eye: 25, face: 15, nose: 20, cheek: 30, lip: 25 },
-        { id: 'puri',    label: 'プリ盛れ',   skin: 70, white: 25, clear: 60, eye: 45, face: 30, nose: 35, cheek: 55, lip: 45 },
+        /* 小鼻 35→22（2026-08-14 モニター指摘「プリ盛れにすると鼻が無くなりすぎる」）。
+           warp側の範囲・移動量も絞ったので、ここは「小さくなったと分かる」最小限に留める */
+        { id: 'puri',    label: 'プリ盛れ',   skin: 70, white: 25, clear: 60, eye: 45, face: 30, nose: 22, cheek: 55, lip: 45 },
       ],
       defaultPreset: 'natural',
       makeup: { cheek: '#e2917d', lip: '#c96a5f' },
@@ -2298,7 +2300,11 @@
             const midX = (nl.x + nr.x) / 2;
             [nl, nr].forEach((pt) => {
               const dir = (midX - pt.x) >= 0 ? 1 : -1; // 中心軸へ向かう向き
-              directionalWarp(work, pt.x, pt.y, nw2 * 0.75, dir * noseS * nw2 * 0.20, 0);
+              /* 効かせる範囲を鼻翼まわりに絞る（2026-08-14 モニター指摘「鼻が無くなりすぎる」）。
+                 半径0.75→0.45: 広いと鼻筋や頬まで一緒に引っぱられ、鼻の稜線が消えて
+                 「鼻が無い」顔になる。移動量0.20→0.13: 実機のプリも鼻は小さくなるが
+                 輪郭は残っている。「小さくはなるが、ぼやけない」を狙う値。 */
+              directionalWarp(work, pt.x, pt.y, nw2 * 0.45, dir * noseS * nw2 * 0.13, 0);
             });
           }
         }
@@ -2697,7 +2703,11 @@
     const w = canvas.width, h = canvas.height;
     const n = w * h;
     const r = 9;        // 平滑化の半径
-    const eps = 110;    // エッジ判定のしきい値（輝度分散）。小さいほどエッジを残す
+    /* エッジ判定のしきい値（輝度分散）。小さいほどエッジを残す。
+       110→55（2026-08-14 モニター指摘「各パーツの輪郭がクリアだった気がする」）:
+       肌のムラは今までどおりならすが、鼻筋・小鼻の際・唇の稜線といった
+       「形を決めている段差」は残す。肌をきれいにすることと、顔を溶かすことは別。 */
+    const eps = 55;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const img = ctx.getImageData(0, 0, w, h);
     const d = img.data;
@@ -4761,8 +4771,18 @@
     lastRollX = x; lastRollY = y;
   }
 
+  /* 落書き中に画面ごとスクロールさせない（2026-08-14 モニター指摘）。
+     CSSの touch-action:none だけでは、LINEなどのアプリ内ブラウザで
+     ページが一緒に動いてしまうことがあるため、キャンバス上のタッチは
+     passive:false で明示的に止める（この2つは落書きキャンバス限定。
+     ツールバーなど他の場所のスクロールには一切触らない）。 */
+  const blockTouchScroll = (e) => { if (e.cancelable) e.preventDefault(); };
+  drawCanvas.addEventListener('touchstart', blockTouchScroll, { passive: false });
+  drawCanvas.addEventListener('touchmove', blockTouchScroll, { passive: false });
+
   drawCanvas.addEventListener('pointerdown', (e) => {
     if (state.remaining <= 0) return;
+    if (e.cancelable) e.preventDefault(); // 長押しの選択・コールアウトもここで止める
     try { drawCanvas.setPointerCapture(e.pointerId); } catch (err) { /* 一部環境では無視して続行 */ }
     const { x, y } = getCanvasPos(e);
 
@@ -4853,6 +4873,7 @@
 
   drawCanvas.addEventListener('pointermove', (e) => {
     if (!state.isDrawing || state.remaining <= 0) return;
+    if (e.cancelable) e.preventDefault(); // 描いている間はスクロールに渡さない
     const { x, y } = getCanvasPos(e);
 
     if (state.tool === 'edit') {
@@ -5725,6 +5746,8 @@
     }),
     waDisable: () => { WA_KEYS.forEach(k => delete waBuffers[k]); }, // 無音環境の再現用
     lastSaveRoute: () => lastSaveRoute, // 保存経路の検証用（share|download|fallback|share-cancel）
+    // 盛れ感プリセットの実値（検証で値を直書きしないため・2026-08-14）
+    presetOf: (id) => (MODES.reiwa.presets || []).find(p => p.id === id) || null,
     // デザイン確認用: ダミー写真の入った盛り調整画面へ直行（カメラ不要・2026-08-13）
     gotoBeauty() {
       document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
