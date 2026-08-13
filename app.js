@@ -3723,7 +3723,11 @@
       cctx.beginPath(); cctx.arc(18, 18, 17, 0, Math.PI * 2); cctx.fill();
       cctx.save(); cctx.translate(18, 19); def.draw(cctx, 22); cctx.restore();
       b.appendChild(cv);
-      b.addEventListener('click', () => setTool('dstamp', id));
+      b.addEventListener('click', () => {
+        setTool('dstamp', id);
+        // どれを選んでいるかをひと目で（2026-08-13 実機テスト指摘: 選択中の表示が無かった）
+        row.querySelectorAll('.stamp-btn').forEach(x => x.classList.toggle('selected', x === b));
+      });
       row.appendChild(b);
     });
     // 絵文字スタンプ
@@ -3731,7 +3735,10 @@
       const b = document.createElement('button');
       b.className = 'stamp-btn';
       b.textContent = s;
-      b.addEventListener('click', () => setTool('stamp', s));
+      b.addEventListener('click', () => {
+        setTool('stamp', s);
+        row.querySelectorAll('.stamp-btn').forEach(x => x.classList.toggle('selected', x === b));
+      });
       row.appendChild(b);
     });
     const group = $('#group-stamp');
@@ -4041,8 +4048,9 @@
     if (tool === 'pen') $('.tool-btn[data-mode="pen"]').classList.add('active');
     if (tool === 'eraser') $('.tool-btn[data-mode="eraser"]').classList.add('active');
     if (tool === 'swipe') $('.tool-btn[data-mode="swipe"]').classList.add('active');
-    // 別ツールへ移ったら、見本・文字スタンプの選択ハイライトを消す（2026-08-13）
+    // 別ツールへ移ったら、見本・スタンプ・文字スタンプの選択ハイライトを消す（2026-08-13）
     if (tool !== 'sample') document.querySelectorAll('.sample-btn').forEach(b => b.classList.remove('selected'));
+    if (tool !== 'stamp' && tool !== 'dstamp') document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('selected'));
     if (tool !== 'textstamp') {
       document.querySelectorAll('.text-stamp-btn').forEach(b => b.classList.remove('selected'));
       renderTextStampPreview();

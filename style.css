@@ -2371,3 +2371,27 @@ body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected
 .push-btn.active { background: #ff2fa0; color: #fff; border-color: #ff2fa0; }
 body.theme-heisei .push-btn { border: 2px dashed var(--h-pink); color: var(--h-ink); }
 body.theme-heisei .push-btn.active { background: var(--h-pink); color: #fff; border-style: solid; }
+
+/* スタンプの選択中表示（2026-08-13 実機テスト指摘「どれ選んでるかわからねぇ」対応）:
+   ペン色や文字スタンプには選択ハイライトがあったのに、スタンプボタンだけ無かった。
+   選んだ瞬間ぷるっと拡大し、太フチ＋背景色で選択中を示す（両モード・様式別） */
+@keyframes stampPop { 0% { transform: scale(.85); } 60% { transform: scale(1.22); } 100% { transform: scale(1.12); } }
+.stamp-btn.selected {
+  border-color: #ff2fa0;
+  background: #ffe6f3;
+  transform: scale(1.12);
+  animation: stampPop .2s ease-out;
+}
+body.theme-heisei .stamp-btn.selected {
+  border: 2px solid var(--h-pink);          /* ふだんの破線 → 実線に */
+  box-shadow: 0 0 0 2px var(--h-pink);      /* 太フチで「コレ！」感 */
+  background: #ffe6f3;
+}
+body.theme-reiwa .stamp-btn.selected {
+  border: 1px solid var(--r-accent);
+  box-shadow: 0 0 0 1.5px var(--r-accent);
+  background: #f4e9e1;
+  transform: scale(1.08);
+}
+/* コロコロ選択中もぷるっと強調（押し方の切り替わりが分かるように） */
+.push-btn.active { animation: stampPop .2s ease-out; transform: none; }
