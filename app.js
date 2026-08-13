@@ -3249,6 +3249,24 @@
     }
   }
 
+  /* メイクりれき（Bloomit型・2026-08-14）: 前回保存したレタッチ設定を4枚全部へワンタッチ再現 */
+  $('#btn-makeup-history').addEventListener('click', () => {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('purikura.makeupHistory.v1')); } catch (e) { /* 壊れた保存は無視 */ }
+    if (!saved) return;
+    const list = Array.isArray(saved) ? saved : [saved];
+    if (state.beautyShots) {
+      state.beautyShots = state.beautyShots.map((cur, i) => ({ ...cur, ...(list[i] || list[0]) }));
+    } else {
+      state.beauty = { ...state.beauty, ...list[0] };
+    }
+    syncBeautyUIFromCur();
+    queueBeautyRender();
+    beautyFaceNote.textContent = '🕘 前回の盛れ設定を再現したよ！';
+    beautyFaceNote.classList.remove('hidden');
+    setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
+  });
+
   /* 一括反映（FLASH式・2026-08-12）: いま見ている1枚の盛り設定を4枚全部へコピーする */
   $('#btn-beauty-apply-all').addEventListener('click', () => {
     if (!state.beautyShots) return;
@@ -3310,6 +3328,13 @@
     // 脚長バーは全身コースのときだけ出す（アップコースでは意味が無い・piemo型）
     const legsRow = $('#row-legs');
     if (legsRow) legsRow.style.display = state.shotMode === 'full' ? '' : 'none';
+    // メイクりれき: 前回の保存があるときだけボタンを出す
+    const histBtn = $('#btn-makeup-history');
+    if (histBtn) {
+      let has = false;
+      try { has = !!localStorage.getItem('purikura.makeupHistory.v1'); } catch (e) { /* 読めない環境では出さない */ }
+      histBtn.classList.toggle('hidden', !has);
+    }
     state.beautySelected = 0;
     state.beautyRemaining = BEAUTY_SECONDS;
     state.beautyWarned = false;
@@ -3357,6 +3382,12 @@
     if (beautyFinished) return;
     beautyFinished = true;
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
+    /* メイクりれき（Bloomit型・2026-08-14）: レタッチの設定値だけをこの端末のlocalStorageへ保存。
+       写真・氏名等の個人情報は一切保存しない（守屋ライン: 端末外への送信もゼロ）。次回の盛り画面で
+       「まえの盛れを再現」ボタンとして出てくる */
+    try {
+      localStorage.setItem('purikura.makeupHistory.v1', JSON.stringify(state.beautyShots || [state.beauty]));
+    } catch (e) { /* プライベートブラウズ等で保存できない場合は何もしない */ }
     // 各ショットに「その1枚の」パラメータを適用（2026-08-12: 1枚ごとの盛り設定に対応）
     state.processedShots = state.shots.map((shot, i) =>
       applyBeauty(shot, state.faceData[i], (state.beautyShots && state.beautyShots[i]) || state.beauty, null, i));

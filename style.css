@@ -2414,6 +2414,10 @@ body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected
 .layout-gate-list { grid-template-columns: repeat(3, 1fr); margin: 0; }
 #layout-gate .deco-gate-inner { max-width: min(90vw, 480px); }
 
+/* メイクりれき（Bloomit型・2026-08-14） */
+.makeup-history { margin-bottom: 8px; width: 100%; }
+body.theme-reiwa .makeup-history { border: 1px solid var(--r-accent); color: var(--r-ink); background: #f7f0e8; }
+
 /* コロコロは標準挙動（2026-08-14 統一: タップ=1個・なぞる=連なる）。使い方の一言だけ添える */
 .stamp-hint { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #a03cae; opacity: .85; }
 body.theme-heisei .stamp-hint { color: var(--h-ink); }
