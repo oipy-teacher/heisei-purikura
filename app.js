@@ -305,13 +305,54 @@
   const screens = {};
   document.querySelectorAll('.screen').forEach(s => screens[s.id] = s);
 
+  let currentScreenId = 'screen-title';
+
   function showScreen(id) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[id].classList.add('active');
+    currentScreenId = id;
     // タイトルへ戻ったら待機デモのアイドル計測を仕掛け直す（関数はこの後で定義される）
     if (id === 'screen-title' && typeof armAttractIdle === 'function') armAttractIdle();
     if (typeof updateThemeFx === 'function') updateThemeFx(id);
   }
+
+  /* ===================== 画面の回転・サイズ変更（2026-08-14 実機指摘「横表示にうまく対応しない」） =====================
+     スマホは遊んでいる最中に回る。「回った後にもう一度組み直す」窓口をここ1本にまとめる。
+
+     ・--app-h … iOSはアドレスバーが伸び縮みするため 100vh が実際の表示高とズレる。
+       dvh が使える端末はCSS側の 100dvh に任せ、使えない端末（iOS 15.3以前など）だけ
+       この実測値で補う（style.css の @supports not (height: 100dvh) を参照）。
+     ・data-orient … 縦持ち/横持ちをCSSと検証から確実に見分けられるようにする。
+     ・作業中の画面の描き直し … 落書きも盛りも中身は固定サイズ（SHOT_W×SHOT_H）の
+       キャンバスに入っているので回しても消えない。表示側の拡大率だけが変わるため、
+       念のため描き直して表示と中身のズレを残さない。 */
+  function applyViewportMetrics() {
+    const vv = window.visualViewport;
+    const h = (vv && vv.height) || window.innerHeight;
+    document.documentElement.style.setProperty('--app-h', h + 'px');
+    document.body.dataset.orient = window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait';
+  }
+  let viewportTimer = null;
+  function onViewportChange() {
+    // iOSは回転1回でresizeを何度も投げる。まとめて最後の1回だけ効かせる
+    if (viewportTimer) clearTimeout(viewportTimer);
+    viewportTimer = setTimeout(() => {
+      viewportTimer = null;
+      applyViewportMetrics();
+      try {
+        if (currentScreenId === 'screen-deco') {
+          renderDeco();
+          refreshDecoThumbs();
+        } else if (currentScreenId === 'screen-beauty') {
+          queueBeautyRender();
+        }
+      } catch (e) { /* 描き直しに失敗しても回転そのものは止めない */ }
+    }, 120);
+  }
+  applyViewportMetrics();
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('orientationchange', onViewportChange);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportChange);
 
   /* ===================== テーマ演出（2026-08-12 デザイン刷新・柄本仕様書 §0/1-d/2-d） =====================
      見た目の着せ替えは body.theme-heisei / body.theme-reiwa のCSSが担う。

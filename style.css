@@ -20,8 +20,14 @@ html, body {
   position: relative;
   width: 100%;
   height: 100vh;
-  height: 100dvh;
+  height: 100dvh; /* iOSのアドレスバー伸縮に追従する（対応端末はこちらが効く） */
   overflow: hidden;
+}
+/* dvh が使えない端末（iOS 15.3以前など）だけ、JSが実測した高さで補う。
+   ここを @supports で囲っているのは、dvh が使える端末では常にCSS側に任せたいため
+   （JSの実測値は回転直後の一瞬だけ古い値になりうる）。 */
+@supports not (height: 100dvh) {
+  #app { height: var(--app-h, 100vh); }
 }
 
 .screen {
@@ -1044,7 +1050,12 @@ body[data-mode="reiwa"] .deco-timeup p { background: #a8917d; }
 body[data-mode="reiwa"] #screen-print { background: linear-gradient(160deg,#4a4038,#8a7568); }
 body[data-mode="reiwa"] .print-caption { color: #8a7568; }
 
-@media (max-width: 780px) {
+/* 🚨 縦積みレイアウトは「縦持ち」専用（2026-08-14 実機指摘「横表示にうまく対応しない」）。
+   以前はここが width だけの条件だったため、スマホを横に倒した状態（例 667x375）も
+   「幅が狭い＝縦持ち」と誤判定して縦積みになり、高さ375pxに収まらず
+   撮影スタートボタンや盛りのショットタブが画面の外へ出ていた（スクロールもできない）。
+   横持ちは「幅があって高さが無い」＝PC/iPad横と同じ形なので、横並びのまま扱う。 */
+@media (max-width: 780px) and (orientation: portrait) {
   .camera-stage { flex-direction: column; }
   .camera-viewport { width: 88vw; }
   .deco-main { flex-direction: column; }
@@ -1056,6 +1067,23 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .deco-thumb canvas { width: 68px; height: 51px; }
   .beauty-main { flex-direction: column; }
   .beauty-controls { max-width: none; }
+}
+
+/* スマホ横持ち（高さが無い）: 横並びは保ったまま、縦に食う余白と部品を詰めて
+   作業面（カメラ映像・盛りプレビュー・落書きキャンバス）に高さを譲る。
+   iPad横(768px高)には掛からない高さ条件にしてある。 */
+@media (max-height: 520px) {
+  .deco-wrap, .beauty-wrap { padding: 6px 10px; }
+  .deco-header, .beauty-header { padding: 2px 4px 6px; }
+  /* サムネイル4枚が横並びの狭い列に収まらず左右へはみ出すため、ひと回り小さくする */
+  .deco-thumb canvas { width: 60px; height: 45px; }
+  .deco-thumbs { gap: 6px; padding: 6px 0 0; }
+  .deco-photo-stage { max-height: none; }
+  .camera-stage { gap: 12px; }
+  .camera-side { min-width: 170px; }
+  .cam-caption { font-size: 16px; margin: 2px 0; }
+  .cam-caption.small { margin-bottom: 8px; }
+  .beauty-controls, .deco-toolbar { min-width: 200px; }
 }
 
 /* ================================================================
