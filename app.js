@@ -1756,6 +1756,13 @@
     { key: 'count1', label: '1' },
     { key: 'countHai', label: 'ハイ！' },
   ];
+  /* カウントと撮影のリズム定数（2026-08-13 実機体感指摘対応・オーナーが体感で最終調整する用）:
+     - COUNT_INTERVAL_MS: 数字1つの間隔。音の有無・クリップ長に関わらずこの値で一定
+       （「3・2・1は早くて良い」＝従来の鳴っている環境の体感値を固定化。クリップ最長0.48秒なので切れない）
+     - SHOT_GAP_MS: シャッター→チラ見せ後、ライブ映像に戻してから次のポーズ提案までの
+       「構え直す間」。撮れた1枚を見て次のポーズに体を作り直す呼吸（実機指摘「次に行くときに間が欲しい」） */
+  const COUNT_INTERVAL_MS = 700;
+  const SHOT_GAP_MS = 1500;
 
   /* ポーズ提案ボイス（2026-08-12 新設／2026-08-13 実機指摘修正）: 実機は「テンポのよい
      掛け声とポーズ提案が矢継ぎ早に流れる」（era-designerリサーチ）。
@@ -1802,14 +1809,13 @@
     if (!skipIntro) await playSoundAwait('introShot' + (shotIndex + 1), 1100);
     // ポーズ提案ボイス（ファイル未着なら黙ってスキップ）
     if (poseKey) await playSoundAwait(poseKey, 1300);
-    /* 数字のリズムは固定タイマー基準（2026-08-12 検見の実測指摘対応）:
-       以前は音声の ended イベント待ちだったため、令和のライブ盛れ負荷で配達が遅れると
-       0.7秒間隔が1.0〜1.2秒に延びていた。1歩の枠を「クリップ実測長＋固定の間合い」で
-       先に決め、絶対時刻で消化する。数字表示と同時に音声を開始するので同期は保たれ、
-       クリップ実測長ぶんは必ず待つのでセリフが切れることもない（＝秒数決め打ちとは違う）。 */
+    /* 数字のリズムは完全な固定値 COUNT_INTERVAL_MS（2026-08-13 実機体感指摘対応）:
+       以前は「クリップ実測長＋固定の間合い」だったため、実機で音声が使えない・
+       メタデータが取れない場合に枠が短縮方向へ働き、カウントが「せっかち」になっていた。
+       間隔は音の有無・クリップ長と無関係の定数にし、絶対時刻で消化する
+       （音は各数字の表示と同時に鳴り始めるだけ。リズムを音から導出しない）。 */
     let base = performance.now();
     for (const step of COUNTDOWN_STEPS) {
-      const clipMs = soundDurationMs(step.key) || 430; // count_3〜hai は実測0.31〜0.48秒
       // 数字は1文字ごとのspanに分解（平成: 互い違いの傾き＝柄本仕様書3-5。文言は内部定数なので安全）
       countdownEl.innerHTML = [...step.label].map(c => `<span class="cd-ch">${c}</span>`).join('');
       countdownEl.style.opacity = '1';
@@ -1840,10 +1846,10 @@
       }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
-      base += 60 + clipMs + 160; // 従来の間合い（60ms立ち上がり＋クリップ＋160ms間）を固定枠に
+      base += COUNT_INTERVAL_MS - 100; // 数字の表示時間（間隔の残り100msは数字が消えている間）
       await sleepUntil(base);
       countdownEl.style.opacity = '0';
-      base += 60;
+      base += 100;
       await sleepUntil(base);
     }
   }
@@ -1938,6 +1944,10 @@
       if (i < NUM_SHOTS - 1) {
         previewRunning = true;
         previewLoop();
+        /* ショット間の「構え直す間」（2026-08-13 実機体感指摘「次に行くときに間が欲しい」）:
+           ライブ映像に戻してから SHOT_GAP_MS 置いて、次のポーズ提案ボイスへ。
+           撮れた1枚を見て、鏡（プレビュー）で次のポーズに体を作り直す呼吸 */
+        await sleep(SHOT_GAP_MS);
       }
     }
     setPoseGuide('かわいく決めてね💕');
