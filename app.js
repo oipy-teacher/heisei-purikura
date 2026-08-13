@@ -35,7 +35,10 @@
         { id: 'plain',   label: 'シンプル', emoji: '' },
       ],
       frameStyle: 'motif', // シール全周にモチーフを並べる（初期プリ機のフレーム風）
-      penColors: ['#ff2fa0', '#ff8fc7', '#ffef5c', '#5cff8f', '#5cc8ff', '#a06bff', '#ffffff', '#000000'],
+      /* ペン12色（2026-08-13 考証回帰・era-designer乖離監査B-1の置き換え案）:
+         当時「色を選ぶ」道具はペンで、ペン色切替は実機に確実にあった（花鳥風月2003はツール2000種以上）。
+         文字スタンプの色パレット撤去の代わりに、当時のポスカ/カラーペン文化に寄せたビビッド系で8→12色 */
+      penColors: ['#ff2fa0', '#ff8fc7', '#ff3b30', '#ff8a2a', '#ffef5c', '#5cff8f', '#00b389', '#5cc8ff', '#2a5bff', '#a06bff', '#ffffff', '#000000'],
       penTypes: ['normal'],
       /* 落書きの考証（2026-08-12 改訂・era-designerリサーチ準拠）:
          本機の平成モードはユーロビートBGM＝1999〜2003年ごろの再現。この時代は落書き全盛期で、
@@ -851,7 +854,7 @@
     const main = $('#select-main');
     const adv = $('#advanced-body');
     const order = state.mode === 'heisei'
-      ? { main: ['sel-shotmode', 'sel-frame', 'sel-filter', 'sel-bgm'], adv: ['sel-eratone', 'sel-layout', 'sel-curtain', 'sel-chroma'] }
+      ? { main: ['sel-shotmode', 'sel-frame', 'sel-filter', 'sel-bgm'], adv: ['sel-eratone', 'sel-curtain', 'sel-chroma'] }
       : { main: ['sel-shotmode', 'sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-bgm', 'sel-eratone', 'sel-chroma'] };
     order.main.forEach(id => main.appendChild($('#' + id)));
     order.adv.forEach(id => adv.appendChild($('#' + id)));
@@ -3882,36 +3885,11 @@
     });
   }
   const DOODLE_SAMPLES = {
-    heisei: [
-      { label: 'ズッ友', items: [
-        { type: 'dstamp', id: 'heartChalk', nx: 0.09, ny: 0.13, fsize: 0.16 },
-        { type: 'dstamp', id: 'heartChalk', nx: 0.91, ny: 0.13, fsize: 0.16 },
-        { type: 'kira', items: [
-          { ch: '✨', nx: 0.32, ny: 0.08, fsize: 0.09, rot: 0.4 },
-          { ch: '⭐', nx: 0.50, ny: 0.05, fsize: 0.10, rot: -0.3 },
-          { ch: '✨', nx: 0.68, ny: 0.08, fsize: 0.09, rot: 0.2 },
-        ] },
-        { type: 'dstamp', id: 'heartChalk', nx: 0.09, ny: 0.85, fsize: 0.14 },
-        { type: 'text', t: '我等友情永久不滅成', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.90, fs: 0.075, rotDeg: -3 },
-        { type: 'dstamp', id: 'dateRetro', nx: 0.87, ny: 0.76, fsize: 0.18 },
-      ] },
-      { label: 'ラブラブ', items: [
-        { type: 'dstamp', id: 'heartSticker', nx: 0.10, ny: 0.14, fsize: 0.17 },
-        { type: 'dstamp', id: 'heartGlossy', nx: 0.90, ny: 0.14, fsize: 0.17 },
-        { type: 'text', t: 'ラブラブ♡', style: 'neon', nx: 0.50, ny: 0.10, fs: 0.095, rotDeg: 0 },
-        { type: 'stamp', char: '💋', nx: 0.88, ny: 0.86, fsize: 0.16 },
-        { type: 'dstamp', id: 'heartOutline', nx: 0.12, ny: 0.86, fsize: 0.15 },
-        { type: 'dstamp', id: 'dateRetro', nx: 0.50, ny: 0.93, fsize: 0.17 },
-      ] },
-      { label: 'アゲアゲ', items: [
-        { type: 'dstamp', id: 'sparkleLine', nx: 0.09, ny: 0.13, fsize: 0.14 },
-        { type: 'dstamp', id: 'sparkleLine', nx: 0.91, ny: 0.13, fsize: 0.14 },
-        { type: 'stamp', char: '🔥', nx: 0.10, ny: 0.87, fsize: 0.15 },
-        { type: 'stamp', char: '⚡', nx: 0.90, ny: 0.87, fsize: 0.15 },
-        { type: 'text', t: '最強', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.10, fs: 0.10, rotDeg: 2 },
-        { type: 'text', t: 'アゲアゲ⤴', style: 'sticker', color: '#ff8a2a', nx: 0.50, ny: 0.90, fs: 0.095, rotDeg: -2 },
-      ] },
-    ],
+    /* 平成に見本は出さない（2026-08-13 オーナー裁定・era-designer乖離監査A-1）:
+       「完成見本をワンタップ反映」は現行実機Meidy(2025)の型で、1999〜2003年の実機には無い。
+       当時の落書きはペンとスタンプで自力で埋め尽くすもの。空配列にすると
+       buildSampleRow が #group-sample ごと自動で隠す。令和の見本は現状維持 */
+    heisei: [],
     reiwa: [
       { label: 'なかよし', items: [
         { type: 'text', t: 'BFF♡', style: 'sticker', color: '#e0498a', nx: 0.50, ny: 0.10, fs: 0.095, rotDeg: -2 },
@@ -4001,11 +3979,21 @@
 
   function buildDecoTools() {
     const conf = modeConf();
+    const isHeisei = state.mode === 'heisei';
     buildColorRow();
     buildStampRow();
     buildTextStampRow();
     buildTextColorRow();
     buildSampleRow();
+    /* 平成の考証回帰（2026-08-13 オーナー裁定・era-designer乖離監査A-2/A-3/B-1）:
+       色パレット・角度えらび・押す前プレビューは令和専用。当時のスタンプは
+       「用意された色のまま・押したらそのまま（手の癖ランダム角度）」なので、平成では丸ごと隠す */
+    const textColorRow = $('#text-color-row');
+    if (textColorRow) textColorRow.style.display = isHeisei ? 'none' : '';
+    const angleRow = $('#text-angle-row');
+    if (angleRow) angleRow.style.display = isHeisei ? 'none' : '';
+    const previewCv = $('#text-stamp-preview');
+    if (previewCv) previewCv.style.display = isHeisei ? 'none' : '';
     // 文字スタンプの色・角度を初期値へ（モードが変わるたびリセット・2026-08-13）
     state.textStampColor = null;
     state.textStampAngle = 'auto';
@@ -4376,7 +4364,18 @@
        撮影ルームから出て、別の場所へ移動して、座るまでの間に持ち時間が溶けるのを防ぐため。 */
     if (state.timerId) clearInterval(state.timerId);
     drawCanvas.style.pointerEvents = 'none';
-    buildPhotoPick(); // シールに載せる写真えらび（タイマー開始前に済ませる）
+    /* シールに載せる写真えらびは令和専用（2026-08-13 オーナー裁定・era-designer乖離監査B-2）:
+       1999〜2003年の実機は「撮った写真がそのまま落書きへ」＝撮影順固定。平成はUIごと出さない */
+    const pickOn = state.mode !== 'heisei';
+    ['#photo-pick-note', '#photo-pick', '#photo-pick-hint'].forEach(sel => {
+      const el = $(sel);
+      if (el) el.style.display = pickOn ? '' : 'none';
+    });
+    if (pickOn) {
+      buildPhotoPick(); // シールに載せる写真えらび（タイマー開始前に済ませる）
+    } else {
+      state.photoPick = null; // 平成は撮影順固定
+    }
     $('#deco-start-gate').classList.remove('hidden');
   }
 
