@@ -1418,8 +1418,16 @@
   }
 
   // ライブプレビュー1フレーム分の合成。くりぬきOFF時は素通し＋軽い美肌ライト
+  /* プレビュー描画の世代番号（2026-08-13 実機指摘「チラ見せが見えない」の根本原因対策）:
+     previewLoop は async（セグメント推論を await）のため、previewRunning=false にしても
+     飛行中の1フレームが後から previewCtx へ着地し、直前に描いたチラ見せの静止画を
+     上書きしてしまう。推論が重い実機ほど確実に起きる（ヘッドレスでは速すぎて見えない）。
+     チラ見せ開始時に世代を進め、古い世代のフレームは表示段階で捨てる */
+  let previewDrawEpoch = 0;
+
   async function renderPreviewFrame(sourceEl) {
     const t0 = performance.now();
+    const epoch = previewDrawEpoch;
     const liveBeauty = liveBeautyWanted();
     let maskCv = null;
     liveFrameCount++;
@@ -1489,6 +1497,8 @@
     }
 
     // --- 表示（ライブ盛れONなら加工を重ねる。撮影データには影響しない） ---
+    // チラ見せ開始後に着地した飛行中フレームは捨てる（静止画の上書き防止・2026-08-13）
+    if (epoch !== previewDrawEpoch) return;
     previewCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     previewCtx.drawImage(liveClean, 0, 0);
     if (liveBeauty) renderLiveBeauty(previewCtx);
@@ -1763,6 +1773,10 @@
        「構え直す間」。撮れた1枚を見て次のポーズに体を作り直す呼吸（実機指摘「次に行くときに間が欲しい」） */
   const COUNT_INTERVAL_MS = 700;
   const SHOT_GAP_MS = 1500;
+  /* SNAP_PREVIEW_MS: シャッター後に撮れた静止画をはっきり見せる時間（2026-08-13 実機指摘
+     「撮ったやつを一瞬写して欲しい」対応）。暗背景＋白フチ付きで表示し、ライブ映像と
+     ひと目で区別がつく形にする。この後さらに SHOT_GAP_MS のライブ構え直しが入る */
+  const SNAP_PREVIEW_MS = 1000;
 
   /* ポーズ提案ボイス（2026-08-12 新設／2026-08-13 実機指摘修正）: 実機は「テンポのよい
      掛け声とポーズ提案が矢継ぎ早に流れる」（era-designerリサーチ）。
@@ -1870,6 +1884,43 @@
     return c;
   }
 
+  /* 撮れた静止画のチラ見せ（2026-08-13 実機指摘「撮ったやつを一瞬写して欲しい」対応）:
+     以前は撮影データを全面に0.5秒描くだけで、①飛行中のプレビューフレームに上書きされる
+     ②ライブ映像と見分けがつかない、の二重の理由で実機では認識できなかった。
+     - previewDrawEpoch を進めて飛行中フレームを無効化（上書きの根絶）
+     - 暗背景＋ポラロイド風の白フチで「静止画が撮れた」とひと目で分かる見た目にする
+     - 文字は描かない（前面カメラはCSSで左右反転表示されるため、文字が鏡文字になる。
+       「とれた〜！」の一言はポーズ吹き出し（DOM側・反転しない）が担当する） */
+  function showSnapPreview(shot) {
+    previewRunning = false;
+    previewDrawEpoch++; // これ以降、飛行中のライブフレームは previewCtx に描かれない
+    const ctx = previewCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // 暗幕（ライブ映像との明確な区別）
+    ctx.fillStyle = '#241d21';
+    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
+    // ポラロイド風の白フチ（下だけ厚い）＋影
+    const m = 34, bottom = 62;
+    ctx.shadowColor = 'rgba(0,0,0,.55)';
+    ctx.shadowBlur = 26;
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, m - 12, m - 12, SHOT_W - (m - 12) * 2, SHOT_H - (m - 12) - (bottom - 24), 6);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // 写真本体。前面カメラはCSS反転表示を相殺するため左右反転して描く（従来と同じ扱い）
+    const px = m, py = m, pw = SHOT_W - m * 2, ph = SHOT_H - m - bottom;
+    ctx.beginPath();
+    ctx.rect(px, py, pw, ph);
+    ctx.clip();
+    if (state.shotMode !== 'full') {
+      ctx.translate(SHOT_W, 0);
+      ctx.scale(-1, 1);
+    }
+    drawCover(ctx, shot, state.shotMode !== 'full' ? SHOT_W - px - pw : px, py, pw, ph);
+    ctx.restore();
+  }
+
   async function flash() {
     flashCanvas.style.transition = 'none';
     flashCanvas.style.opacity = '0.9';
@@ -1924,23 +1975,13 @@
       playSound('seShutter');
       await flash();
 
-      // 撮った1枚をその場でチラ見せ（実機の「今の撮れた！」感）→ すぐ次のポーズへ
-      previewRunning = false;
-      previewCtx.save();
-      // 前面カメラのときは画面表示がCSSで左右反転されるため、事前に反転して相殺する。
-      // 背面カメラ（全身モード）はCSS反転も無効なので、そのまま描く。
-      if (state.shotMode !== 'full') {
-        previewCtx.translate(SHOT_W, 0);
-        previewCtx.scale(-1, 1);
-      }
-      previewCtx.drawImage(shot, 0, 0);
-      previewCtx.restore();
-      // ライブ盛れ中は、チラ見せも盛れた見た目で（無加工に戻ると「あれ？」となるため）
-      if (liveBeautyWanted()) renderLiveBeauty(previewCtx);
+      // 撮った1枚をその場でしっかり見せる（実機の「今の撮れた！」感・2026-08-13 演出強化）
+      showSnapPreview(shot);
+      setPoseGuide('📸 とれた〜！');
       state.shots.push(shot);
       shotIndicator.children[i].classList.add('done');
       $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
-      await sleep(500); // チラ見せの間（これが「撮れた！」の余韻。長くしない）
+      await sleep(SNAP_PREVIEW_MS); // 撮れた静止画をはっきり見せる間
       if (i < NUM_SHOTS - 1) {
         previewRunning = true;
         previewLoop();
