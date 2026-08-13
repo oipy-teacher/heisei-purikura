@@ -57,9 +57,9 @@
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
       presets: [
-        { id: 'usu',      label: 'うす盛れ',     skin: 30, white: 20, clear: 20, eye: 20, face: 10, cheek: 20, lip: 15 },
-        { id: 'shikkari', label: 'しっかり盛れ', skin: 60, white: 40, clear: 40, eye: 50, face: 30, cheek: 45, lip: 40 },
-        { id: 'keba',     label: 'ケバ盛れ',     skin: 90, white: 70, clear: 55, eye: 80, face: 50, cheek: 75, lip: 65 },
+        { id: 'usu',      label: 'うす盛れ',     skin: 30, white: 20, clear: 20, eye: 20, face: 10, nose: 0, cheek: 20, lip: 15 },
+        { id: 'shikkari', label: 'しっかり盛れ', skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40 },
+        { id: 'keba',     label: 'ケバ盛れ',     skin: 90, white: 70, clear: 55, eye: 80, face: 50, nose: 0, cheek: 75, lip: 65 },
       ],
       defaultPreset: 'shikkari',
       makeup: { cheek: '#ff5f8f', lip: '#ff2f6e' },
@@ -139,9 +139,9 @@
       textStampStyle: { font: 'italic 600 18px Georgia, serif', fill: '#a8917d', stroke: null, strokeWidth: 0, rotate: 4 },
       // 盛れ感プリセット（現行機 Hyper shot の「無加工風/ナチュ盛れ/プリ盛れ」選択を再現）
       presets: [
-        { id: 'mukakou', label: '無加工風',   skin: 20, white: 0,  clear: 15, eye: 5,  face: 5,  cheek: 10, lip: 10 },
-        { id: 'natural', label: 'ナチュ盛れ', skin: 45, white: 10, clear: 40, eye: 25, face: 15, cheek: 30, lip: 25 },
-        { id: 'puri',    label: 'プリ盛れ',   skin: 70, white: 25, clear: 60, eye: 45, face: 30, cheek: 55, lip: 45 },
+        { id: 'mukakou', label: '無加工風',   skin: 20, white: 0,  clear: 15, eye: 5,  face: 5,  nose: 5,  cheek: 10, lip: 10 },
+        { id: 'natural', label: 'ナチュ盛れ', skin: 45, white: 10, clear: 40, eye: 25, face: 15, nose: 20, cheek: 30, lip: 25 },
+        { id: 'puri',    label: 'プリ盛れ',   skin: 70, white: 25, clear: 60, eye: 45, face: 30, nose: 35, cheek: 55, lip: 45 },
       ],
       defaultPreset: 'natural',
       makeup: { cheek: '#e2917d', lip: '#c96a5f' },
@@ -273,7 +273,7 @@
     photoPick: null,     // シールに載せる写真の並び（shotsのインデックス列・2026-08-13新設）。nullなら撮影順
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
-    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, cheek: 45, lip: 40, filter: 'none' },
+    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, filter: 'none' },
     beautySelected: 0,
     beautyTimerId: null,
     beautyRemaining: BEAUTY_SECONDS,
@@ -625,7 +625,7 @@
     state.curtain = conf.curtains[0];
     state.frame = conf.frames[0];
     const preset = conf.presets.find(p => p.id === conf.defaultPreset);
-    state.beauty = { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
+    state.beauty = { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, nose: preset.nose || 0, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
     buildSelectGrids();
     applyShotMode();
     buildDecoTools();
@@ -1213,6 +1213,46 @@
     });
   }
 
+  // 小鼻のライブ版: 本番の directionalWarp は重いので、鼻周辺を横方向に縮めた
+  // コピーをフェザー付きで重ねて近似する（liveEyeMagnify と同じ発想・2026-08-13）
+  let liveNoseTmp = null, liveNoseTmpCtx = null;
+  function liveNoseSlim(ctx, cleanCv, faces, noseS) {
+    if (!faces || !faces.length || noseS <= 0) return;
+    if (!liveNoseTmp) {
+      liveNoseTmp = document.createElement('canvas');
+      liveNoseTmpCtx = liveNoseTmp.getContext('2d');
+    }
+    const w = cleanCv.width, h = cleanCv.height;
+    faces.forEach((lm) => {
+      if (!lm || lm.length < 468) return;
+      const nl = lmToPx(lm[129], w, h);
+      const nr = lmToPx(lm[358], w, h);
+      const c = { x: (nl.x + nr.x) / 2, y: (nl.y + nr.y) / 2 };
+      const nw2 = dist(nl, nr);
+      const r = nw2 * 0.95;
+      if (r < 4) return;
+      if (c.x - r < 0 || c.y - r < 0 || c.x + r > w || c.y + r > h) return; // 画面端はスキップ（目の近似と同じ理由）
+      const dpx = Math.ceil(r * 2);
+      if (liveNoseTmp.width !== dpx || liveNoseTmp.height !== dpx) {
+        liveNoseTmp.width = dpx; liveNoseTmp.height = dpx;
+      }
+      const squeeze = 1 - noseS * 0.09; // 本番warp(約10%)より控えめ＝近似のアラを出さない
+      const dw = dpx * squeeze;
+      liveNoseTmpCtx.globalCompositeOperation = 'source-over';
+      liveNoseTmpCtx.clearRect(0, 0, dpx, dpx);
+      liveNoseTmpCtx.imageSmoothingEnabled = true;
+      liveNoseTmpCtx.drawImage(cleanCv, c.x - r, c.y - r, dpx, dpx, (dpx - dw) / 2, 0, dw, dpx);
+      const grad = liveNoseTmpCtx.createRadialGradient(r, r, r * 0.4, r, r, r);
+      grad.addColorStop(0, 'rgba(0,0,0,1)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      liveNoseTmpCtx.globalCompositeOperation = 'destination-in';
+      liveNoseTmpCtx.fillStyle = grad;
+      liveNoseTmpCtx.fillRect(0, 0, dpx, dpx);
+      liveNoseTmpCtx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(liveNoseTmp, c.x - r, c.y - r);
+    });
+  }
+
   // ライブ盛れの1フレーム描画（previewCtx に、liveClean を土台として重ねる）
   function renderLiveBeauty(ctx) {
     const conf = modeConf();
@@ -1268,8 +1308,9 @@
       }
     }
 
-    // デカ目（ライブ近似）＋チーク・リップ
+    // デカ目・小鼻（ライブ近似）＋チーク・リップ（重い端末では eyeOn の自動OFFに連動して両方止まる）
     if (livePerf.eyeOn) liveEyeMagnify(ctx, liveClean, liveFaces, p.eye / 100);
+    if (livePerf.eyeOn) liveNoseSlim(ctx, liveClean, liveFaces, (p.nose || 0) / 100);
     drawMakeup(ctx, liveFaces, w, h, (p.cheek || 0) / 100, (p.lip || 0) / 100, conf);
 
     // 選択中フィルターもライブで反映（合成のみなので軽い）
@@ -1505,7 +1546,7 @@
     livePresetRow.innerHTML = '';
     conf.presets.forEach(p => {
       const b = document.createElement('button');
-      const isActive = ['skin', 'white', 'clear', 'eye', 'face', 'cheek', 'lip'].every(k => state.beauty[k] === p[k]);
+      const isActive = ['skin', 'white', 'clear', 'eye', 'face', 'nose', 'cheek', 'lip'].every(k => (state.beauty[k] || 0) === (p[k] || 0));
       b.className = 'live-preset-btn' + (isActive ? ' active' : '');
       b.textContent = p.label;
       b.addEventListener('click', () => {
@@ -1514,6 +1555,7 @@
         state.beauty.clear = p.clear;
         state.beauty.eye = p.eye;
         state.beauty.face = p.face;
+        state.beauty.nose = p.nose || 0;
         state.beauty.cheek = p.cheek;
         state.beauty.lip = p.lip;
         syncLiveBeautyUI();
@@ -1980,15 +2022,16 @@
   /* --- 以下の盛り処理はすべて iPad Safari 対応のため ctx.filter を使わず、
          ブレンドモード（globalCompositeOperation）と縮小→拡大ぼかしで実装している --- */
 
-  // ワープ（デカ目・小顔）のみを適用したキャンバスを返す
-  function warpShot(srcCanvas, faces, eyeS, faceS) {
+  // ワープ（デカ目・小顔・小鼻）のみを適用したキャンバスを返す
+  function warpShot(srcCanvas, faces, eyeS, faceS, noseS) {
+    noseS = noseS || 0;
     const w = srcCanvas.width, h = srcCanvas.height;
     const work = document.createElement('canvas');
     work.width = w; work.height = h;
     const workCtx = work.getContext('2d', { willReadFrequently: true });
     workCtx.drawImage(srcCanvas, 0, 0);
 
-    if (faces && faces.length && (eyeS > 0 || faceS > 0)) {
+    if (faces && faces.length && (eyeS > 0 || faceS > 0 || noseS > 0)) {
       faces.forEach((lm) => {
         if (!lm || lm.length < 478) return; // 虹彩ランドマーク(468-477)が無い場合はスキップ
         if (eyeS > 0) {
@@ -2014,6 +2057,21 @@
           const cr = lmToPx(lm[425], w, h);
           directionalWarp(work, cl.x, cl.y + fw * 0.12, fw * 0.4, faceS * fw * 0.018, -faceS * fw * 0.04);
           directionalWarp(work, cr.x, cr.y + fw * 0.12, fw * 0.4, -faceS * fw * 0.018, -faceS * fw * 0.04);
+        }
+        if (noseS > 0) {
+          /* 小鼻（2026-08-13 実機テスト要望）: 現行実機の「鼻筋・小鼻」補正の小鼻側。
+             鼻翼の外側点（129=左・358=右）を鼻の中心軸へ寄せて鼻幅を細くする。
+             小顔と同じ directionalWarp パイプライン。強度MAXで鼻幅が約8〜10%細くなる目安 */
+          const nl = lmToPx(lm[129], w, h);
+          const nr = lmToPx(lm[358], w, h);
+          const nw2 = dist(nl, nr);
+          if (nw2 > 4) {
+            const midX = (nl.x + nr.x) / 2;
+            [nl, nr].forEach((pt) => {
+              const dir = (midX - pt.x) >= 0 ? 1 : -1; // 中心軸へ向かう向き
+              directionalWarp(work, pt.x, pt.y, nw2 * 0.75, dir * noseS * nw2 * 0.20, 0);
+            });
+          }
         }
       });
     }
@@ -2538,7 +2596,7 @@
     const conf = modeConf();
     const w = srcCanvas.width, h = srcCanvas.height;
     const eyeS = params.eye / 100;
-    const work = preWarped || warpShot(srcCanvas, faces, eyeS, params.face / 100);
+    const work = preWarped || warpShot(srcCanvas, faces, eyeS, params.face / 100, (params.nose || 0) / 100);
 
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
@@ -2738,6 +2796,7 @@
   const sliderClear = $('#slider-clear');
   const sliderEye = $('#slider-eye');
   const sliderFace = $('#slider-face');
+  const sliderNose = $('#slider-nose');
   const sliderCheek = $('#slider-cheek');
   const sliderLip = $('#slider-lip');
 
@@ -2771,7 +2830,7 @@
 
   // ワープ結果と美肌ベースをキャッシュ
   // （デカ目/小顔変更時のみワープ+ベースを再計算。美肌・チーク・リップ・フィルターは合成だけなので即応答）
-  const warpCache = { idx: -1, eye: -1, face: -1, facesRef: null, skinConfRef: null, canvas: null, base: null };
+  const warpCache = { idx: -1, eye: -1, face: -1, nose: -1, facesRef: null, skinConfRef: null, canvas: null, base: null };
 
   function renderBeautyPreview() {
     const idx = state.beautySelected;
@@ -2780,14 +2839,15 @@
     const p = curBeauty();
     const faces = state.faceData[idx];
     const skinConfRef = state.skinConf[idx] || null;
-    if (warpCache.idx !== idx || warpCache.eye !== p.eye || warpCache.face !== p.face
+    if (warpCache.idx !== idx || warpCache.eye !== p.eye || warpCache.face !== p.face || warpCache.nose !== (p.nose || 0)
         || warpCache.facesRef !== faces || warpCache.skinConfRef !== skinConfRef) {
-      warpCache.canvas = warpShot(src, faces, p.eye / 100, p.face / 100);
+      warpCache.canvas = warpShot(src, faces, p.eye / 100, p.face / 100, (p.nose || 0) / 100);
       const mask = getSkinMask(idx, src, faces, p.eye / 100);
       warpCache.base = (mask && !maskIsEmpty(mask)) ? buildBeautyBase(warpCache.canvas, mask) : null;
       warpCache.idx = idx;
       warpCache.eye = p.eye;
       warpCache.face = p.face;
+      warpCache.nose = p.nose || 0;
       warpCache.facesRef = faces;
       warpCache.skinConfRef = skinConfRef;
     }
@@ -2803,6 +2863,7 @@
     sliderClear.value = p.clear || 0;
     sliderEye.value = p.eye;
     sliderFace.value = p.face;
+    sliderNose.value = p.nose || 0;
     sliderCheek.value = p.cheek || 0;
     sliderLip.value = p.lip || 0;
     $('#val-skin').textContent = p.skin;
@@ -2810,6 +2871,7 @@
     $('#val-clear').textContent = p.clear || 0;
     $('#val-eye').textContent = p.eye;
     $('#val-face').textContent = p.face;
+    $('#val-nose').textContent = p.nose || 0;
     $('#val-cheek').textContent = p.cheek || 0;
     $('#val-lip').textContent = p.lip || 0;
   }
@@ -2851,6 +2913,7 @@
     p.clear = clamp(preset.clear);
     p.eye = clamp(preset.eye);
     p.face = clamp(preset.face);
+    p.nose = clamp(preset.nose || 0);
     p.cheek = clamp(preset.cheek);
     p.lip = clamp(preset.lip);
   }
@@ -2938,7 +3001,7 @@
     setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
   });
 
-  [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
+  [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderNose, 'nose'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
     el.addEventListener('input', () => {
       const cur = curBeauty();
       cur[key] = Number(el.value);
@@ -2992,7 +3055,7 @@
        撮影時の設定がどのプリセットと一致するかを調べてUIメモも入れておく */
     const conf = modeConf();
     const matched = conf.presets.find(p =>
-      ['skin', 'white', 'clear', 'eye', 'face', 'cheek', 'lip'].every(k => state.beauty[k] === p[k]));
+      ['skin', 'white', 'clear', 'eye', 'face', 'nose', 'cheek', 'lip'].every(k => (state.beauty[k] || 0) === (p[k] || 0)));
     state.beautyShots = Array.from({ length: NUM_SHOTS }, () => ({
       ...state.beauty,
       _preset: matched ? matched.id : '',
@@ -4489,6 +4552,11 @@
     applyBeauty,
     startAttract,
     stopAttract,
+    // デザイン確認用: ダミー写真の入った盛り調整画面へ直行（カメラ不要・2026-08-13）
+    gotoBeauty() {
+      document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
+      startBeautyScreen();
+    },
     // デザイン確認用: ダミー写真の入った落書き/プリント画面へ直行（カメラ不要）
     gotoDeco(toPrint) {
       document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
