@@ -419,7 +419,67 @@
 
   function soundMissing(key) { return soundAvailable[key] === false; }
 
+  /* ===================== WebAudio（短尺ボイス/SE・iOS根本対策 2026-08-13） =====================
+     iPad実機で「3・2・1」カウントだけが鳴らない問題の根本対策。
+     HTMLAudioElement はiOS Safariで「ユーザー操作起点でない短尺クリップの連打」が
+     再生拒否されることがある（解錠済みでも失敗し、ヘッドレスでは再現できない）。
+     カウント・シャッター等の短尺は AudioContext + 事前デコード済み AudioBuffer で鳴らす。
+     - 解錠: pointerdown（キャプチャ段階）で resume() する。running になるまで
+       タップのたびに再試行するので「ユーザージェスチャ内での解錠」がコードパスで保証される
+     - BGM・長尺ボイス（前置き/ポーズ提案等）は従来の HTMLAudio のまま（実機で鳴っている実績）
+     - AudioBuffer が未デコード/未解錠のときは従来の HTMLAudio 経路へフォールバック */
+  const WA_KEYS = ['count3', 'count2', 'count1', 'countHai', 'seShutter', 'seTap', 'seDecide'];
+  let audioCtx = null;
+  const waBuffers = {};
+  let waPlayCount = 0; // 検証用（WebAudio経路で鳴らした回数）
+  function ensureAudioCtx() {
+    if (audioCtx) return audioCtx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { audioCtx = new AC(); } catch (e) { return null; }
+    return audioCtx;
+  }
+  (function preloadWaBuffers() {
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    WA_KEYS.forEach((key) => {
+      fetch(SOUND_FILES[key])
+        .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status))))
+        .then(buf => new Promise((res, rej) => {
+          // iOSの旧Safariはコールバック形式のみ対応のため両対応で呼ぶ（二重解決は無害）
+          const p = ctx.decodeAudioData(buf, res, rej);
+          if (p && p.then) p.then(res, rej);
+        }))
+        .then(b => { waBuffers[key] = b; })
+        .catch(() => { /* 取得/デコード失敗時は HTMLAudio へフォールバックするだけ */ });
+    });
+  })();
+  // タップのたびに running でなければ resume（iOSはバックグラウンド復帰・電話着信等でも suspend する）
+  document.addEventListener('pointerdown', () => {
+    const ctx = ensureAudioCtx();
+    if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+  }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && audioCtx && audioCtx.state !== 'running') {
+      audioCtx.resume().catch(() => {}); // ジェスチャ外では拒否されうるが、次のタップで再試行される
+    }
+  });
+  function waPlay(key) {
+    if (!audioCtx || audioCtx.state !== 'running') return false;
+    const buf = waBuffers[key];
+    if (!buf) return false;
+    try {
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start();
+      waPlayCount++;
+      return true;
+    } catch (e) { return false; }
+  }
+
   function playSound(key) {
+    if (waPlay(key)) return; // 短尺はWebAudio優先（iOS対策）。未解錠/未デコードなら従来経路へ
     const a = sounds[key];
     if (!a || soundMissing(key)) return;
     a.muted = false; // unlockAudioのミュート解錠と同時になっても本物の再生が消音されないように（2026-08-13）
@@ -1771,9 +1831,12 @@
          voiceGaveUp は「待たない」の印であって「鳴らさない」の印ではない。
          再生は常に試みる（playSoundAwait の gaveUp 分岐と同じ扱い）。
          muted=false も明示する（unlockAudio の解錠が残っても消音で鳴らないことがないように） */
-      const a = sounds[step.key];
-      if (a && !soundMissing(step.key)) {
-        try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+      if (!waPlay(step.key)) {
+        // WebAudioが使えない環境だけ従来のHTMLAudioで鳴らす
+        const a = sounds[step.key];
+        if (a && !soundMissing(step.key)) {
+          try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+        }
       }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
@@ -4925,6 +4988,13 @@
     applyBeauty,
     startAttract,
     stopAttract,
+    // WebAudio経路の検証用（iOS音声対策・2026-08-13）
+    waStatus: () => ({
+      state: audioCtx ? audioCtx.state : 'none',
+      loaded: Object.keys(waBuffers),
+      played: waPlayCount,
+    }),
+    waDisable: () => { WA_KEYS.forEach(k => delete waBuffers[k]); }, // 無音環境の再現用
     // デザイン確認用: ダミー写真の入った盛り調整画面へ直行（カメラ不要・2026-08-13）
     gotoBeauty() {
       document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
