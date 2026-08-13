@@ -16,6 +16,26 @@
 
 <div id="app">
 
+  <!-- 誤操作で画面が変わってしまったときの復帰（2026-08-14 実機テスト指摘①）。
+       落書きの内容はこの端末のこのタブの中だけに一時保存され、タブを閉じると消える -->
+  <div id="resume-modal" class="confirm-modal hidden">
+    <div class="confirm-box">
+      <p class="confirm-text">さっきの らくがき、<br>のこってるよ！</p>
+      <div class="resume-preview" id="resume-preview"></div>
+      <p class="resume-note">とちゅうで がめんが かわっちゃったみたい。<br>つづきから やりなおせるよ。</p>
+      <div class="confirm-buttons">
+        <button id="btn-resume-yes" class="btn-main small">▶ つづきから</button>
+        <button id="btn-resume-no" class="btn-sub">さいしょから</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ホーム画面に追加して使うと、あやまって画面が変わらない（iOS Safariのタブで開いた時だけ） -->
+  <div id="pwa-hint" class="pwa-hint hidden">
+    <span id="pwa-hint-text">📱 ホーム画面に追加して開くと、らくがき中に画面が変わりません（共有 → ホーム画面に追加）</span>
+    <button id="btn-pwa-hint-close" class="pwa-hint-close" aria-label="とじる">✕</button>
+  </div>
+
   <!-- ============ 0. タイトル画面（モード決定前・対比の顔） ============
        柄本仕様書 3-1/3-3: 斜め対角線で2分割し、上=平成の扉・下=令和の扉として
        画面全体を「時代の対比」にする。扉そのものがモード選択ボタン。 -->
@@ -264,6 +284,10 @@
             <canvas id="deco-photo-canvas"></canvas>
             <canvas id="draw-canvas"></canvas>
             <canvas id="stroke-canvas"></canvas>
+            <!-- 選んだフレーム／シールのカラーを落書き中もずっと見せる層（2026-08-14 実機テスト指摘対応）。
+                 v13で落書きが「写真拡大表示」になってから、台紙が画面に出なくなり、
+                 客は3分間ずっと自分の選んだ飾りを一度も見られなくなっていた -->
+            <canvas id="deco-frame-canvas"></canvas>
             <!-- 写真の送り（横持ちのみ表示・2026-08-14）。2本指の横スワイプでも切り替わる -->
             <button id="btn-shot-prev" class="shot-nav prev" aria-label="前のしゃしん">◀</button>
             <button id="btn-shot-next" class="shot-nav next" aria-label="次のしゃしん">▶</button>

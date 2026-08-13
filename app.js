@@ -3474,29 +3474,101 @@
     ctx.drawImage(img, sx, sy, cw, ch, x, y, w, h);
   }
 
+  /* ---------- 選んだ「シールのカラー」「フレーム」を見える形にする道具
+     （2026-08-14 実機テスト指摘「フレームと、シールのカラー機能が全く機能していない」対応） ----------
+     🚨 直した理由をここに残す。以前も frame / curtain は合成に結線されていた（＝コードは動いていた）。
+     効いていないと言われた本当の理由は「見えない大きさだった」こと:
+       - フレーム = 台紙の外周に 22px の絵文字を 62px 間隔。スマホの印刷画面では台紙が
+         幅250px程度に縮んで表示されるため、絵文字は実測で約4px にしかならない
+       - カラー = 背景グラデの上15%に1点とセル枠線1.5〜3px だけ。同じ理由で細帯にしか見えない
+     そこで「実機のプリクラのフレームと同じ載り方」＝**写真1枚ずつの周りにカラーの太枠と
+     四隅のモチーフ**へ作り替える。写真の縁は客が必ず見る場所なので、縮んでも消えない。 */
+  function lumOf(hex) {
+    const c = hex.replace('#', '');
+    return 0.299 * parseInt(c.slice(0, 2), 16) + 0.587 * parseInt(c.slice(2, 4), 16) + 0.114 * parseInt(c.slice(4, 6), 16);
+  }
+  // 帯の上に置く文字の色（明るいカラーの上に白を置くと読めなくなるため）
+  function inkOnColor(hex, darkInk) {
+    return lumOf(hex) > 175 ? darkInk : '#ffffff';
+  }
+  /* 写真セル1枚ぶんの飾り: カラーの太枠 ＋ 四隅（円は上下左右）にフレームのモチーフ。
+     セルが小さい分割（16分割など）でも比率で縮むので、どの分割でも同じ見え方になる。
+     「シンプル」（emoji が空）のときは枠だけ＝選択の意味が残る。 */
+  function drawCellDecor(ctx, cell, opt) {
+    const { x, y, w, h } = cell;
+    const cc = state.curtain.color;
+    const emoji = opt.emoji;
+    const isCircle = opt.isCircle;
+    const radius = opt.radius || 0;
+    const minSide = Math.min(w, h);
+    const lw = Math.max(3, Math.min(9, minSide * 0.024)); // 枠の太さ
+    ctx.save();
+    ctx.lineJoin = 'round';
+    // ① カラーの太枠（枠の内側に食い込ませて、写真の縁に必ず色が乗るようにする）
+    // 明るいカラーはそのままだと白い台紙に溶けて見えないので、枠のときだけ濃くする
+    ctx.strokeStyle = lumOf(cc) > 205 ? shadeColor(cc, -48) : cc;
+    ctx.lineWidth = lw;
+    if (isCircle) {
+      const cx = x + w / 2, cy = y + h / 2, r = minSide / 2 - lw / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    } else {
+      roundRect(ctx, x + lw / 2, y + lw / 2, w - lw, h - lw, Math.max(0, radius - lw / 2));
+    }
+    ctx.stroke();
+    // ② フレームのモチーフ（写真の四隅に載る＝実機のフレームと同じ載り方）
+    if (emoji) {
+      const size = Math.max(11, Math.min(34, minSide * 0.155));
+      ctx.font = `${size}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // 絵文字が写真に埋もれないよう、白いにじみを下に敷く
+      ctx.shadowColor = 'rgba(255,255,255,.95)';
+      ctx.shadowBlur = Math.max(3, size * 0.28);
+      const inset = size * 0.55 + lw;
+      let pts;
+      if (isCircle) {
+        const cx = x + w / 2, cy = y + h / 2, r = minSide / 2 - inset * 0.7;
+        pts = [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]];
+      } else {
+        pts = [[x + inset, y + inset], [x + w - inset, y + inset], [x + inset, y + h - inset], [x + w - inset, y + h - inset]];
+      }
+      pts.forEach(p => { ctx.fillText(emoji, p[0], p[1]); ctx.fillText(emoji, p[0], p[1]); });
+    }
+    ctx.restore();
+  }
+
   function composeSheet() {
     const conf = modeConf();
     const sheet = conf.sheet;
     const ctx = sheetCanvas.getContext('2d');
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
+    const cc = state.curtain.color;
 
-    // 背景
+    /* 背景（2026-08-14 カラーを「見える」量まで引き上げた）:
+       ヘッダー帯とフッター帯をカラーでベタ塗りし、写真の載る本体は同色の淡いグラデにする。
+       写真が映える明るい下地、という元の設計は保ったまま、選んだ色が一目で分かる。 */
     if (state.mode === 'heisei') {
       const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
-      grad.addColorStop(0, sheet.bgTop);
-      grad.addColorStop(0.15, state.curtain.color);
-      grad.addColorStop(1, sheet.bgBottom);
+      grad.addColorStop(0, shadeColor(cc, 62));
+      grad.addColorStop(0.5, shadeColor(cc, 34));
+      grad.addColorStop(1, shadeColor(cc, 62));
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+      ctx.fillStyle = cc;
+      ctx.fillRect(0, 0, SHEET_W, HEADER_H - 8);
+      ctx.fillRect(0, SHEET_H - FOOTER_H, SHEET_W, FOOTER_H);
     } else {
       const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
       grad.addColorStop(0, sheet.bgTop);
       grad.addColorStop(1, sheet.bgBottom);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, SHEET_W, SHEET_H);
-      // 令和：シールカラーの細いラインをアクセントに
-      ctx.fillStyle = state.curtain.color;
-      ctx.fillRect(0, 62, SHEET_W, 3);
+      /* 令和は「くすみカラー」の上品さが売り（柄本仕様書）。ベタ塗りにはせず、
+         ヘッダーの帯とフッターの細線でカラーを効かせる（細ライン3pxだけでは見えなかった） */
+      ctx.fillStyle = cc;
+      ctx.fillRect(0, 0, SHEET_W, HEADER_H - 18);
+      ctx.fillRect(0, SHEET_H - FOOTER_H + 6, SHEET_W, 4);
     }
 
     // タイトル
@@ -3507,7 +3579,10 @@
       ctx.shadowColor = sheet.titleGlow;
       ctx.shadowBlur = 6;
     }
-    ctx.fillStyle = sheet.titleColor;
+    /* 見出しの色はカラーの明るさで決める（2026-08-14）。
+       ヘッダー帯をカラーでベタ塗りにしたため、「ホワイト」「クリーム」等を選ぶと
+       白い題字が完全に消えてしまう。明るい帯のときだけ濃い色に落とす */
+    ctx.fillStyle = sheet.titleColor === '#ffffff' ? inkOnColor(cc, sheet.footerColor) : sheet.titleColor;
     ctx.fillText(sheet.title, SHEET_W / 2, 46);
     ctx.restore();
 
@@ -3564,52 +3639,73 @@
       }
       ctx.restore();
 
-      ctx.save();
-      cellPath();
-      ctx.lineWidth = state.mode === 'reiwa' ? 1.5 : 3;
-      if (state.mode === 'reiwa') {
-        ctx.strokeStyle = '#e0d5c8';
-      } else {
-        ctx.strokeStyle = state.curtain.color === '#ffffff' ? '#ffb6de' : state.curtain.color;
-      }
-      ctx.stroke();
-      ctx.restore();
     });
 
-    // フレーム装飾
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (sheet.cornerDeco === 'frameEmoji') {
-      // 初期プリ機のフレーム風: シール全周にモチーフを並べる（「シンプル」はモチーフなし）
-      if (state.frame.emoji) {
-        ctx.font = '22px sans-serif';
-        const step = 62;
-        const topY = HEADER_H + 8;
-        const botY = SHEET_H - FOOTER_H - 8;
-        for (let x = 30; x <= SHEET_W - 30; x += step) {
-          ctx.fillText(state.frame.emoji, x, topY);
-          ctx.fillText(state.frame.emoji, x, botY);
-        }
-        for (let y = topY + step; y < botY; y += step) {
-          ctx.fillText(state.frame.emoji, 16, y);
-          ctx.fillText(state.frame.emoji, SHEET_W - 16, y);
-        }
-      }
-    } else {
-      // 令和：フレーム絵文字を小さく上品に散らす
-      ctx.font = '18px sans-serif';
-      ctx.globalAlpha = 0.85;
-      ctx.fillText(state.frame.emoji, 30, HEADER_H + 6);
-      ctx.fillText(state.frame.emoji, SHEET_W - 30, SHEET_H - FOOTER_H - 6);
-      ctx.globalAlpha = 1;
-    }
+    drawSheetDecor(ctx);
 
     // フッター（日付）
     const d = new Date();
     const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
     ctx.font = state.mode === 'reiwa' ? 'italic 500 13px Georgia, serif' : '700 14px sans-serif';
-    ctx.fillStyle = sheet.footerColor;
-    ctx.fillText(`${dateStr}　${sheet.footerName}`, SHEET_W / 2, SHEET_H - FOOTER_H / 2);
+    ctx.fillStyle = state.mode === 'reiwa' ? sheet.footerColor : inkOnColor(cc, sheet.footerColor);
+    ctx.fillText(`${dateStr}　${sheet.footerName}`, SHEET_W / 2, SHEET_H - FOOTER_H / 2 + 5);
+  }
+
+  /* 台紙の飾り（カラーの枠＋フレームのモチーフ）だけを描く。
+     composeSheet の最後と、落書きを載せたあとの composeFinal の両方から呼ぶ。
+     🚨 落書きの「あと」に描くのが要点（2026-08-14）: 実機のフレームは写真と落書きの上に
+     載る。先に描くと客の落書きでフレームが塗りつぶされ、また「効いていない」に戻る。 */
+  function drawSheetDecor(ctx) {
+    const conf = modeConf();
+    const sheet = conf.sheet;
+    const cells = layoutCells(state.layout);
+    const isCircle = state.layout.shape === 'circle';
+    const radius = state.layout.radius;
+    const emoji = state.frame.emoji;
+    cells.forEach((cell) => {
+      drawCellDecor(ctx, cell, { emoji, isCircle, radius });
+    });
+    // 台紙の外周にもモチーフを並べる（平成の初期プリ機のフレーム風。「シンプル」はなし）
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (emoji && sheet.cornerDeco === 'frameEmoji') {
+      /* 外周のモチーフは「余白があるときだけ」並べる（2026-08-14）。
+         16分割・6分割はセルの隙間が12〜18pxしかなく、外周まで並べると写真の上に
+         モチーフが乗り続けて何が写っているか分からなくなる。
+         セルごとの飾りは全レイアウトに載るので、外周は余裕のある分割の飾りと割り切る。 */
+      const left = Math.min(...cells.map(c => c.x));
+      const top = Math.min(...cells.map(c => c.y));
+      const bottom = Math.max(...cells.map(c => c.y + c.h));
+      ctx.font = '26px sans-serif';
+      const step = 52;
+      const topY = HEADER_H + 8;
+      const botY = SHEET_H - FOOTER_H - 8;
+      ctx.shadowColor = 'rgba(255,255,255,.9)';
+      ctx.shadowBlur = 6;
+      if (top - HEADER_H >= 20 && SHEET_H - FOOTER_H - bottom >= 20) {
+        for (let x = 26; x <= SHEET_W - 26; x += step) {
+          ctx.fillText(emoji, x, topY);
+          ctx.fillText(emoji, x, botY);
+        }
+      }
+      if (left >= 24) {
+        for (let y = topY + step; y < botY; y += step) {
+          ctx.fillText(emoji, 18, y);
+          ctx.fillText(emoji, SHEET_W - 18, y);
+        }
+      }
+    } else if (emoji) {
+      // 令和：ヘッダー帯の両端に小さく添える（くすみカラーの上品さを壊さない）
+      ctx.font = '20px sans-serif';
+      ctx.globalAlpha = 0.9;
+      ctx.fillText(emoji, 34, (HEADER_H - 18) / 2);
+      ctx.fillText(emoji, SHEET_W - 34, (HEADER_H - 18) / 2);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
   }
 
   /* ===================== 3. 落書き画面（オブジェクト方式） =====================
@@ -3636,6 +3732,20 @@
   decoPhotoCanvas.width = SHOT_W;
   decoPhotoCanvas.height = SHOT_H;
   const decoPhotoCtx = decoPhotoCanvas.getContext('2d');
+  /* 選んだフレーム／シールのカラーを落書き中もずっと見せる層（2026-08-14 実機テスト指摘対応）。
+     シール上で写真1枚に載る飾りと同じものを、拡大表示の写真にもそのまま載せる＝
+     出来上がりの見たままで落書きできる（かつ「選んだのに何も変わらない」が消える） */
+  const decoFrameCanvas = $('#deco-frame-canvas');
+  decoFrameCanvas.width = SHOT_W;
+  decoFrameCanvas.height = SHOT_H;
+  const decoFrameCtx = decoFrameCanvas.getContext('2d');
+  function renderDecoFramePreview() {
+    decoFrameCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    if (!state.frame || !state.curtain) return;
+    drawCellDecor(decoFrameCtx, { x: 0, y: 0, w: SHOT_W, h: SHOT_H }, {
+      emoji: state.frame.emoji, isCircle: false, radius: 10,
+    });
+  }
 
   let shotDeco = [];      // 写真ごとの落書き { objects: [], undo: [] }（インデックス＝撮影順）
   let curShot = 0;        // いま拡大表示している写真のインデックス
@@ -3974,7 +4084,9 @@
     decoPhotoCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     if (shot) decoPhotoCtx.drawImage(shot, 0, 0, SHOT_W, SHOT_H);
     renderDeco();
+    renderDecoFramePreview();
     refreshDecoThumbs();
+    scheduleSessionSave(); // 見ている写真も一時保存に含める（復帰したとき同じ写真から続けられる）
   }
 
   // 写真iの落書きだけを SHOT_W×SHOT_H の透明キャンバスに描き出す（合成・サムネイル共用）
@@ -4042,6 +4154,7 @@
     undoStack.push(op);
     if (undoStack.length > 60) undoStack.shift();
     scheduleThumbUpdate();
+    scheduleSessionSave(); // 描いたぶんを一時保存（離脱しても作品を失わないため・2026-08-14）
   }
 
   function undo() {
@@ -5150,6 +5263,10 @@
 
   function startDecoScreen() {
     showScreen('screen-deco');
+    /* 誤操作での離脱対策をこの画面の間だけ入れる（2026-08-14 実機テスト指摘①）:
+       履歴にダミーを積み、端スワイプの吸収と落書きの自動保存を有効にする */
+    decoActive = true;
+    armHistorySentinel();
     // 写真拡大表示方式: 落書きは写真ごとに持つ。1枚目を拡大表示して開始
     shotDeco = decoShots().map(() => ({ objects: [], undo: [] }));
     buildDecoThumbs();
@@ -5245,6 +5362,10 @@
     clearEditSel();
     decoCountdownEl.classList.add('hidden');
     decoToastEl.classList.add('hidden');
+    /* 落書きが終わったので、端スワイプの吸収と履歴の番人は外す（2026-08-14）。
+       一時保存はまだ消さない。分割えらび中に離脱しても、描いたものは戻せるようにする */
+    decoActive = false;
+    disarmHistorySentinel();
     $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ できあがり！' : '⏰ タイムアップ！';
     $('#deco-timeup').classList.remove('hidden');
     playSound(reason === 'manual' ? 'finish' : 'timeup');
@@ -5258,6 +5379,7 @@
       return;
     }
     composeFinal();
+    clearSessionSnapshot(); // シールが出来上がった＝一時保存の役目は終わり（客の写真を端末に残さない）
     showScreen('screen-print');
     startPrintSequence();
   }
@@ -5281,6 +5403,7 @@
         composeSheet();
         gate.classList.add('hidden');
         composeFinal();
+        clearSessionSnapshot(); // 同上（分割を選んで排出まで来たら消す）
         showScreen('screen-print');
         startPrintSequence();
       });
@@ -5342,6 +5465,10 @@
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
     ctx.drawImage(sheetCanvas, 0, 0);
     composeDoodleOntoSheet(ctx);
+    /* フレーム／カラーの飾りは落書きの「あと」に載せ直す（2026-08-14 実機テスト指摘対応）。
+       写真いっぱいに落書きされると、台紙側に描いてある枠とモチーフが隠れてしまい、
+       また「フレームが効いていない」に戻るため。実機のフレームも落書きの上に載る */
+    drawSheetDecor(ctx);
     /* 保存は押された瞬間に deliverImage が生成して届ける（2026-08-14 保存経路の作り替え）。
        以前ここで作っていた巨大dataURLのhrefは、iPad Safariで保存が無反応になる原因の
        ひとつだったため廃止（a[download]+dataURLはiOSで信用しない） */
@@ -5513,19 +5640,27 @@
   /* ---------- 追加出力①: 16分割シール風（初代プリント倶楽部1995年の型） ----------
      初代は「16分割・1枚17mm×24mm（横長）」のみだった（JAIA20年史）。
      選んだレイアウトに関係なく、その比率の16分割台紙を別出力として作る。落書きは載せない
-     （初代に落書き機能は無い、という考証）。 */
+     （初代に落書き機能は無い、という考証）。
+     🚨 2026-08-14: ここは色を `#ffb6de` / `#ff2fa0` / `#ffd3ea` で決め打ちしており、
+     選んだシールのカラーもフレームも一度も参照していなかった（実機テスト指摘の直接原因の1つ）。
+     本体シールと同じ色・同じモチーフが載るように結線した。 */
   function composeSixteenRetro() {
     const cv = document.createElement('canvas');
     cv.width = SHEET_W; cv.height = SHEET_H;
     const ctx = cv.getContext('2d');
-    ctx.fillStyle = '#ffffff';
+    const cc = state.curtain.color;
+    const line = lumOf(cc) > 205 ? shadeColor(cc, -48) : cc;
+    const emoji = state.frame.emoji;
+    ctx.fillStyle = shadeColor(cc, 66);
     ctx.fillRect(0, 0, SHEET_W, SHEET_H);
-    ctx.strokeStyle = '#ffb6de';
+    ctx.fillStyle = cc;
+    ctx.fillRect(0, 0, SHEET_W, 66);
+    ctx.strokeStyle = line;
     ctx.lineWidth = 3;
     ctx.strokeRect(8, 8, SHEET_W - 16, SHEET_H - 16);
     ctx.textAlign = 'center';
     ctx.font = '900 30px -apple-system, sans-serif';
-    ctx.fillStyle = '#ff2fa0';
+    ctx.fillStyle = inkOnColor(cc, '#c2185b');
     // 「プリント倶楽部/Print Club」はセガの登録商標のため自前の名称を使う（2026-08-12 era-designer指摘）
     ctx.fillText('★ 太子プリ ★', SHEET_W / 2, 52);
 
@@ -5547,15 +5682,15 @@
           ctx.clip();
           drawCover(ctx, shot, x, y, cw, chh);
           ctx.restore();
-          ctx.strokeStyle = '#ffd3ea';
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, chh - 1);
+          // 1枚ずつにカラーの枠とフレームのモチーフを載せる（本体シールと同じ載り方）
+          drawCellDecor(ctx, { x, y, w: cw, h: chh }, { emoji, isCircle: false, radius: 0 });
         }
       }
     }
     const d = new Date();
+    ctx.textAlign = 'center';
     ctx.font = '700 13px sans-serif';
-    ctx.fillStyle = '#c78ab0';
+    ctx.fillStyle = shadeColor(cc, -70);
     ctx.fillText(`${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}　16pcs sticker`, SHEET_W / 2, SHEET_H - 18);
     return cv;
   }
@@ -5613,6 +5748,10 @@
         ctx.fill();
         ctx.shadowBlur = 0;
         drawCover(ctx, shot, -pw / 2, -cardH / 2 + padT, pw, ph);
+        /* フレームのモチーフをこの版にも載せる（2026-08-14 実機テスト指摘対応）。
+           たて長ver.はカラーだけ結線されていて、フレームは一度も参照していなかった。
+           カードは回転しているので、回転した座標系のまま写真の枠へ描く */
+        drawCellDecor(ctx, { x: -pw / 2, y: -cardH / 2 + padT, w: pw, h: ph }, { emoji: state.frame.emoji, isCircle: false, radius: 0 });
         ctx.restore();
       });
     }
@@ -5632,15 +5771,30 @@
     const cv = document.createElement('canvas');
     cv.width = SHEET_W; cv.height = SHEET_H;
     const ctx = cv.getContext('2d');
+    /* 台紙の色は選んだシールのカラーから作る（2026-08-14 実機テスト指摘対応）。
+       以前は #f6efe6→#eee4d6 の決め打ちで、カラーもフレームも参照していなかった。
+       証明写真なので写真そのものにモチーフは載せない（顔の判別を邪魔しない）。
+       選んだフレームは台紙の下辺に控えめに並べて「選んだものが出ている」ようにする */
+    const cc = state.curtain.color;
     const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
-    grad.addColorStop(0, '#f6efe6');
-    grad.addColorStop(1, '#eee4d6');
+    grad.addColorStop(0, shadeColor(cc, 62));
+    grad.addColorStop(1, shadeColor(cc, 30));
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+    ctx.fillStyle = cc;
+    ctx.fillRect(0, 0, SHEET_W, 66);
     ctx.textAlign = 'center';
     ctx.font = 'italic 600 26px Georgia, serif';
-    ctx.fillStyle = '#6f5f52';
-    ctx.fillText('ID photo — 証明プリ', SHEET_W / 2, 52);
+    ctx.fillStyle = inkOnColor(cc, '#6f5f52');
+    ctx.fillText('ID photo — 証明プリ', SHEET_W / 2, 44);
+    if (state.frame.emoji) {
+      ctx.save();
+      ctx.font = '20px sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.85;
+      for (let x = 30; x <= SHEET_W - 30; x += 54) ctx.fillText(state.frame.emoji, x, SHEET_H - 52);
+      ctx.restore();
+    }
 
     const shots = state.processedShots.length ? state.processedShots : state.shots;
     const idx = (state.photoPick && state.photoPick.length) ? state.photoPick[0] : 0;
@@ -5749,6 +5903,11 @@
        前の客が選んだ分割が次の令和の客の初期選択に化ける */
     state.layout = LAYOUTS[0];
     voiceGaveUp = false; // 次の客は音声から仕切り直す
+    /* 一時保存も必ず消す（2026-08-14・守屋ライン）。
+       前の客の顔写真と落書きが端末に残ったまま次の客が触る、が起きないようにする */
+    decoActive = false;
+    disarmHistorySentinel();
+    clearSessionSnapshot();
     shotDeco = []; // 写真ごとの落書きも次の客のためにまっさらへ
     decoObjects = [];
     undoStack = [];
@@ -5789,6 +5948,222 @@
       navigator.serviceWorker.register('sw.js').catch(() => { /* file://等では失敗するが動作に影響なし */ });
     });
   }
+
+  /* ===================== 誤操作でアプリから離脱する事故への対策 =====================
+     2026-08-14 オーナー実機テスト指摘①「乱暴に指を動かしたら別アプリに画面が変わってしまった」。
+     落書き中の激しい操作で、iOS Safari の「画面の端から引っぱって戻る/進む」が発火したのが
+     いちばんありそうな筋（落書きは横方向に指を走らせる操作そのもの）。
+
+     🚨 正直に書いておく: **iOSのシステムジェスチャは Web からは完全には殺せない。**
+     ホームバーの上スワイプ、コントロールセンター、アプリ切り替えは止められない。
+     だからここは3段構えで、「起きにくくする」＋「起きても作品を失わない」で守る:
+       ① 履歴の番人   … 落書きに入る前にダミーの履歴を1つ積む。戻るジェスチャはその
+                        ダミーを消費するだけで、ページは再読み込みされない＝落書きは無傷
+       ② 端の受け皿   … 画面の左右端26pxに透明な帯を置き、そこで始まった指の動きを吸い込む
+       ③ 自動保存     … それでも離脱してページが読み直された場合に備え、写真と落書きを
+                        この端末のこのタブに一時保存し、戻ってきたら続きから再開する
+
+     守屋ライン（情報を外に出さない）:
+     - 保存先は **sessionStorage**。タブを閉じれば消える。localStorage には置かない
+       （前の客の顔写真が端末に残り続けるのを避けるため）
+     - 写真はJPEG化してこの端末の中だけに置く。外部への送信はゼロ
+     - 「もう一回あそぶ」と、シールが出来上がった時点で必ず消す */
+
+  const SESSION_KEY = 'purikura.session.v1';
+  const SESSION_TTL_MS = 45 * 60 * 1000; // 45分より古い下書きは他人のものとみなして捨てる
+  let decoActive = false;   // 落書き画面にいる間だけ true（保存とガードのスイッチ）
+  let sessionSaveId = null;
+
+  function clearSessionSnapshot() {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* 使えない環境では何もしない */ }
+  }
+
+  function saveSessionSnapshot() {
+    if (!decoActive) return;
+    try {
+      const shots = decoShots();
+      if (!shots.length) return;
+      const payload = {
+        ts: Date.now(),
+        mode: state.mode,
+        frameId: state.frame && state.frame.id,
+        curtainId: state.curtain && state.curtain.id,
+        layoutId: state.layout && state.layout.id,
+        heiseiEra: state.heiseiEra,
+        bgmChoice: state.bgmChoice,
+        photoPick: state.photoPick,
+        curShot,
+        remaining: state.remaining,
+        // 写真はJPEGで持つ（PNGだと4枚で数MBになり sessionStorage を溢れさせる）
+        shots: shots.map(c => c.toDataURL('image/jpeg', 0.82)),
+        deco: shotDeco.map(d => ((d && d.objects) || [])),
+      };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (e) {
+      /* 容量オーバーやプライベートブラウズでは保存できない。
+         その場合でも落書きそのものは続けられるので、客には何も出さない */
+    }
+  }
+  // 描くたびに保存すると重いので、1.2秒にまとめる
+  function scheduleSessionSave() {
+    if (!decoActive || sessionSaveId) return;
+    sessionSaveId = setTimeout(() => { sessionSaveId = null; saveSessionSnapshot(); }, 1200);
+  }
+
+  // 画面が隠れる/離れる瞬間は、まとめ待ちをせずその場で書く（ここを逃すと作品が消える）
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveSessionSnapshot();
+  });
+  window.addEventListener('pagehide', saveSessionSnapshot);
+
+  /* ① 履歴の番人。落書きに入るときダミーを1つ積み、戻るジェスチャが来たら積み直す。
+     同一ページ内の履歴移動なのでページは読み直されず、キャンバスもタイマーも生き残る。 */
+  let historySentinel = false;
+  function armHistorySentinel() {
+    if (historySentinel) return;
+    try {
+      history.pushState({ puri: 'deco' }, '');
+      historySentinel = true;
+    } catch (e) { /* file:// 等で使えない環境では諦める（他の2段で守る） */ }
+  }
+  function disarmHistorySentinel() { historySentinel = false; }
+  window.addEventListener('popstate', () => {
+    if (!decoActive || !historySentinel) return;
+    // 戻るジェスチャを吸収して積み直す。客には「戻れない」ことだけ伝える
+    try { history.pushState({ puri: 'deco' }, ''); } catch (e) { /* 何もできないときは黙る */ }
+    saveSessionSnapshot();
+    if (typeof showDecoToast === 'function') showDecoToast('✋ らくがき中は もどれないよ！');
+  });
+
+  /* ② 端で始まった指の動きを吸収する。
+     iOSの「端から引っぱって戻る」は touch-action では止まらず、touchstart の
+     preventDefault が唯一の打ち手（passive:false でないと効かないので明示する）。
+
+     🚨 透明な帯を左右にかぶせる方式は採らなかった（2026-08-14 の設計判断）:
+     横持ちだと道具箱が画面の右端まで来るため、帯を置くと色えらびやボタンの右端26pxが
+     押せなくなる。押せないほうが客には致命的なので、ボタンの上では何もしない形にした。 */
+  const EDGE_PX = 24;
+  document.addEventListener('touchstart', (e) => {
+    if (!decoActive || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX > EDGE_PX && t.clientX < window.innerWidth - EDGE_PX) return;
+    // ボタン・サムネイル等の上では吸収しない（押せなくなるほうが困る）
+    if (e.target && e.target.closest && e.target.closest('button, input, a, label, .choice-item, .layout-item, .deco-thumb, .pp-item, .save-box')) return;
+    e.preventDefault();
+  }, { passive: false });
+
+  /* ③ 復帰。起動時に下書きが残っていたら「つづきから／さいしょから」を聞く。 */
+  function readSessionSnapshot() {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (!p || !Array.isArray(p.shots) || !p.shots.length) return null;
+      if (Date.now() - p.ts > SESSION_TTL_MS) { clearSessionSnapshot(); return null; }
+      // 落書きが1本も無い下書きは、聞くほどのものではない（客を迷わせない）
+      const drawn = (p.deco || []).some(objs => objs && objs.length);
+      if (!drawn) { clearSessionSnapshot(); return null; }
+      return p;
+    } catch (e) { return null; }
+  }
+
+  function loadImageCanvas(dataUrl) {
+    return new Promise((resolve) => {
+      const im = new Image();
+      im.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = SHOT_W; c.height = SHOT_H;
+        c.getContext('2d').drawImage(im, 0, 0, SHOT_W, SHOT_H);
+        resolve(c);
+      };
+      im.onerror = () => resolve(null);
+      im.src = dataUrl;
+    });
+  }
+
+  async function restoreSessionSnapshot(p) {
+    const canvases = (await Promise.all(p.shots.map(loadImageCanvas))).filter(Boolean);
+    if (!canvases.length) return false;
+    state.mode = p.mode === 'reiwa' ? 'reiwa' : 'heisei';
+    document.body.dataset.mode = state.mode;
+    setTheme(state.mode);
+    const conf = modeConf();
+    state.curtain = conf.curtains.find(c => c.id === p.curtainId) || conf.curtains[0];
+    state.frame = conf.frames.find(f => f.id === p.frameId) || conf.frames[0];
+    state.layout = LAYOUTS.find(l => l.id === p.layoutId) || LAYOUTS[0];
+    state.heiseiEra = p.heiseiEra || 'standard';
+    state.bgmChoice = p.bgmChoice || 'auto';
+    state.photoPick = Array.isArray(p.photoPick) ? p.photoPick : null;
+    state.shots = canvases;
+    state.processedShots = canvases.slice();
+    state.faceData = canvases.map(() => null);
+    state.skinConf = canvases.map(() => null);
+    buildSelectGrids();
+    buildDecoTools();
+    composeSheet();
+    startDecoScreen(); // ここで shotDeco が作り直されるので、そのあとに中身を戻す
+    shotDeco = canvases.map((_, i) => ({ objects: (p.deco && p.deco[i]) || [], undo: [] }));
+    selectShot(Math.min(p.curShot || 0, canvases.length - 1));
+    // 残り時間も引き継ぐ（最低30秒は残す。0秒で復帰したら何もできないため）
+    state.remaining = Math.max(30, Math.min(decoSeconds(), p.remaining || decoSeconds()));
+    timerDisplay.textContent = formatTime(state.remaining);
+    unlockAudio();
+    startBGM();
+    return true;
+  }
+
+  (function offerResume() {
+    const p = readSessionSnapshot();
+    if (!p) return;
+    const modal = $('#resume-modal');
+    if (!modal) return;
+    // 何が残っているのかを見せる（文字だけだと客は判断できない）
+    const prev = $('#resume-preview');
+    prev.innerHTML = '';
+    p.shots.slice(0, 4).forEach((url) => {
+      const cv = document.createElement('canvas');
+      cv.width = 124; cv.height = 94;
+      const im = new Image();
+      im.onload = () => cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+      im.src = url;
+      prev.appendChild(cv);
+    });
+    modal.classList.remove('hidden');
+    $('#btn-resume-yes').addEventListener('click', async () => {
+      modal.classList.add('hidden');
+      const ok = await restoreSessionSnapshot(p);
+      if (!ok) { clearSessionSnapshot(); showScreen('screen-title'); }
+    });
+    $('#btn-resume-no').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      clearSessionSnapshot();
+    });
+  })();
+
+  /* ホーム画面に追加のおすすめ（Safariのタブで開いているときだけ）。
+     ホーム画面から起動すると端スワイプの戻るが無くなるので、本番はこちらが前提。 */
+  (function pwaHint() {
+    const bar = $('#pwa-hint');
+    if (!bar) return;
+    const standalone = window.navigator.standalone === true
+      || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    let dismissed = false;
+    try { dismissed = sessionStorage.getItem('purikura.pwaHint.off') === '1'; } catch (e) { /* 読めなければ出す */ }
+    if (standalone || !ios || dismissed) return;
+    bar.classList.remove('hidden');
+    $('#btn-pwa-hint-close').addEventListener('click', () => {
+      bar.classList.add('hidden');
+      try { sessionStorage.setItem('purikura.pwaHint.off', '1'); } catch (e) { /* 保存できなくても閉じる */ }
+    });
+    // 落書きが始まったら邪魔なので自動で引っ込める
+    document.addEventListener('click', function hideOnDeco() {
+      if (!decoActive) return;
+      bar.classList.add('hidden');
+      document.removeEventListener('click', hideOnDeco);
+    }, true);
+  })();
 
   // 動作検証用フック（アプリの動作には影響しない）
   window.__puriDebug = {
