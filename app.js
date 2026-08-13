@@ -493,6 +493,35 @@
     if (fallbackKey) playSound(fallbackKey);
   }
 
+  /* ---------- 画面案内ボイスの専用チャンネル（2026-08-14 実機指摘「令和で声のダブり再発」対応） ----------
+     案内ボイス（呼び込み・コース選択・盛りチェック・らくがきスタート等）は同時に1本だけ、を
+     結線の注意ではなく仕組みで保証する。新しい案内を鳴らすときは、
+     ①前の案内の再生を止める ②予約済みの後続タイマー（旧3本チェーン等）を全て取り消す。
+     どの画面からどの画面へどんな順で移っても、案内どうしが重なる経路が存在しなくなる */
+  let announceTimers = [];
+  let curAnnounce = null;
+  function stopAnnounce() {
+    announceTimers.forEach(clearTimeout);
+    announceTimers = [];
+    if (curAnnounce) {
+      try { curAnnounce.pause(); curAnnounce.currentTime = 0; } catch (e) { /* 停止失敗は無視 */ }
+      curAnnounce = null;
+    }
+  }
+  function playAnnounce(key) {
+    stopAnnounce();
+    const a = sounds[key];
+    if (!a || soundMissing(key)) return;
+    a.muted = false;
+    a.currentTime = 0;
+    a.play().catch(() => {});
+    curAnnounce = a;
+  }
+  // 案内の後続を予約する（stopAnnounceでまとめて取り消せる）
+  function queueAnnounce(fn, ms) {
+    announceTimers.push(setTimeout(fn, ms));
+  }
+
   /* 音声が鳴らせない環境の印（2026-08-12 検見の実測指摘対応）。
      以前は保険タイムアウト4秒×6クリップで、無音環境だと4枚撮影が96秒に化けた。
      一度でも「再生失敗」か「endedが来ない」を検知したら、そのセッションの残りは
@@ -642,7 +671,7 @@
       attractSlides.forEach((s, i) => s.classList.toggle('active', i === attractSlideIdx));
     }, ATTRACT_SLIDE_MS);
     // 呼び込み音声（ファイル未着ならスキップ）。連呼しすぎないよう間隔を空けてループ
-    playSound('attractCall');
+    playAnnounce('attractCall');
   }
 
   function stopAttract() {
@@ -658,7 +687,7 @@
   if (sounds.attractCall) {
     sounds.attractCall.addEventListener('ended', () => {
       if (!attractOn) return;
-      attractCallId = setTimeout(() => { if (attractOn) playSound('attractCall'); }, ATTRACT_CALL_GAP_MS);
+      attractCallId = setTimeout(() => { if (attractOn) playAnnounce('attractCall'); }, ATTRACT_CALL_GAP_MS);
     });
   }
 
@@ -718,16 +747,19 @@
        旧アナウンス（start / selectCurtain / selectFrame）を一切鳴らさず、
        ファイル未着時だけ従来の3本を「終わってから次」の順送りで鳴らす */
     if (!soundMissing('courseSelectV2')) {
-      playSound('courseSelectV2');
+      playAnnounce('courseSelectV2');
     } else {
-      playSound('start');
+      /* 旧3本チェーンは「鳴らしてから次を予約」の逐次連鎖にする
+         （playAnnounceが予約を全消しするため、先にまとめて予約すると2本目で3本目が消える） */
+      playAnnounce('start');
       const startMs = soundDurationMs('start') || 1300;
-      setTimeout(() => {
-        if (screens['screen-select'].classList.contains('active')) playSound('selectCurtain');
+      queueAnnounce(() => {
+        if (!screens['screen-select'].classList.contains('active')) return;
+        playAnnounce('selectCurtain');
+        queueAnnounce(() => {
+          if (screens['screen-select'].classList.contains('active')) playAnnounce('selectFrame');
+        }, (soundDurationMs('selectCurtain') || 1700) + 250);
       }, startMs + 250);
-      setTimeout(() => {
-        if (screens['screen-select'].classList.contains('active')) playSound('selectFrame');
-      }, startMs + 250 + (soundDurationMs('selectCurtain') || 1700) + 250);
     }
   }
 
@@ -755,6 +787,7 @@
      BGM/写り年代は「もう一回あそぶ」と同じく初期値へ戻す（次のモードへ持ち越さない）。
      カーテン・フレーム等は enterMode が毎回リセットするので触らなくてよい。 */
   $('#btn-back-title').addEventListener('click', () => {
+    stopAnnounce(); // コース選択の案内が読み上げ中でも、戻ったら黙る
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
     delete document.body.dataset.mode; // 前回のモード値を残さない（qa-tester検収指摘6）
@@ -3194,7 +3227,7 @@
 
   function startBeautyScreen() {
     showScreen('screen-beauty');
-    playSound('beauty');
+    playAnnounce('beauty'); // 案内は1本チャンネル経由（前画面の案内が残っていても止まる）
     state.beautySelected = 0;
     state.beautyRemaining = BEAUTY_SECONDS;
     state.beautyWarned = false;
@@ -4663,7 +4696,7 @@
   $('#btn-deco-start').addEventListener('click', () => {
     $('#deco-start-gate').classList.add('hidden');
     drawCanvas.style.pointerEvents = 'auto';
-    playSound('decoStart');
+    playAnnounce('decoStart'); // 案内は1本チャンネル経由
     startDecoTimer();
   });
 
@@ -4977,6 +5010,7 @@
   });
 
   $('#btn-restart').addEventListener('click', () => {
+    stopAnnounce(); // 案内ボイスも次の客へ持ち越さない
     if (state.timerId) clearInterval(state.timerId);
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
     if (printReadyId) { clearTimeout(printReadyId); printReadyId = null; }
