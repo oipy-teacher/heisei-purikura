@@ -285,6 +285,8 @@
     tool: 'pen',
     stampChar: null,
     textStampSel: null,
+    textStampColor: null,  // 文字スタンプの色（null=おまかせ＝スタンプごとの標準色・2026-08-13）
+    textStampAngle: 'auto', // 文字スタンプの角度（'auto'=従来の手の癖ランダム / 度数指定・2026-08-13）
     dstampId: null,
     isDrawing: false,
     lastX: 0,
@@ -3471,7 +3473,7 @@
     } else if (o.style === 'neon') {
       // ネオン発光（プリ機の定番フレーズ用）
       ctx.font = `700 ${fs}px "Hiragino Maru Gothic ProN", sans-serif`;
-      ctx.shadowColor = '#ff7ad9';
+      ctx.shadowColor = o.glow || '#ff7ad9';
       ctx.shadowBlur = fs * 0.9;
       ctx.fillStyle = 'rgba(255,255,255,.96)';
       ctx.fillText(o.t, 0, 0);
@@ -3729,11 +3731,114 @@
       const b = document.createElement('button');
       b.className = 'text-stamp-btn';
       b.textContent = item.t;
-      b.addEventListener('click', () => setTool('textstamp', item));
+      b.addEventListener('click', () => {
+        setTool('textstamp', item);
+        row.querySelectorAll('.text-stamp-btn').forEach(x => x.classList.toggle('selected', x === b));
+        renderTextStampPreview();
+      });
       row.appendChild(b);
     });
     const group = $('#group-text');
     if (group) group.style.display = (conf.textStamps || []).length ? '' : 'none';
+  }
+
+  /* ---------- 文字スタンプの色・角度・プレビュー（2026-08-13 実機テスト要望①②） ----------
+     色: ペンと同系のパレット＋「おまかせ」（スタンプごとの標準色）。
+     角度: 押す前に ひだり/まっすぐ/みぎ を選べる。おまかせ＝従来の手の癖ランダム角度。
+     プレビュー: いま選んでいるスタンプが「どの色・どの角度で押されるか」を置く前に見せる。 */
+  function buildTextColorRow() {
+    const conf = modeConf();
+    const row = $('#text-color-row');
+    if (!row) return;
+    row.innerHTML = '';
+    // 先頭は「おまかせ」（スタンプ標準色に戻す）
+    const auto = document.createElement('div');
+    auto.className = 'color-swatch text-color-auto selected';
+    auto.title = 'おまかせ（スタンプの標準色）';
+    auto.addEventListener('click', () => {
+      row.querySelectorAll('.color-swatch').forEach(x => x.classList.remove('selected'));
+      auto.classList.add('selected');
+      state.textStampColor = null;
+      renderTextStampPreview();
+    });
+    row.appendChild(auto);
+    conf.penColors.forEach((c) => {
+      const sw = document.createElement('div');
+      sw.className = 'color-swatch';
+      sw.style.background = c;
+      if (c === '#ffffff') sw.style.boxShadow = '0 0 0 1px #ccc, inset 0 0 0 1px #ddd';
+      sw.addEventListener('click', () => {
+        row.querySelectorAll('.color-swatch').forEach(x => x.classList.remove('selected'));
+        sw.classList.add('selected');
+        state.textStampColor = c;
+        renderTextStampPreview();
+      });
+      row.appendChild(sw);
+    });
+  }
+
+  // 角度ボタン（静的DOM。1回だけ結線）
+  document.querySelectorAll('#text-angle-row .angle-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#text-angle-row .angle-btn').forEach(x => x.classList.toggle('active', x === b));
+      state.textStampAngle = b.dataset.angle === 'auto' ? 'auto' : Number(b.dataset.angle);
+      renderTextStampPreview();
+    });
+  });
+
+  // いまの選択（スタンプ×色×角度）で実際に押される見た目を作る共通処理
+  function makeTextStampObject(sel, x, y) {
+    const modeStyle = modeConf().textStampStyle;
+    const sizeScale = state.stampSize / 48;
+    const fontSize = Math.round((sel.style === 'neon' ? 22 : 20) * sizeScale);
+    const rot = state.textStampAngle === 'auto'
+      ? (Math.random() * modeStyle.rotate * 2 - modeStyle.rotate) * Math.PI / 180
+      : state.textStampAngle * Math.PI / 180;
+    return {
+      type: 'text', t: sel.t, style: sel.style || 'plain',
+      color: state.textStampColor || sel.color || modeStyle.fill,
+      glow: state.textStampColor || null, // neonスタイルの発光色（未指定なら従来の既定色）
+      x, y, fontSize, rot,
+      font: modeStyle.font.replace(/(\d+)px/, (m, n) => Math.round(Number(n) * sizeScale) + 'px'),
+      strokeColor: modeStyle.stroke,
+      strokeWidth: (modeStyle.strokeWidth || 0) * sizeScale,
+    };
+  }
+
+  function renderTextStampPreview() {
+    const cv = $('#text-stamp-preview');
+    if (!cv) return;
+    const pctx = cv.getContext('2d');
+    pctx.clearRect(0, 0, cv.width, cv.height);
+    const sel = state.tool === 'textstamp' ? state.textStampSel : null;
+    if (!sel) {
+      pctx.save();
+      pctx.font = '600 13px sans-serif';
+      pctx.textAlign = 'center';
+      pctx.textBaseline = 'middle';
+      pctx.fillStyle = 'rgba(0,0,0,.38)';
+      pctx.fillText('👆 スタンプをえらぶと ここにプレビュー', cv.width / 2, cv.height / 2);
+      pctx.restore();
+      return;
+    }
+    // プレビューは中央固定サイズ。角度おまかせは「最大の癖角度」で傾きを見せる
+    const o = makeTextStampObject(sel, cv.width / 2, cv.height / 2);
+    o.fontSize = sel.style === 'neon' ? 22 : 20;
+    o.font = modeConf().textStampStyle.font;
+    o.strokeWidth = modeConf().textStampStyle.strokeWidth || 0;
+    if (state.textStampAngle === 'auto') o.rot = -modeConf().textStampStyle.rotate * Math.PI / 180;
+    // 長い文言はキャンバス幅に収まるよう縮小して描く
+    pctx.save();
+    pctx.font = `900 ${o.fontSize}px sans-serif`;
+    const tw = pctx.measureText(o.t).width + o.fontSize * 0.8;
+    pctx.restore();
+    const sc = Math.min(1, (cv.width - 12) / tw);
+    pctx.save();
+    pctx.translate(cv.width / 2, cv.height / 2);
+    pctx.scale(sc, sc);
+    pctx.translate(-cv.width / 2, -cv.height / 2);
+    drawTextStampStyled(pctx, o);
+    pctx.restore();
   }
 
   /* ---------- 落書き見本（Meidy式・2026-08-12 新設／2026-08-13 写真セル単位に改修） ----------
@@ -3889,7 +3994,13 @@
     buildColorRow();
     buildStampRow();
     buildTextStampRow();
+    buildTextColorRow();
     buildSampleRow();
+    // 文字スタンプの色・角度を初期値へ（モードが変わるたびリセット・2026-08-13）
+    state.textStampColor = null;
+    state.textStampAngle = 'auto';
+    document.querySelectorAll('#text-angle-row .angle-btn').forEach(b => b.classList.toggle('active', b.dataset.angle === 'auto'));
+    renderTextStampPreview();
     state.penColor = conf.penColors[0];
     // ペン種別（モードごとに使えるものだけ表示。1種類なら行ごと隠す）
     const types = conf.penTypes || ['normal'];
@@ -3962,18 +4073,9 @@
       return;
     }
     if (state.tool === 'textstamp' && state.textStampSel) {
-      const sel = state.textStampSel;
-      const modeStyle = modeConf().textStampStyle;
-      const sizeScale = state.stampSize / 48;
-      const fontSize = Math.round((sel.style === 'neon' ? 22 : 20) * sizeScale);
-      const o = {
-        type: 'text', t: sel.t, style: sel.style || 'plain', color: sel.color || modeStyle.fill,
-        x, y, fontSize,
-        rot: (Math.random() * modeStyle.rotate * 2 - modeStyle.rotate) * Math.PI / 180,
-        font: modeStyle.font.replace(/(\d+)px/, (m, n) => Math.round(Number(n) * sizeScale) + 'px'),
-        strokeColor: modeStyle.stroke,
-        strokeWidth: (modeStyle.strokeWidth || 0) * sizeScale,
-      };
+      // 色・角度は事前に選んだもの（プレビューどおり）で押す（2026-08-13）
+      const o = makeTextStampObject(state.textStampSel, x, y);
+      const fontSize = o.fontSize;
       // ヒットテスト用に幅を測る
       drawCtx.save();
       drawCtx.font = `900 ${fontSize}px sans-serif`;
@@ -4123,8 +4225,9 @@
     const t = nameInput.value.trim();
     nameModal.classList.add('hidden');
     if (!t) return;
-    const color = state.mode === 'reiwa' ? '#a8917d' : '#ff2fa0';
+    const color = state.textStampColor || (state.mode === 'reiwa' ? '#a8917d' : '#ff2fa0');
     setTool('textstamp', { t, style: 'sticker', color });
+    renderTextStampPreview();
     showDecoToast('シートをタップして なまえを押してね！');
   });
 

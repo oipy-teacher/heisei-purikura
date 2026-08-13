@@ -276,6 +276,16 @@
           <div class="tool-group" id="group-text">
             <p class="tool-label">🔤 文字スタンプ</p>
             <div class="text-stamp-row" id="text-stamp-row"></div>
+            <!-- 文字色（2026-08-13 実機テスト要望①）: ペンと同系の色パレット＋「おまかせ」 -->
+            <div class="color-row text-color-row" id="text-color-row"></div>
+            <!-- 角度（2026-08-13 実機テスト要望②）: 置く前に角度を選べる。おまかせ＝従来の手の癖角度 -->
+            <div class="angle-row" id="text-angle-row">
+              <button class="angle-btn" data-angle="-12">↖ ひだり</button>
+              <button class="angle-btn" data-angle="0">→ まっすぐ</button>
+              <button class="angle-btn" data-angle="12">↘ みぎ</button>
+              <button class="angle-btn active" data-angle="auto">🎲 おまかせ</button>
+            </div>
+            <canvas id="text-stamp-preview" width="252" height="56"></canvas>
             <button id="btn-name-stamp" class="btn-small name-stamp-btn">✍️ おなまえスタンプをつくる</button>
           </div>
 

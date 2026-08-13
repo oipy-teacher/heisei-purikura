@@ -2304,3 +2304,47 @@ body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
     padding: 30px 18px 12px;
   }
 }
+
+/* ===== 2026-08-13 実機テスト対応の追加UI（文字スタンプ色/角度・見本の写真タップ貼り） ===== */
+.text-color-row { margin-top: 8px; }
+.angle-row { display: flex; gap: 6px; margin: 8px 0 0; flex-wrap: wrap; }
+.angle-btn {
+  flex: 1;
+  min-width: 62px;
+  white-space: nowrap;
+  padding: 7px 2px;
+  border-radius: 10px;
+  border: 2px solid #d9c2ee;
+  background: #fff;
+  color: #7a3fb0;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+.angle-btn.active { background: #ff2fa0; color: #fff; border-color: #ff2fa0; }
+body[data-mode="reiwa"] .angle-btn { border-color: #d8c9b8; color: #8a7568; }
+body[data-mode="reiwa"] .angle-btn.active { background: #a8917d; border-color: #a8917d; }
+body.theme-heisei .angle-btn {
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--h-pink);
+  border-radius: 999px;
+  color: var(--h-ink);
+}
+body.theme-heisei .angle-btn.active { background: var(--h-pink); color: #fff; }
+#text-stamp-preview {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 8px;
+  border: 2px dashed #eee;
+  border-radius: 10px;
+  background: #fff;
+}
+body.theme-heisei #text-stamp-preview { border: 2px dashed #e8cede; }
+body.theme-reiwa #text-stamp-preview { border: 1px solid rgba(74,63,56,.25); border-radius: 4px; background: #fefcf9; }
+/* 「おまかせ」スウォッチ（スタンプ標準色に戻す）: 虹色で他の単色と区別 */
+.text-color-auto { background: conic-gradient(#ff2fa0, #ffef5c, #5cff8f, #5cc8ff, #a06bff, #ff2fa0); }
+/* 選択中の文字スタンプ・見本のハイライト */
+.text-stamp-btn.selected, .sample-btn.selected { outline: 3px solid #ff2fa0; outline-offset: 1px; }
+body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected { outline: 2px solid var(--r-accent); }
+.sample-all-btn { margin-top: 8px; width: 100%; }
