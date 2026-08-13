@@ -2356,3 +2356,18 @@ body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected
 .layout-gate-list { grid-template-columns: repeat(3, 1fr); margin: 0; }
 #layout-gate .deco-gate-inner { max-width: min(90vw, 480px); }
 
+/* コロコロ（当時の名物ツール: なぞるとスタンプが連なって押される）。平成のみ表示 */
+.push-row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.push-btn {
+  border: 2px solid #f0a8d0;
+  background: #fff;
+  color: #a03cae;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.push-btn.active { background: #ff2fa0; color: #fff; border-color: #ff2fa0; }
+body.theme-heisei .push-btn { border: 2px dashed var(--h-pink); color: var(--h-ink); }
+body.theme-heisei .push-btn.active { background: var(--h-pink); color: #fff; border-style: solid; }

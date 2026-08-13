@@ -291,6 +291,7 @@
     textStampColor: null,  // 文字スタンプの色（null=おまかせ＝スタンプごとの標準色・2026-08-13）
     textStampAngle: 'auto', // 文字スタンプの角度（'auto'=従来の手の癖ランダム / 度数指定・2026-08-13）
     dstampId: null,
+    stampPush: 'pon',      // スタンプの押し方（平成のみ）。pon=1こずつ / roll=コロコロ（なぞって連打・当時の名物ツール）
     sampleSel: null,       // 選択中の落書き見本（写真タップで貼るモード・2026-08-13）,
     isDrawing: false,
     lastX: 0,
@@ -4007,6 +4008,11 @@
     if (angleRow) angleRow.style.display = isHeisei ? 'none' : '';
     const previewCv = $('#text-stamp-preview');
     if (previewCv) previewCv.style.display = isHeisei ? 'none' : '';
+    // コロコロは平成の名物ツール（令和には出さない）。モードが変わるたび「ポン」に戻す
+    const pushRow = $('#stamp-push-row');
+    if (pushRow) pushRow.style.display = isHeisei ? '' : 'none';
+    state.stampPush = 'pon';
+    document.querySelectorAll('#stamp-push-row .push-btn').forEach(b => b.classList.toggle('active', b.dataset.push === 'pon'));
     // 文字スタンプの色・角度を初期値へ（モードが変わるたびリセット・2026-08-13）
     state.textStampColor = null;
     state.textStampAngle = 'auto';
@@ -4064,6 +4070,24 @@
   let curStroke = null;   // 描画中の stroke/erase/kira オブジェクト
   let lastSparkleX = 0, lastSparkleY = 0;
 
+  /* ---------- コロコロ（平成のみ・2026-08-13 考証回帰） ----------
+     当時の名物ツール「ローラーでスタンプが連なって押される」を再現。
+     ドラッグ中、一定間隔ごとにいま選んでいるスタンプを置いていく。
+     1ドラッグ＝1操作（addMany）なので「もどす」で丸ごと消える */
+  let rolling = false;
+  let rollCount = 0;
+  let lastRollX = 0, lastRollY = 0;
+
+  function placeRollStamp(x, y) {
+    const o = state.tool === 'dstamp'
+      ? { type: 'dstamp', id: state.dstampId, x, y, size: state.stampSize * 1.2 }
+      : { type: 'stamp', char: state.stampChar, x, y, size: state.stampSize };
+    decoObjects.push(o);
+    drawObject(drawCtx, o);
+    rollCount++;
+    lastRollX = x; lastRollY = y;
+  }
+
   drawCanvas.addEventListener('pointerdown', (e) => {
     if (state.remaining <= 0) return;
     try { drawCanvas.setPointerCapture(e.pointerId); } catch (err) { /* 一部環境では無視して続行 */ }
@@ -4086,15 +4110,18 @@
       return;
     }
 
-    if (state.tool === 'stamp' && state.stampChar) {
-      const o = { type: 'stamp', char: state.stampChar, x, y, size: state.stampSize };
-      decoObjects.push(o);
-      drawObject(drawCtx, o);
-      pushUndo({ op: 'add' });
-      return;
-    }
-    if (state.tool === 'dstamp' && state.dstampId) {
-      const o = { type: 'dstamp', id: state.dstampId, x, y, size: state.stampSize * 1.2 };
+    if ((state.tool === 'stamp' && state.stampChar) || (state.tool === 'dstamp' && state.dstampId)) {
+      // コロコロ（平成のみ）: ドラッグでスタンプが連なる。1こ目はこの場で置く
+      if (state.mode === 'heisei' && state.stampPush === 'roll') {
+        state.isDrawing = true;
+        rolling = true;
+        rollCount = 0;
+        placeRollStamp(x, y);
+        return;
+      }
+      const o = state.tool === 'dstamp'
+        ? { type: 'dstamp', id: state.dstampId, x, y, size: state.stampSize * 1.2 }
+        : { type: 'stamp', char: state.stampChar, x, y, size: state.stampSize };
       decoObjects.push(o);
       drawObject(drawCtx, o);
       pushUndo({ op: 'add' });
@@ -4160,6 +4187,13 @@
       swipeEraseAt(x, y);
       return;
     }
+    if (rolling) {
+      // コロコロ: スタンプの大きさに応じた間隔で連なって押される
+      const spacing = state.stampSize * 0.9;
+      const dx = x - lastRollX, dy = y - lastRollY;
+      if (dx * dx + dy * dy >= spacing * spacing) placeRollStamp(x, y);
+      return;
+    }
     if (state.tool === 'eraser' && curStroke) {
       // プレビューは直接destination-outで消しつつ、オブジェクトにも記録
       curStroke.pts.push({ x, y });
@@ -4196,6 +4230,13 @@
   function endStroke() {
     if (!state.isDrawing) return;
     state.isDrawing = false;
+    if (rolling) {
+      // コロコロの1ドラッグ＝1操作。「もどす」で連なり全部が消える
+      rolling = false;
+      if (rollCount > 0) pushUndo({ op: 'addMany', count: rollCount });
+      rollCount = 0;
+      return;
+    }
     if (state.tool === 'swipe') {
       if (swipeRemoved.length) {
         pushUndo({ op: 'remove', items: swipeRemoved });
@@ -4228,6 +4269,13 @@
     btn.addEventListener('click', () => {
       state.stampSize = Number(btn.dataset.stampsize);
       document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+  // スタンプの押し方（ポン/コロコロ・平成のみ表示）
+  document.querySelectorAll('#stamp-push-row .push-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.stampPush = btn.dataset.push;
+      document.querySelectorAll('#stamp-push-row .push-btn').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
 
