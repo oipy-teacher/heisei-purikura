@@ -1152,15 +1152,62 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
 @media (max-height: 520px) {
   .deco-wrap, .beauty-wrap { padding: 6px 10px; }
   .deco-header, .beauty-header { padding: 2px 4px 6px; }
-  /* サムネイル4枚が横並びの狭い列に収まらず左右へはみ出すため、ひと回り小さくする */
-  .deco-thumb canvas { width: 60px; height: 45px; }
-  .deco-thumbs { gap: 6px; padding: 6px 0 0; }
   .deco-photo-stage { max-height: none; }
   .camera-stage { gap: 12px; }
   .camera-side { min-width: 170px; }
   .cam-caption { font-size: 16px; margin: 2px 0; }
   .cam-caption.small { margin-bottom: 8px; }
-  .beauty-controls, .deco-toolbar { min-width: 200px; }
+  .beauty-controls { min-width: 200px; }
+
+  /* 平成の下端テロップは横持ちでは画面の12%を食い、道具の最終行を削っていた。
+     考証として残しつつ、横持ちだけ薄くする（2026-08-14 実機指摘「横向きで文字被り」）。
+     .deco-wrap の下余白もこの高さに合わせる（一括指定で消さないこと） */
+  #marquee { height: 24px; bottom: 6px; }
+  #marquee-inner { font-size: 14px; }
+  body.theme-heisei .deco-wrap { padding-bottom: 32px; }
+
+  /* ゲート（らくがき開始・分割えらび）は横持ちだと中身が画面より高くなり、
+     見出しが上へ切れて選択肢が下端テロップに隠れていた。中でスクロールさせる */
+  .deco-gate-inner {
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 14px 18px;
+  }
+  .deco-gate-title { font-size: 17px; margin: 0 0 6px; }
+  .deco-gate-note, .photo-pick-note { font-size: 12px; margin: 4px 0; }
+
+  /* ===== 落書きの横持ち最適化（2026-08-14 オーナー裁定）=====
+     「落書きのときだけ横にする」想定。編集中の写真をできるだけ大きく見せ、
+     サムネイルは縦一列のレールにして高さを写真に譲る。
+     レールはそのままスクロール（スワイプ）できるので、指で送って選べる。 */
+  .deco-canvas-holder { flex-direction: row; align-items: stretch; gap: 8px; flex: 2.4; }
+  .deco-photo-stage { flex: 1; width: auto; height: 100%; }
+  .deco-thumbs {
+    flex: none;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    gap: 6px;
+    padding: 0;
+    scroll-snap-type: y proximity;
+    touch-action: pan-y; /* レール上の縦スワイプはスクロールとして受け取る */
+  }
+  .deco-thumb { scroll-snap-align: center; }
+  .deco-thumb canvas { width: 54px; height: 41px; }
+  /* 道具箱は省スペース化して、空いた分を写真に回す */
+  .deco-toolbar { flex: 0 1 200px; min-width: 170px; max-width: 230px; gap: 9px; padding: 9px; }
+  .deco-toolbar .tool-btn { font-size: 11px; padding: 6px 4px; }
+  .deco-toolbar .tool-group { gap: 6px; }
+  /* 写真の左右に出す送りボタン（横持ちのみ・タップでも切り替えられるように）。
+     .shot-nav の既定(display:none)はこの後ろで定義されるため、
+     打ち勝てるように親を含めた指定にしている */
+  .deco-photo-stage .shot-nav { display: flex; }
+
+  /* 令和の左上ロゴタイプ（#theme-frame::before）は固定の飾り。
+     横持ちだと圧縮したヘッダーの「らくがきタイム」と重なるため、
+     高さの無い画面では出さない（平成の年代票を隠しているのと同じ考え方）。 */
+  body.theme-reiwa #theme-frame::before { display: none; }
 }
 
 /* ================================================================
@@ -2582,6 +2629,34 @@ body.theme-reiwa .save-escape {
 }
 /* 長押し保存の案内文（モーダル内）はテーマの confirm-box / confirm-text をそのまま継承する */
 .save-box .save-hint { margin: 6px 0 0; font-size: 12px; opacity: .8; }
+
+/* 写真の送りボタン（横持ちのみ・2026-08-14 オーナー裁定「横で落書きするとき写真を大きく」）。
+   既定は非表示で、上の max-height:520px 側で display:flex にして出す。 */
+.shot-nav {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 7;
+  width: 34px; height: 52px;
+  align-items: center; justify-content: center;
+  padding: 0;
+  border: 2px solid rgba(255,255,255,.9);
+  border-radius: 10px;
+  background: rgba(0,0,0,.42);
+  color: #fff;
+  font-size: 17px; font-weight: 900;
+  cursor: pointer;
+}
+.shot-nav.prev { left: 4px; }
+.shot-nav.next { right: 4px; }
+.shot-nav:disabled { opacity: .28; }
+body.theme-reiwa .shot-nav {
+  background: rgba(255,255,255,.86);
+  border-color: var(--r-accent);
+  color: var(--r-ink);
+  font-weight: 600;
+}
 
 /* 落書き編集ツール（√me2型・令和のみ・2026-08-14）: 選択中に出る操作バー */
 .edit-bar { position: absolute; right: 10px; top: 10px; z-index: 6; display: flex; gap: 8px; }

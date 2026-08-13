@@ -4028,6 +4028,7 @@
       if (shots[i]) cctx.drawImage(shots[i], 0, 0, cv.width, cv.height);
       if (doodled) cctx.drawImage(renderShotDoodle(i), 0, 0, cv.width, cv.height);
     });
+    if (typeof updateShotNav === 'function') updateShotNav(); // 送りボタンの端の無効化を合わせる
   }
 
   // 描き込みのたびに毎回全サムネイルを描き直すと重いので、1フレーム相当にまとめる
@@ -4771,6 +4772,59 @@
     lastRollX = x; lastRollY = y;
   }
 
+  /* ===== 写真の送り（横持ちの落書き用・2026-08-14 オーナー裁定） =====
+     「落書きのときだけ横にする」想定に合わせ、写真を大きく見せたまま
+     別の写真へ移れるようにする。移り方は3つ:
+       ・サムネイルのレール（横持ちでは縦一列）をスワイプして選ぶ
+       ・写真の左右に出る ◀ ▶ を押す
+       ・写真の上で **2本指の**横スワイプ
+     2本指にしているのは、描くのが必ず1本指だから。
+     1本指のスワイプを割り当てると、描いている最中に写真が変わる事故が起きうる。
+     この方式なら描画中に切り替わることは原理的に起きない。 */
+  function shotCount() { return decoShots().length; }
+  function gotoShot(delta) {
+    const n = shotCount();
+    if (n <= 1) return;
+    const next = Math.min(n - 1, Math.max(0, curShot + delta));
+    if (next === curShot) return;
+    if (state.isDrawing) return; // 念のため（描いている間は絶対に切り替えない）
+    selectShot(next);
+    updateShotNav();
+    // 選んだサムネイルをレールの見える位置へ送る
+    const row = $('#deco-thumbs');
+    const btn = row && row.children[next];
+    if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  function updateShotNav() {
+    const n = shotCount();
+    const prev = $('#btn-shot-prev'), next = $('#btn-shot-next');
+    if (prev) prev.disabled = curShot <= 0;
+    if (next) next.disabled = curShot >= n - 1;
+  }
+  $('#btn-shot-prev').addEventListener('click', (e) => { e.preventDefault(); gotoShot(-1); });
+  $('#btn-shot-next').addEventListener('click', (e) => { e.preventDefault(); gotoShot(1); });
+
+  // 2本指の横スワイプで写真を送る（描画は1本指なので競合しない）
+  let twoFingerStart = null;
+  drawCanvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const mid = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      twoFingerStart = { x: mid, done: false };
+    } else {
+      twoFingerStart = null;
+    }
+  }, { passive: true });
+  drawCanvas.addEventListener('touchmove', (e) => {
+    if (!twoFingerStart || twoFingerStart.done || e.touches.length !== 2) return;
+    const mid = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const dx = mid - twoFingerStart.x;
+    if (Math.abs(dx) > 48) { // しきい値。うっかり触れた程度では動かさない
+      twoFingerStart.done = true;
+      gotoShot(dx < 0 ? 1 : -1); // 左へ払う＝次の写真
+    }
+  }, { passive: true });
+  drawCanvas.addEventListener('touchend', () => { twoFingerStart = null; }, { passive: true });
+
   /* 落書き中に画面ごとスクロールさせない（2026-08-14 モニター指摘）。
      CSSの touch-action:none だけでは、LINEなどのアプリ内ブラウザで
      ページが一緒に動いてしまうことがあるため、キャンバス上のタッチは
@@ -5349,7 +5403,11 @@
       img.src = cv.toDataURL('image/png'); // Blobが作れなかった環境の保険
     }
     $('#save-modal').classList.remove('hidden');
-    showSaveToast('画像を ながおし して「“写真”に追加」でほぞんできるよ');
+    /* ここでトーストは出さない（2026-08-14 実機指摘「横向きで文字被り」）。
+       トーストは画面上端に出るため、横持ちではモーダルの案内文
+       「この画像をながおしして…」に重なって読めなくなっていた。
+       同じ内容をモーダル自身が大きく出しているので、二重に言う必要もない。 */
+    if (saveToastEl) { saveToastEl.classList.add('hidden'); if (saveToastId) clearTimeout(saveToastId); }
   }
   $('#btn-save-close').addEventListener('click', () => {
     $('#save-modal').classList.add('hidden');
