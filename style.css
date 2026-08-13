@@ -2414,6 +2414,9 @@ body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected
 .layout-gate-list { grid-template-columns: repeat(3, 1fr); margin: 0; }
 #layout-gate .deco-gate-inner { max-width: min(90vw, 480px); }
 
+/* 証明プリは令和のみ（Meidy型・2026-08-14。平成の年代設定1999-2003に証明プリは無い） */
+body[data-mode="heisei"] #btn-download-id { display: none; }
+
 /* メイクりれき（Bloomit型・2026-08-14） */
 .makeup-history { margin-bottom: 8px; width: 100%; }
 body.theme-reiwa .makeup-history { border: 1px solid var(--r-accent); color: var(--r-ink); background: #f7f0e8; }

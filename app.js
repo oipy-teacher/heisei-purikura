@@ -4946,7 +4946,7 @@
     link.href = dataUrl;
     link.download = `purikura_${state.mode}_${fileStamp()}.png`;
     // 追加出力（16分割・たて長）は押されたときに作る。前回セッションの生成結果は破棄
-    ['#btn-download-16', '#btn-download-story'].forEach(sel => {
+    ['#btn-download-16', '#btn-download-story', '#btn-download-id'].forEach(sel => {
       const el = $(sel);
       el.removeAttribute('href');
       delete el.dataset.done;
@@ -5090,6 +5090,89 @@
     return cv;
   }
 
+  /* ---------- 追加出力③: 証明プリ（現行実機Meidy 2025の型・令和のみ・2026-08-14） ----------
+     履歴書(4×3cm)/免許証風(3×2.4cm)/パスポート(4.5×3.5cm)の3サイズを1枚の台紙に並べる。
+     顔検出があれば顔を証明写真の定石位置（顔の高さ≒写真の半分・頭上に余白）へ自動センタリング。
+     落書きは載せない（証明風の出力に落書きは似合わない）。あそび用の断り書きを入れる */
+  function composeIdPhoto() {
+    const cv = document.createElement('canvas');
+    cv.width = SHEET_W; cv.height = SHEET_H;
+    const ctx = cv.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
+    grad.addColorStop(0, '#f6efe6');
+    grad.addColorStop(1, '#eee4d6');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, SHEET_W, SHEET_H);
+    ctx.textAlign = 'center';
+    ctx.font = 'italic 600 26px Georgia, serif';
+    ctx.fillStyle = '#6f5f52';
+    ctx.fillText('ID photo — 証明プリ', SHEET_W / 2, 52);
+
+    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    const idx = (state.photoPick && state.photoPick.length) ? state.photoPick[0] : 0;
+    const shot = shots[idx];
+    if (!shot) return cv;
+    const faces = state.faceData[idx];
+    // 縦横比 aspect(w/h) の証明写真クロップ矩形（顔があれば顔基準・なければ上寄せ中央）
+    const faceRect = (aspect) => {
+      const sw = shot.width, sh = shot.height;
+      let cx = sw / 2, cy = sh * 0.42, faceH = sh * 0.5;
+      if (faces && faces.length && faces[0].length >= 468) {
+        let minX = 1, maxX = 0, minY = 1, maxY = 0;
+        faces[0].forEach(p => {
+          if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        });
+        cx = (minX + maxX) / 2 * sw;
+        cy = (minY + maxY) / 2 * sh;
+        faceH = (maxY - minY) * sh;
+      }
+      let ch = Math.min(sh, faceH * 2.1);
+      let cw = ch * aspect;
+      if (cw > sw) { cw = sw; ch = cw / aspect; }
+      const x = Math.max(0, Math.min(sw - cw, cx - cw / 2));
+      const y = Math.max(0, Math.min(sh - ch, cy - ch * 0.46));
+      return { x, y, w: cw, h: ch };
+    };
+    const SIZES = [
+      { label: 'りれきしょ（4cm×3cm）', w: 30, h: 40, n: 2 },
+      { label: 'めんきょしょう風（3cm×2.4cm）', w: 24, h: 30, n: 3 },
+      { label: 'パスポート（4.5cm×3.5cm）', w: 35, h: 45, n: 2 },
+    ];
+    const SCALE = 4.6; // mm→px（台紙内で切って使う遊び用の縮尺）
+    let y = 86;
+    SIZES.forEach((sz) => {
+      const pw = sz.w * SCALE, ph = sz.h * SCALE;
+      ctx.font = '500 15px "Hiragino Kaku Gothic ProN", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#8a7568';
+      ctx.fillText(sz.label, 40, y + 14);
+      const gap = 22;
+      const total = sz.n * pw + (sz.n - 1) * gap;
+      const x0 = (SHEET_W - total) / 2;
+      const r = faceRect(pw / ph);
+      for (let i = 0; i < sz.n; i++) {
+        const x = x0 + i * (pw + gap);
+        const py = y + 24;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x - 5, py - 5, pw + 10, ph + 10);
+        ctx.drawImage(shot, r.x, r.y, r.w, r.h, x, py, pw, ph);
+        ctx.save();
+        ctx.strokeStyle = '#c9b8a6';
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(x - 5.5, py - 5.5, pw + 11, ph + 11);
+        ctx.restore();
+      }
+      y += 24 + ph + 34;
+    });
+    const d = new Date();
+    ctx.textAlign = 'center';
+    ctx.font = 'italic 500 13px Georgia, serif';
+    ctx.fillStyle = '#8a7568';
+    ctx.fillText(d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + '　※あそび用のプリだよ（ほんものの証明写真には使えません）', SHEET_W / 2, SHEET_H - 22);
+    return cv;
+  }
+
   // 追加出力は押された瞬間に生成して同じタップで保存する（クリック処理内でhrefを確定させる）
   $('#btn-download-16').addEventListener('click', function () {
     if (this.dataset.done) return;
@@ -5101,6 +5184,12 @@
     if (this.dataset.done) return;
     this.href = composeStoryCollage().toDataURL('image/png');
     this.download = `purikura_story_${state.mode}_${fileStamp()}.png`;
+    this.dataset.done = '1';
+  });
+  $('#btn-download-id').addEventListener('click', function () {
+    if (this.dataset.done) return;
+    this.href = composeIdPhoto().toDataURL('image/png');
+    this.download = `purikura_id_${state.mode}_${fileStamp()}.png`;
     this.dataset.done = '1';
   });
 
