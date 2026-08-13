@@ -178,11 +178,13 @@
      平成 = 180秒。実機の約200秒に準拠。時間に追われて描く緊張感が体験の核なので変えない。
      令和 = 長め。スマホの小さい画面で指で拡大しながら描くため、実機と同じ尺だと足りない。
      ※ 実際に試して調整する前提の数字。ここだけ直せば変えられる。 */
-  const DECO_SECONDS_BY_MODE = { heisei: 180, reiwa: 600 };
+  /* 2026-08-13 オーナー裁定（実機ユーザーテスト）: 「盛り2分、落書き3分とかで◎」
+     令和の落書きも3分に短縮（600→180）。平成は従来どおり3分。 */
+  const DECO_SECONDS_BY_MODE = { heisei: 180, reiwa: 180 };
   const DECO_SECONDS = DECO_SECONDS_BY_MODE.heisei; // 既定値（後方互換）
   const decoSeconds = () => DECO_SECONDS_BY_MODE[state.mode] ?? DECO_SECONDS;
 
-  const BEAUTY_SECONDS = 60;  // 盛り調整1分（実機の盛り調整時間に準拠）
+  const BEAUTY_SECONDS = 120; // 盛り調整2分（2026-08-13 オーナー裁定: 1分では足りない）
 
   /* 全身モードの準備カウント。
      プリクラ機は無人。客が自分で「はじめる」を押したあと、雲台を回して場ミリまで
