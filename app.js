@@ -278,9 +278,9 @@
     beautyRemaining: BEAUTY_SECONDS,
     beautyWarned: false,
     penColor: MODES.heisei.penColors[0],
-    penSize: 8,
+    penSize: 16, // 写真拡大表示方式: 写真の原寸座標に描くため従来比2倍が既定
     penType: 'normal', // normal | neon | fuchi | kira
-    stampSize: 48,
+    stampSize: 96, // 写真拡大表示方式ではキャンバスが写真の原寸(640×480)なので従来比2倍が「中」
     tool: 'pen',
     stampChar: null,
     textStampSel: null,
@@ -317,7 +317,7 @@
      ここでは「画面ごとのテロップ文言」と「平成の遷移フラッシュ」だけをJSで面倒を見る。 */
   const MARQUEE_TEXTS = {
     'screen-select': 'コースをえらんでね！　らくがきは３ぷんしょうぶ！　プリはともだちとはんぶんこ！　シールはプリちょうにはろう！　',
-    'screen-deco': 'らくがきは３ぷんしょうぶ！　あまったよはくは うめつくせ！　スタンプれんだ かいきん！　我等友情永久不滅成！　',
+    'screen-deco': 'らくがきは３ぷんしょうぶ！　しゃしんを きりかえて ４まいぜんぶ かきこめ！　スタンプれんだ かいきん！　我等友情永久不滅成！　',
   };
 
   function setTheme(mode) {
@@ -3302,18 +3302,35 @@
      すべての描き込みを「オブジェクト」として保持し、キャンバスはオブジェクト列から再描画する。
      これにより ロイロノート式の「なぞり消し」（触れた線やスタンプを丸ごと消す）と
      軽量なアンドゥ（操作の巻き戻し）が可能になる。 */
+  /* 落書きは「写真拡大表示」方式（2026-08-13 実機テスト指摘
+     「各ショットを全体表示しないと落書きなんてできねーじゃないか」対応・平成/令和共通）:
+     - 選択中の写真1枚を画面いっぱいに表示して描く（キャンバス座標＝写真座標 SHOT_W×SHOT_H）
+     - サムネイル（1〜4）でショットを切り替える。落書きは写真ごとに保持する
+     - シール合成時に、写真と同じcover変換で各セルへ縮小反映（＝落書きは写真に付いていく）
+     - 台紙の余白（セル外）への落書きは廃止（実機も写真にしか描けない） */
   const drawCanvas = $('#draw-canvas');
-  drawCanvas.width = SHEET_W;
-  drawCanvas.height = SHEET_H;
+  drawCanvas.width = SHOT_W;
+  drawCanvas.height = SHOT_H;
   const drawCtx = drawCanvas.getContext('2d');
   // ストローク描画中のプレビュー用レイヤー
   const strokeCanvas = $('#stroke-canvas');
-  strokeCanvas.width = SHEET_W;
-  strokeCanvas.height = SHEET_H;
+  strokeCanvas.width = SHOT_W;
+  strokeCanvas.height = SHOT_H;
   const strokeCtx = strokeCanvas.getContext('2d');
+  // 選択中の写真の表示レイヤー（draw-canvasの下）
+  const decoPhotoCanvas = $('#deco-photo-canvas');
+  decoPhotoCanvas.width = SHOT_W;
+  decoPhotoCanvas.height = SHOT_H;
+  const decoPhotoCtx = decoPhotoCanvas.getContext('2d');
 
-  let decoObjects = [];   // 描き込みオブジェクトの列（描画順）
-  let undoStack = [];     // 操作履歴 {op:'add'} | {op:'remove', items:[{index,obj}]}
+  let shotDeco = [];      // 写真ごとの落書き { objects: [], undo: [] }（インデックス＝撮影順）
+  let curShot = 0;        // いま拡大表示している写真のインデックス
+  let decoObjects = [];   // 選択中の写真の描き込みオブジェクト列（shotDeco[curShot].objects への参照）
+  let undoStack = [];     // 選択中の写真の操作履歴（shotDeco[curShot].undo への参照）
+
+  function decoShots() {
+    return state.processedShots.length ? state.processedShots : state.shots;
+  }
 
   /* ---------- 手描き風スタンプ（Canvas描画） ---------- */
   function heartPath(ctx, s) {
@@ -3625,13 +3642,87 @@
   }
 
   function renderDeco() {
-    drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+    drawCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     decoObjects.forEach(o => drawObject(drawCtx, o));
+  }
+
+  /* ---------- ショット切り替え（サムネイル1〜4） ---------- */
+  function selectShot(i) {
+    curShot = i;
+    if (!shotDeco[i]) shotDeco[i] = { objects: [], undo: [] };
+    decoObjects = shotDeco[i].objects;
+    undoStack = shotDeco[i].undo;
+    const shot = decoShots()[i];
+    decoPhotoCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    if (shot) decoPhotoCtx.drawImage(shot, 0, 0, SHOT_W, SHOT_H);
+    renderDeco();
+    refreshDecoThumbs();
+  }
+
+  // 写真iの落書きだけを SHOT_W×SHOT_H の透明キャンバスに描き出す（合成・サムネイル共用）
+  function renderShotDoodle(i) {
+    const c = document.createElement('canvas');
+    c.width = SHOT_W; c.height = SHOT_H;
+    const ctx = c.getContext('2d');
+    ((shotDeco[i] && shotDeco[i].objects) || []).forEach(o => drawObject(ctx, o));
+    return c;
+  }
+
+  function buildDecoThumbs() {
+    const row = $('#deco-thumbs');
+    if (!row) return;
+    row.innerHTML = '';
+    decoShots().forEach((shot, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'deco-thumb';
+      b.dataset.idx = String(i);
+      const cv = document.createElement('canvas');
+      cv.width = 96; cv.height = 72;
+      b.appendChild(cv);
+      const num = document.createElement('span');
+      num.className = 'dt-num';
+      num.textContent = String(i + 1);
+      b.appendChild(num);
+      const mark = document.createElement('span');
+      mark.className = 'dt-mark';
+      mark.textContent = '✎';
+      b.appendChild(mark);
+      b.addEventListener('click', () => { if (i !== curShot) selectShot(i); });
+      row.appendChild(b);
+    });
+    refreshDecoThumbs();
+  }
+
+  // サムネイルの再描画（選択中の枠・落書き済みマーク・落書きプレビュー）
+  function refreshDecoThumbs() {
+    const row = $('#deco-thumbs');
+    if (!row) return;
+    const shots = decoShots();
+    Array.from(row.children).forEach((b) => {
+      const i = Number(b.dataset.idx);
+      b.classList.toggle('selected', i === curShot);
+      const doodled = !!(shotDeco[i] && shotDeco[i].objects.length);
+      b.classList.toggle('doodled', doodled);
+      const cv = b.querySelector('canvas');
+      const cctx = cv.getContext('2d');
+      cctx.clearRect(0, 0, cv.width, cv.height);
+      if (shots[i]) cctx.drawImage(shots[i], 0, 0, cv.width, cv.height);
+      if (doodled) cctx.drawImage(renderShotDoodle(i), 0, 0, cv.width, cv.height);
+    });
+  }
+
+  // 描き込みのたびに毎回全サムネイルを描き直すと重いので、1フレーム相当にまとめる
+  let thumbUpdateId = null;
+  function scheduleThumbUpdate() {
+    if (thumbUpdateId) return;
+    thumbUpdateId = setTimeout(() => { thumbUpdateId = null; refreshDecoThumbs(); }, 120);
   }
 
   function pushUndo(op) {
     undoStack.push(op);
     if (undoStack.length > 60) undoStack.shift();
+    scheduleThumbUpdate();
   }
 
   function undo() {
@@ -3648,6 +3739,7 @@
       });
     }
     renderDeco();
+    scheduleThumbUpdate();
   }
 
   /* ---------- なぞり消し（ロイロノート式: 触れたものを丸ごと消す） ---------- */
@@ -3946,13 +4038,9 @@
     ],
   };
 
-  // 見本→現在のレイアウトの全写真セルへ展開（セルごとに位置・サイズを合わせる）
-  function buildSampleObjects(sample) {
-    const objs = [];
-    layoutCells(state.layout).forEach((cell) => {
-      objs.push(...sampleCellObjects(sample.items, cell));
-    });
-    return objs;
+  /* 見本→写真1枚ぶんのオブジェクト列（写真拡大表示方式: 貼り先は常に「いま表示中の写真」全体） */
+  function sampleObjectsForPhoto(sample) {
+    return sampleCellObjects(sample.items, { x: 0, y: 0, w: SHOT_W, h: SHOT_H });
   }
 
   function buildSampleRow() {
@@ -3963,22 +4051,14 @@
       const b = document.createElement('button');
       b.className = 'sample-btn';
       const cv = document.createElement('canvas');
-      cv.width = 60; cv.height = 79;
+      cv.width = 64; cv.height = 48;
       const cctx = cv.getContext('2d');
       cctx.fillStyle = state.mode === 'reiwa' ? '#f4ede4' : '#ffe6f3';
-      cctx.fillRect(0, 0, 60, 79);
+      cctx.fillRect(0, 0, 64, 48);
+      /* プレビューは写真1枚ぶん（写真拡大表示方式: 見本は表示中の写真にそのまま載る） */
       cctx.save();
-      cctx.scale(60 / SHEET_W, 79 / SHEET_H);
-      /* プレビューも現在のレイアウトのセル単位で描く（写真1枚ごとに載る見え方が伝わる）。
-         セルの枠線も薄く敷いて「どこが写真か」を示す */
-      layoutCells(state.layout).forEach((cell) => {
-        cctx.save();
-        cctx.strokeStyle = 'rgba(0,0,0,.18)';
-        cctx.lineWidth = 6;
-        cctx.strokeRect(cell.x, cell.y, cell.w, cell.h);
-        cctx.restore();
-      });
-      buildSampleObjects(sample).forEach(o => drawObject(cctx, o));
+      cctx.scale(64 / SHOT_W, 48 / SHOT_H);
+      sampleObjectsForPhoto(sample).forEach(o => drawObject(cctx, o));
       cctx.restore();
       b.appendChild(cv);
       const lb = document.createElement('span');
@@ -3986,11 +4066,11 @@
       lb.textContent = sample.label;
       b.appendChild(lb);
       b.addEventListener('click', () => {
-        /* 2026-08-13 実機テスト要望⑥: 全セル一括反映をやめ「見本を選ぶ→貼りたい写真をタップ」に。
-           実機同様、選んだ写真1枚ずつに貼れる。全部に貼りたいときは「ぜんぶのしゃしんに はる」ボタン */
+        /* 見本を選ぶ→貼りたい写真をサムネイルで出して、写真をタップで1枚ずつ貼る。
+           全部に貼りたいときは「ぜんぶのしゃしんに はる」ボタン */
         setTool('sample', sample);
         row.querySelectorAll('.sample-btn').forEach(x => x.classList.toggle('selected', x === b));
-        showDecoToast('👆 はりたい しゃしんを タップしてね！');
+        showDecoToast('👆 はりたいしゃしんを下のサムネイルでえらんで、しゃしんをタップ！');
       });
       row.appendChild(b);
     });
@@ -3998,14 +4078,19 @@
     if (group) group.style.display = samples.length ? '' : 'none';
   }
 
-  // 「ぜんぶのしゃしんに はる」: 選択中の見本を全セルへ（1操作＝「もどす」で丸ごと消える）
+  // 「ぜんぶのしゃしんに はる」: 選択中の見本を全写真へ（写真ごとに1操作＝その写真の「もどす」で丸ごと消える）
   $('#btn-sample-all').addEventListener('click', () => {
     if (state.remaining <= 0) return;
     if (!state.sampleSel) { showDecoToast('さきに みほんを えらんでね！'); return; }
-    const objs = buildSampleObjects(state.sampleSel);
-    decoObjects.push(...objs);
+    decoShots().forEach((_, i) => {
+      if (!shotDeco[i]) shotDeco[i] = { objects: [], undo: [] };
+      const objs = sampleObjectsForPhoto(state.sampleSel);
+      shotDeco[i].objects.push(...objs);
+      shotDeco[i].undo.push({ op: 'addMany', count: objs.length });
+      if (shotDeco[i].undo.length > 60) shotDeco[i].undo.shift();
+    });
     renderDeco();
-    pushUndo({ op: 'addMany', count: objs.length });
+    scheduleThumbUpdate();
   });
 
   function buildDecoTools() {
@@ -4119,9 +4204,8 @@
     }
 
     if (state.tool === 'sample' && state.sampleSel) {
-      const cell = layoutCells(state.layout).find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
-      if (!cell) { showDecoToast('👆 しゃしんの上を タップしてね！'); return; }
-      const objs = sampleCellObjects(state.sampleSel.items, cell);
+      // 写真拡大表示方式: タップした「いま表示中の写真」1枚に見本を貼る
+      const objs = sampleObjectsForPhoto(state.sampleSel);
       decoObjects.push(...objs);
       renderDeco();
       pushUndo({ op: 'addMany', count: objs.length });
@@ -4239,7 +4323,7 @@
     }
     if (curStroke) {
       curStroke.pts.push({ x, y });
-      strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+      strokeCtx.clearRect(0, 0, SHOT_W, SHOT_H);
       strokePolyline(strokeCtx, curStroke.pts, curStroke.penType, curStroke.color, curStroke.size);
       state.lastX = x; state.lastY = y;
     }
@@ -4265,7 +4349,7 @@
     if (!curStroke) return;
     if (curStroke.type === 'stroke') {
       drawCtx.drawImage(strokeCanvas, 0, 0);
-      strokeCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+      strokeCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     }
     decoObjects.push(curStroke);
     pushUndo({ op: 'add' });
@@ -4299,9 +4383,10 @@
 
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-clear').addEventListener('click', () => {
+    // 「ぜんぶ消す」の対象は表示中の写真1枚ぶん（写真拡大表示方式）
     if (!decoObjects.length) return;
     pushUndo({ op: 'remove', items: decoObjects.map((obj, index) => ({ index, obj })) });
-    decoObjects = [];
+    decoObjects.length = 0; // shotDeco[curShot].objects への参照を保ったまま空にする
     renderDeco();
   });
 
@@ -4322,7 +4407,7 @@
     const color = state.textStampColor || (state.mode === 'reiwa' ? '#a8917d' : '#ff2fa0');
     setTool('textstamp', { t, style: 'sticker', color });
     renderTextStampPreview();
-    showDecoToast('シートをタップして なまえを押してね！');
+    showDecoToast('しゃしんをタップして なまえを押してね！');
   });
 
   /* ===================== できあがり確認 ===================== */
@@ -4420,10 +4505,10 @@
 
   function startDecoScreen() {
     showScreen('screen-deco');
-    drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
-    decoObjects = [];
-    undoStack = [];
-    renderDeco();
+    // 写真拡大表示方式: 落書きは写真ごとに持つ。1枚目を拡大表示して開始
+    shotDeco = decoShots().map(() => ({ objects: [], undo: [] }));
+    buildDecoThumbs();
+    selectShot(0);
     buildDecoTools();
     setTool('pen');
     state.remaining = decoSeconds();
@@ -4532,35 +4617,8 @@
   }
 
   /* ---------- 平成: 落書き後の分割選択（2026-08-13 考証回帰） ----------
-     落書き中の台紙は4分割固定。ここで別の分割を選んだら、落書きを写真セル単位で
-     切り出して新しいセルへ再投影する（＝実機の「落書きは写真に付いていく」）。
-     セルの外（余白・ヘッダー）に描かれた落書きはシート座標のまま残す＝消失ゼロ。 */
-  function remapDoodleToLayout(target) {
-    if (target.id === state.layout.id) return; // 同じ分割なら座標もそのまま
-    const srcCells = layoutCells(state.layout);
-    // 1) いまの落書きを写真セルごとに切り出す（セルi＝撮影i枚目の落書き）
-    const perCell = srcCells.map(cell => {
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(cell.w));
-      c.height = Math.max(1, Math.round(cell.h));
-      c.getContext('2d').drawImage(drawCanvas, cell.x, cell.y, cell.w, cell.h, 0, 0, c.width, c.height);
-      return c;
-    });
-    // 2) セルの外に描かれた分（フチの飾りなど）はシート座標のまま保持
-    const outside = document.createElement('canvas');
-    outside.width = SHEET_W; outside.height = SHEET_H;
-    const octx = outside.getContext('2d');
-    octx.drawImage(drawCanvas, 0, 0);
-    srcCells.forEach(cell => octx.clearRect(cell.x, cell.y, cell.w, cell.h));
-    // 3) 新しい分割へ再構成（新セルjには写真 j%4 が入るので、その写真の落書きを重ねる）
-    drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
-    drawCtx.drawImage(outside, 0, 0);
-    layoutCells(target).forEach((cell, j) => {
-      const src = perCell[j % perCell.length];
-      drawCtx.drawImage(src, cell.x, cell.y, cell.w, cell.h);
-    });
-  }
-
+     写真拡大表示方式では落書きが最初から写真単位で保持されているため、
+     分割を選び直しても composeFinal がそのまま各セルへ縮小反映する（再投影の座標変換は不要）。 */
   function showHeiseiLayoutGate() {
     const gate = $('#layout-gate');
     const list = $('#layout-gate-list');
@@ -4572,8 +4630,8 @@
       el.addEventListener('click', () => {
         list.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
-        remapDoodleToLayout(layout); // 先に落書きを移す（state.layoutが旧分割のうちに）
-        state.layout = layout;
+        state.layout = layout; // 落書きは写真単位なので、分割を変えても composeFinal が付いてくる
+
         composeSheet();
         gate.classList.add('hidden');
         composeFinal();
@@ -4595,11 +4653,49 @@
     return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
   }
 
+  /* 落書きをシールの各セルへ縮小反映する（写真拡大表示方式・2026-08-13）。
+     写真と同じセルパスでクリップし、同じ drawCover（中央クロップ）で落書きレイヤーを
+     重ねるので、写真のどの位置に描いたかがセル上でも寸分違わず保たれる。
+     同じ写真が複数セルに入る分割（16分割など）では、落書きも同じように繰り返される。 */
+  function composeDoodleOntoSheet(ctx) {
+    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    const pick = (state.photoPick && state.photoPick.length)
+      ? state.photoPick.filter(idx => idx < shots.length)
+      : null;
+    const order = (pick && pick.length) ? pick : shots.map((_, idx) => idx);
+    const cells = layoutCells(state.layout);
+    const radius = state.layout.radius;
+    const isCircle = state.layout.shape === 'circle';
+    const rendered = {}; // 写真indexごとの落書きレイヤー（同じ写真が複数セルでも1回だけ描く）
+    cells.forEach((cell, i) => {
+      const di = order[i % order.length];
+      if (!shotDeco[di] || !shotDeco[di].objects.length) return;
+      if (!rendered[di]) rendered[di] = renderShotDoodle(di);
+      const { x, y, w, h } = cell;
+      const cx = x + w / 2, cy = y + h / 2;
+      const rad = Math.min(w, h) / 2;
+      ctx.save();
+      if (isCircle) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      } else {
+        roundRect(ctx, x, y, w, h, radius);
+      }
+      ctx.clip();
+      if (isCircle) {
+        drawCover(ctx, rendered[di], cx - rad, cy - rad, rad * 2, rad * 2);
+      } else {
+        drawCover(ctx, rendered[di], x, y, w, h);
+      }
+      ctx.restore();
+    });
+  }
+
   function composeFinal() {
     const ctx = finalCanvas.getContext('2d');
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
     ctx.drawImage(sheetCanvas, 0, 0);
-    ctx.drawImage(drawCanvas, 0, 0);
+    composeDoodleOntoSheet(ctx);
     const dataUrl = finalCanvas.toDataURL('image/png');
     const link = $('#btn-download');
     link.href = dataUrl;
@@ -4779,6 +4875,7 @@
        前の客が選んだ分割が次の令和の客の初期選択に化ける */
     state.layout = LAYOUTS[0];
     voiceGaveUp = false; // 次の客は音声から仕切り直す
+    shotDeco = []; // 写真ごとの落書きも次の客のためにまっさらへ
     decoObjects = [];
     undoStack = [];
     renderDeco();

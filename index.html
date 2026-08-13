@@ -239,10 +239,17 @@
       </div>
 
       <div class="deco-main">
+        <!-- 写真拡大表示方式（2026-08-13 実機テスト指摘対応）:
+             選択中の写真1枚を大きく表示して描き、下のサムネイルでショットを切り替える。
+             sheet-canvas はシール合成用のオフスクリーン（この画面では表示しない） -->
         <div class="deco-canvas-holder">
           <canvas id="sheet-canvas"></canvas>
-          <canvas id="draw-canvas"></canvas>
-          <canvas id="stroke-canvas"></canvas>
+          <div class="deco-photo-stage">
+            <canvas id="deco-photo-canvas"></canvas>
+            <canvas id="draw-canvas"></canvas>
+            <canvas id="stroke-canvas"></canvas>
+          </div>
+          <div id="deco-thumbs" class="deco-thumbs"></div>
         </div>
 
         <div class="deco-toolbar">
@@ -255,7 +262,7 @@
               <button class="pen-type-btn" data-pentype="kira">キラキラ</button>
             </div>
             <div class="color-row" id="color-row"></div>
-            <input type="range" id="pen-size" min="2" max="26" value="8">
+            <input type="range" id="pen-size" min="4" max="52" value="16">
             <div class="mode-row">
               <button class="tool-btn active" data-mode="pen">ペン</button>
               <button class="tool-btn" data-mode="eraser">消しゴム</button>
@@ -271,9 +278,9 @@
               <button class="push-btn" data-push="roll">コロコロ（なぞって れんだ）</button>
             </div>
             <div class="size-row" id="stamp-size-row">
-              <button class="size-btn" data-stampsize="32">小</button>
-              <button class="size-btn active" data-stampsize="48">中</button>
-              <button class="size-btn" data-stampsize="72">大</button>
+              <button class="size-btn" data-stampsize="64">小</button>
+              <button class="size-btn active" data-stampsize="96">中</button>
+              <button class="size-btn" data-stampsize="144">大</button>
             </div>
             <div class="stamp-row" id="stamp-row"></div>
           </div>
@@ -296,7 +303,7 @@
 
           <!-- 落書き見本（現行実機Meidyの「完成見本を選ぶと配置済みになる」型） -->
           <div class="tool-group" id="group-sample">
-            <p class="tool-label">🖼 らくがき見本（えらんで→しゃしんをタップ）</p>
+            <p class="tool-label">🖼 らくがき見本（えらんで→はりたいしゃしんをタップ）</p>
             <div class="sample-row" id="sample-row"></div>
             <button id="btn-sample-all" class="btn-small sample-all-btn">🖼 ぜんぶのしゃしんに はる</button>
           </div>

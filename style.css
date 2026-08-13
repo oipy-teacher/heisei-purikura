@@ -591,15 +591,28 @@ body.theme-reiwa .pp-num { background: var(--r-accent); }
 .deco-header-buttons { display: flex; gap: 8px; }
 
 .deco-main { flex: 1; display: flex; gap: 14px; min-height: 0; }
+/* 写真拡大表示方式（2026-08-13）: 選択中の写真1枚を大きく表示し、下のサムネイルで切り替える */
 .deco-canvas-holder {
   position: relative;
   flex: 1.4;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-width: 0;
+  min-height: 0;
 }
-#sheet-canvas, #draw-canvas, #stroke-canvas {
+#sheet-canvas { display: none; } /* シール合成用のオフスクリーン（落書き画面では表示しない） */
+.deco-photo-stage {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#deco-photo-canvas, #draw-canvas, #stroke-canvas {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
@@ -610,6 +623,46 @@ body.theme-reiwa .pp-num { background: var(--r-accent); }
 }
 #draw-canvas { box-shadow: none; touch-action: none; }
 #stroke-canvas { box-shadow: none; pointer-events: none; }
+/* ショット切り替えサムネイル（1〜4）。落書き済みは✎マークで分かる */
+.deco-thumbs {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px 0 2px;
+}
+.deco-thumb {
+  position: relative;
+  padding: 0;
+  border: 3px solid rgba(255,255,255,.75);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  line-height: 0;
+}
+.deco-thumb canvas { display: block; width: 84px; height: 63px; border-radius: 7px; }
+.deco-thumb.selected { border-color: #ff2fa0; box-shadow: 0 0 0 3px rgba(255,47,160,.35); }
+.deco-thumb .dt-num {
+  position: absolute; left: 3px; top: 3px;
+  min-width: 18px; height: 18px;
+  border-radius: 9px;
+  background: rgba(0,0,0,.55);
+  color: #fff;
+  font-size: 11px; font-weight: 900; line-height: 18px; text-align: center;
+}
+.deco-thumb .dt-mark {
+  position: absolute; right: -7px; top: -9px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #ffd75e;
+  color: #7a4a00;
+  font-size: 13px; font-weight: 900; line-height: 22px; text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  display: none;
+}
+.deco-thumb.doodled .dt-mark { display: block; }
+body[data-mode="reiwa"] .deco-thumb.selected { border-color: #a8917d; box-shadow: 0 0 0 3px rgba(168,145,125,.35); }
+body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff; }
 
 .deco-toolbar {
   flex: 1;
@@ -996,6 +1049,11 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .camera-viewport { width: 88vw; }
   .deco-main { flex-direction: column; }
   .deco-toolbar { max-width: none; }
+  /* スマホ縦: 拡大キャンバス（4:3）＋サムネイル列が上に収まり、ツールは下へスクロール */
+  .deco-canvas-holder { flex: none; }
+  .deco-photo-stage { flex: none; width: 100%; aspect-ratio: 4 / 3; max-height: 46vh; }
+  .deco-thumbs { gap: 8px; padding-top: 8px; }
+  .deco-thumb canvas { width: 68px; height: 51px; }
   .beauty-main { flex-direction: column; }
   .beauty-controls { max-width: none; }
 }
@@ -1530,7 +1588,7 @@ body.theme-heisei #screen-deco .timer-box.alarm { animation: bellShake .22s line
 body.theme-heisei .timer-label { color: var(--h-ink); }
 body.theme-heisei .timer-display { color: var(--h-pink); }
 /* キャンバスの虹帯額縁 */
-body.theme-heisei #sheet-canvas {
+body.theme-heisei #deco-photo-canvas { /* テーマ額縁は表示中の写真へ（写真拡大表示方式） */
   border: 10px solid transparent;
   border-image: repeating-linear-gradient(90deg,
      #ff2fa0 0 40px, #ff8a2a 40px 80px, #ffe066 80px 120px,
@@ -1628,7 +1686,7 @@ body.theme-reiwa #screen-deco .timer-box.warn-box::before {
 body.theme-reiwa .timer-label { color: var(--r-brown); font-weight: 600; }
 body.theme-reiwa .timer-display { color: var(--r-ink); font-weight: 500; }
 body.theme-reiwa .timer-display.warn { color: var(--r-accent); animation: none; }
-body.theme-reiwa #sheet-canvas { border: 8px solid #fff; border-radius: 2px; box-shadow: 0 4px 14px rgba(74,63,56,.18); }
+body.theme-reiwa #deco-photo-canvas { border: 8px solid #fff; border-radius: 2px; box-shadow: 0 4px 14px rgba(74,63,56,.18); }
 body.theme-reiwa .btn-small {
   background: var(--r-paper);
   color: var(--r-ink);
