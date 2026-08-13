@@ -2414,6 +2414,10 @@ body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected
 .layout-gate-list { grid-template-columns: repeat(3, 1fr); margin: 0; }
 #layout-gate .deco-gate-inner { max-width: min(90vw, 480px); }
 
+/* 落書き編集ツール（√me2型・令和のみ・2026-08-14）: 選択中に出る操作バー */
+.edit-bar { position: absolute; right: 10px; top: 10px; z-index: 6; display: flex; gap: 8px; }
+body.theme-reiwa .edit-bar .btn-small { background: #fff; border: 1px solid var(--r-accent); color: var(--r-ink); }
+
 /* 証明プリは令和のみ（Meidy型・2026-08-14。平成の年代設定1999-2003に証明プリは無い） */
 body[data-mode="heisei"] #btn-download-id { display: none; }
 

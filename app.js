@@ -3886,7 +3886,9 @@
         ctx.font = `${o.size}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(o.char, o.x, o.y);
+        ctx.translate(o.x, o.y);
+        if (o.rot) ctx.rotate(o.rot); // 編集ツールの回転（2026-08-14）
+        ctx.fillText(o.char, 0, 0);
         ctx.restore();
         break;
       case 'dstamp': {
@@ -3894,6 +3896,7 @@
         if (!def) break;
         ctx.save();
         ctx.translate(o.x, o.y);
+        if (o.rot) ctx.rotate(o.rot); // 編集ツールの回転（2026-08-14）
         def.draw(ctx, o.size);
         ctx.restore();
         break;
@@ -3912,6 +3915,7 @@
   /* ---------- ショット切り替え（サムネイル1〜4） ---------- */
   function selectShot(i) {
     curShot = i;
+    if (typeof clearEditSel === 'function') clearEditSel(); // 編集選択は写真ごと（前の写真のindexを持ち越さない）
     if (!shotDeco[i]) shotDeco[i] = { objects: [], undo: [] };
     decoObjects = shotDeco[i].objects;
     undoStack = shotDeco[i].undo;
@@ -4000,9 +4004,15 @@
       op.items.slice().sort((a, b) => a.index - b.index).forEach(({ index, obj }) => {
         decoObjects.splice(Math.min(index, decoObjects.length), 0, obj);
       });
+    } else if (op.op === 'replace') {
+      // 編集ツール（移動・回転・拡縮）の巻き戻し: 変形前のオブジェクトへ差し戻す
+      op.items.forEach(({ index, obj }) => {
+        if (index < decoObjects.length) decoObjects[index] = obj;
+      });
     }
     renderDeco();
     scheduleThumbUpdate();
+    if (state.tool === 'edit') { editSel = []; drawEditOverlay(); } // 巻き戻し後の古い選択枠を残さない
   }
 
   /* ---------- なぞり消し（ロイロノート式: 触れたものを丸ごと消す） ---------- */
@@ -4049,6 +4059,259 @@
     }
     if (removedAny) renderDeco();
   }
+
+  /* ---------- 落書き編集ツール（√me2型・令和のみ・2026-08-14） ----------
+     置いた落書き（ペン・スタンプ・文字・キラ）を囲って選択し、移動・回転・拡縮・複製できる。
+     現行実機√me2(2024)の「落書き編集ツール」の再現（フリュー公式技術ブログ）。
+     - タップ: その位置の一番上のオブジェクトを選択（そのままドラッグで移動）
+     - なにもない所からドラッグ: 範囲選択（ペンとスタンプの混在選択も可＝実機同様）
+     - 右下の丸ハンドル: ドラッグで回転＋拡縮（中心基準）
+     - ⧉ふくせい: 選択中のオブジェクトを少しずらして複製
+     変形は「もどす」1回で丸ごと変形前に戻る（op:'replace'）。eraseオブジェクトは対象外 */
+  let editSel = [];
+  let editGesture = null;
+
+  function objBounds(o) {
+    switch (o.type) {
+      case 'stroke': {
+        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        o.pts.forEach(p => {
+          if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        });
+        const m = o.size / 2 + 4;
+        return { x: minX - m, y: minY - m, w: maxX - minX + m * 2, h: maxY - minY + m * 2 };
+      }
+      case 'kira': {
+        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        o.items.forEach(it => {
+          if (it.x - it.size < minX) minX = it.x - it.size;
+          if (it.x + it.size > maxX) maxX = it.x + it.size;
+          if (it.y - it.size < minY) minY = it.y - it.size;
+          if (it.y + it.size > maxY) maxY = it.y + it.size;
+        });
+        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      }
+      case 'stamp':
+      case 'dstamp': {
+        const r = o.size * 0.75;
+        return { x: o.x - r, y: o.y - r, w: r * 2, h: r * 2 };
+      }
+      case 'text': {
+        const hw = (o.w || 60) / 2 + 4;
+        const hh = o.fontSize * 0.9;
+        return { x: o.x - hw, y: o.y - hh, w: hw * 2, h: hh * 2 };
+      }
+      default:
+        return null; // erase は編集対象外
+    }
+  }
+
+  function selectionBounds() {
+    let b = null;
+    editSel.forEach((i) => {
+      const o = decoObjects[i];
+      if (!o) return;
+      const ob = objBounds(o);
+      if (!ob) return;
+      if (!b) b = { ...ob };
+      else {
+        const x2 = Math.max(b.x + b.w, ob.x + ob.w), y2 = Math.max(b.y + b.h, ob.y + ob.h);
+        b.x = Math.min(b.x, ob.x); b.y = Math.min(b.y, ob.y);
+        b.w = x2 - b.x; b.h = y2 - b.y;
+      }
+    });
+    return b;
+  }
+
+  function drawEditOverlay(band) {
+    strokeCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    const bar = $('#edit-bar');
+    if (band) {
+      strokeCtx.save();
+      strokeCtx.strokeStyle = 'rgba(168,145,125,.95)';
+      strokeCtx.setLineDash([7, 5]);
+      strokeCtx.lineWidth = 2;
+      strokeCtx.strokeRect(Math.min(band.x0, band.x1), Math.min(band.y0, band.y1), Math.abs(band.x1 - band.x0), Math.abs(band.y1 - band.y0));
+      strokeCtx.restore();
+    }
+    const b = selectionBounds();
+    if (!b) { if (bar) bar.classList.add('hidden'); return; }
+    strokeCtx.save();
+    strokeCtx.strokeStyle = 'rgba(168,145,125,.95)';
+    strokeCtx.setLineDash([8, 6]);
+    strokeCtx.lineWidth = 2.5;
+    strokeCtx.strokeRect(b.x, b.y, b.w, b.h);
+    // 右下: 回転＋拡縮ハンドル
+    strokeCtx.setLineDash([]);
+    strokeCtx.fillStyle = '#a8917d';
+    strokeCtx.beginPath();
+    strokeCtx.arc(b.x + b.w, b.y + b.h, 13, 0, Math.PI * 2);
+    strokeCtx.fill();
+    strokeCtx.strokeStyle = '#fff';
+    strokeCtx.lineWidth = 2;
+    strokeCtx.beginPath();
+    strokeCtx.moveTo(b.x + b.w - 5, b.y + b.h + 5);
+    strokeCtx.lineTo(b.x + b.w + 5, b.y + b.h - 5);
+    strokeCtx.stroke();
+    strokeCtx.restore();
+    if (bar) bar.classList.remove('hidden');
+  }
+
+  function clearEditSel() {
+    editSel = [];
+    editGesture = null;
+    strokeCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    const bar = $('#edit-bar');
+    if (bar) bar.classList.add('hidden');
+  }
+
+  // 中心(cx,cy)基準の 拡縮s・回転ang・平行移動(dx,dy) を適用した複製を返す
+  function transformObject(o, cx, cy, sc, ang, dx, dy) {
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const tp = (x, y) => ({
+      x: cx + ((x - cx) * ca - (y - cy) * sa) * sc + dx,
+      y: cy + ((x - cx) * sa + (y - cy) * ca) * sc + dy,
+    });
+    const c = JSON.parse(JSON.stringify(o));
+    switch (c.type) {
+      case 'stroke':
+      case 'erase':
+        c.pts = c.pts.map(p => tp(p.x, p.y));
+        c.size = Math.max(1, c.size * sc);
+        break;
+      case 'kira':
+        c.items = c.items.map(it => {
+          const p = tp(it.x, it.y);
+          return { ...it, x: p.x, y: p.y, size: Math.max(4, it.size * sc), rot: (it.rot || 0) + ang };
+        });
+        break;
+      case 'stamp':
+      case 'dstamp': {
+        const p = tp(c.x, c.y);
+        c.x = p.x; c.y = p.y;
+        c.size = Math.max(4, c.size * sc);
+        c.rot = (c.rot || 0) + ang;
+        break;
+      }
+      case 'text': {
+        const p = tp(c.x, c.y);
+        c.x = p.x; c.y = p.y;
+        c.fontSize = Math.max(6, c.fontSize * sc);
+        if (c.w) c.w *= sc;
+        c.rot = (c.rot || 0) + ang;
+        if (c.font) c.font = c.font.replace(/(\d+(?:\.\d+)?)px/, (m, n) => (Number(n) * sc).toFixed(1) + 'px');
+        if (c.strokeWidth) c.strokeWidth *= sc;
+        break;
+      }
+    }
+    return c;
+  }
+
+  function editSnapshot() {
+    return editSel.map(i => ({ index: i, obj: JSON.parse(JSON.stringify(decoObjects[i])) }));
+  }
+
+  function applyEditTransform(sc, ang, dx, dy) {
+    const g = editGesture;
+    g.orig.forEach(({ index, obj }) => {
+      decoObjects[index] = transformObject(obj, g.cx, g.cy, sc, ang, dx, dy);
+    });
+    renderDeco();
+    drawEditOverlay();
+  }
+
+  function editDown(x, y) {
+    const b = editSel.length ? selectionBounds() : null;
+    if (b && Math.hypot(x - (b.x + b.w), y - (b.y + b.h)) <= 26) {
+      // 右下ハンドル: 回転＋拡縮
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      editGesture = {
+        kind: 'transform', cx, cy,
+        startAng: Math.atan2(y - cy, x - cx),
+        startDist: Math.max(10, Math.hypot(x - cx, y - cy)),
+        moved: false, orig: editSnapshot(),
+      };
+      return;
+    }
+    if (b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+      editGesture = { kind: 'move', cx: b.x + b.w / 2, cy: b.y + b.h / 2, startX: x, startY: y, moved: false, orig: editSnapshot() };
+      return;
+    }
+    // タップ位置の一番上のオブジェクトを選択（そのままドラッグで移動できる）
+    let hit = -1;
+    for (let i = decoObjects.length - 1; i >= 0; i--) {
+      const o = decoObjects[i];
+      if (o.type !== 'erase' && hitTestObject(o, x, y, 10)) { hit = i; break; }
+    }
+    if (hit >= 0) {
+      editSel = [hit];
+      const nb = selectionBounds();
+      editGesture = { kind: 'move', cx: nb.x + nb.w / 2, cy: nb.y + nb.h / 2, startX: x, startY: y, moved: false, orig: editSnapshot() };
+      drawEditOverlay();
+    } else {
+      editSel = [];
+      editGesture = { kind: 'band', x0: x, y0: y, x1: x, y1: y };
+      drawEditOverlay(editGesture);
+    }
+  }
+
+  function editMove(x, y) {
+    const g = editGesture;
+    if (!g) return;
+    if (g.kind === 'move') {
+      g.moved = true;
+      applyEditTransform(1, 0, x - g.startX, y - g.startY);
+    } else if (g.kind === 'transform') {
+      g.moved = true;
+      const ang = Math.atan2(y - g.cy, x - g.cx) - g.startAng;
+      const sc = Math.max(0.2, Math.min(5, Math.hypot(x - g.cx, y - g.cy) / g.startDist));
+      applyEditTransform(sc, ang, 0, 0);
+    } else if (g.kind === 'band') {
+      g.x1 = x; g.y1 = y;
+      drawEditOverlay(g);
+    }
+  }
+
+  function editUp() {
+    const g = editGesture;
+    editGesture = null;
+    if (!g) return;
+    if (g.kind === 'band') {
+      const rx = Math.min(g.x0, g.x1), ry = Math.min(g.y0, g.y1);
+      const rw = Math.abs(g.x1 - g.x0), rh = Math.abs(g.y1 - g.y0);
+      if (rw > 6 || rh > 6) {
+        editSel = decoObjects
+          .map((o, i) => ({ o, i }))
+          .filter(({ o }) => {
+            if (o.type === 'erase') return false;
+            const ob = objBounds(o);
+            return ob && ob.x < rx + rw && rx < ob.x + ob.w && ob.y < ry + rh && ry < ob.y + ob.h;
+          })
+          .map(({ i }) => i);
+      }
+      drawEditOverlay();
+      return;
+    }
+    if (g.moved) pushUndo({ op: 'replace', items: g.orig }); // 「もどす」1回で変形前へ
+    drawEditOverlay();
+  }
+
+  // ⧉ふくせい: 選択中を少しずらして複製（1操作＝「もどす」で複製ぶんが丸ごと消える）
+  $('#btn-edit-dup').addEventListener('click', () => {
+    if (!editSel.length || state.remaining <= 0) return;
+    const copies = editSel
+      .map(i => decoObjects[i])
+      .filter(Boolean)
+      .map(o => transformObject(o, 0, 0, 1, 0, 20, 20));
+    const start = decoObjects.length;
+    decoObjects.push(...copies);
+    pushUndo({ op: 'addMany', count: copies.length });
+    editSel = copies.map((_, k) => start + k);
+    renderDeco();
+    drawEditOverlay();
+  });
+  $('#btn-edit-done').addEventListener('click', clearEditSel);
 
   /* ---------- ツールUI ---------- */
   function buildColorRow() {
@@ -4375,6 +4638,10 @@
     if (previewCv) previewCv.style.display = isHeisei ? 'none' : '';
     /* コロコロはスタンプの標準挙動に統一（2026-08-14 オーナー裁定・両モード共通）:
        「タップ=1個・なぞる=連なって押される」。ポン⇄コロコロの切替ボタンは廃止 */
+    // 編集ツール「うごかす」は令和のみ（√me2型。平成は「押したらそのまま」が考証）
+    const editBtn = document.querySelector('.tool-btn[data-mode="edit"]');
+    if (editBtn) editBtn.style.display = isHeisei ? 'none' : '';
+    clearEditSel();
     // 文字スタンプの色・角度を初期値へ（モードが変わるたびリセット・2026-08-13）
     state.textStampColor = null;
     state.textStampAngle = 'auto';
@@ -4405,6 +4672,8 @@
     if (tool === 'pen') $('.tool-btn[data-mode="pen"]').classList.add('active');
     if (tool === 'eraser') $('.tool-btn[data-mode="eraser"]').classList.add('active');
     if (tool === 'swipe') $('.tool-btn[data-mode="swipe"]').classList.add('active');
+    if (tool === 'edit') $('.tool-btn[data-mode="edit"]').classList.add('active');
+    if (tool !== 'edit') clearEditSel(); // 別ツールへ移ったら選択枠を消す
     // 別ツールへ移ったら、見本・スタンプ・文字スタンプの選択ハイライトを消す（2026-08-13）
     if (tool !== 'sample') document.querySelectorAll('.sample-btn').forEach(b => b.classList.remove('selected'));
     if (tool !== 'stamp' && tool !== 'dstamp') document.querySelectorAll('.stamp-btn').forEach(b => b.classList.remove('selected'));
@@ -4455,6 +4724,13 @@
     if (state.remaining <= 0) return;
     try { drawCanvas.setPointerCapture(e.pointerId); } catch (err) { /* 一部環境では無視して続行 */ }
     const { x, y } = getCanvasPos(e);
+
+    if (state.tool === 'edit') {
+      // 編集ツール（令和のみ）: 選択・移動・回転/拡縮・範囲選択
+      state.isDrawing = true;
+      editDown(x, y);
+      return;
+    }
 
     if (state.tool === 'swipe') {
       state.isDrawing = true;
@@ -4538,6 +4814,10 @@
     if (!state.isDrawing || state.remaining <= 0) return;
     const { x, y } = getCanvasPos(e);
 
+    if (state.tool === 'edit') {
+      editMove(x, y);
+      return;
+    }
     if (state.tool === 'swipe') {
       swipeEraseAt(x, y);
       return;
@@ -4585,6 +4865,10 @@
   function endStroke() {
     if (!state.isDrawing) return;
     state.isDrawing = false;
+    if (state.tool === 'edit') {
+      editUp();
+      return;
+    }
     if (rolling) {
       // コロコロの1ドラッグ＝1操作。「もどす」で連なり全部が消える
       rolling = false;
@@ -4842,6 +5126,7 @@
     decoFinished = true;
     confirmModal.classList.add('hidden');
     drawCanvas.style.pointerEvents = 'none';
+    clearEditSel();
     decoCountdownEl.classList.add('hidden');
     decoToastEl.classList.add('hidden');
     $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ できあがり！' : '⏰ タイムアップ！';

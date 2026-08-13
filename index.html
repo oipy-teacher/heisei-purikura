@@ -264,6 +264,11 @@
             <canvas id="deco-photo-canvas"></canvas>
             <canvas id="draw-canvas"></canvas>
             <canvas id="stroke-canvas"></canvas>
+            <!-- 編集ツールの操作バー（選択中だけ表示） -->
+            <div id="edit-bar" class="edit-bar hidden">
+              <button id="btn-edit-dup" class="btn-small">⧉ ふくせい</button>
+              <button id="btn-edit-done" class="btn-small">✓ かくてい</button>
+            </div>
           </div>
           <div id="deco-thumbs" class="deco-thumbs"></div>
         </div>
@@ -283,6 +288,8 @@
               <button class="tool-btn active" data-mode="pen">ペン</button>
               <button class="tool-btn" data-mode="eraser">消しゴム</button>
               <button class="tool-btn" data-mode="swipe">なぞり消し</button>
+              <!-- 落書き編集ツール（√me2型・令和のみ表示・2026-08-14） -->
+              <button class="tool-btn" data-mode="edit" id="btn-tool-edit">うごかす</button>
             </div>
           </div>
 
