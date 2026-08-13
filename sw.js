@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v14'; // 2026-08-13 iOS音声のWebAudio化＋カウント固定リズム/ショット間の間（新規アセットなし）
+const CACHE_NAME = 'purikura-v15'; // 2026-08-13 撮影後チラ見せの静止画演出強化（新規アセットなし）
 
 const PRECACHE = [
   '.',
