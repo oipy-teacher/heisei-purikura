@@ -274,7 +274,7 @@
     photoPick: null,     // シールに載せる写真の並び（shotsのインデックス列・2026-08-13新設）。nullなら撮影順
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
-    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, eyeType: 1, filter: 'none' },
+    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, eyeType: 1, namida: 0, legs: 0, filter: 'none' },
     beautySelected: 0,
     beautyTimerId: null,
     beautyRemaining: BEAUTY_SECONDS,
@@ -2912,13 +2912,62 @@
 
     // チーク＆リップ（顔ランドマークベースのメイク）
     drawMakeup(outCtx, faces, w, h, (params.cheek || 0) / 100, (params.lip || 0) / 100, conf);
+    if ((params.namida || 0) > 0) drawNamida(outCtx, faces, w, h, (params.namida || 0) / 100);
 
     // 選択フィルター
     const selFilter = conf.filters.find(f => f.id === params.filter);
     if (selFilter && selFilter.fx && Object.keys(selFilter.fx).length) {
       applyToneFx(outCtx, w, h, selFilter.fx);
     }
+    // 脚長（piemo型・全身コース専用・2026-08-14）: 顔検出不要の最終ジオメトリ処理
+    if ((params.legs || 0) > 0 && state.shotMode === 'full') stretchLegsInPlace(out, (params.legs || 0) / 100);
     return out;
+  }
+
+  /* 涙袋レタッチ（FLASH 87種の型・2026-08-14）: 下まぶたの少し下に、目の傾きに沿った
+     横長のやわらかいハイライト帯をscreen合成で乗せる。輪郭warpは使わない（精度リスク回避） */
+  function drawNamida(outCtx, faces, w, h, s) {
+    if (!faces || !faces.length || s <= 0) return;
+    faces.forEach((lm) => {
+      if (!lm || lm.length < 468) return;
+      [[145, 33, 133], [374, 362, 263]].forEach(([lowIdx, aIdx, bIdx]) => {
+        const low = lmToPx(lm[lowIdx], w, h);
+        const a = lmToPx(lm[aIdx], w, h), b = lmToPx(lm[bIdx], w, h);
+        const ew = dist(a, b);
+        if (ew < 4) return;
+        const ang = Math.atan2(b.y - a.y, b.x - a.x); // 目の傾き（鏡像でも軸で取るので破綻しない）
+        outCtx.save();
+        outCtx.translate(low.x, low.y + ew * 0.20);
+        outCtx.rotate(ang);
+        outCtx.scale(1, 0.34); // 横長の帯にする
+        const g = outCtx.createRadialGradient(0, 0, 0, 0, 0, ew * 0.55);
+        g.addColorStop(0, 'rgba(255,244,240,' + (0.42 * s).toFixed(3) + ')');
+        g.addColorStop(0.6, 'rgba(255,236,232,' + (0.20 * s).toFixed(3) + ')');
+        g.addColorStop(1, 'rgba(255,236,232,0)');
+        outCtx.globalCompositeOperation = 'screen';
+        outCtx.fillStyle = g;
+        outCtx.beginPath();
+        outCtx.arc(0, 0, ew * 0.55, 0, Math.PI * 2);
+        outCtx.fill();
+        outCtx.restore();
+      });
+    });
+  }
+
+  /* 脚長バー（piemo型）: 腰のラインを保ったまま下半身だけ縦に伸ばす。
+     MAXで画面高の約10%ぶん脚が長くなる（上半身はわずかに圧縮される） */
+  function stretchLegsInPlace(canvas, s) {
+    const w = canvas.width, h = canvas.height;
+    const pivot = Math.round(h * 0.52);
+    const lift = Math.round(h * 0.10 * s);
+    if (lift < 1) return;
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    tmp.getContext('2d').drawImage(canvas, 0, 0);
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(tmp, 0, 0, w, pivot, 0, 0, w, pivot - lift);
+    ctx.drawImage(tmp, 0, pivot, w, h - pivot, 0, pivot - lift, w, h - pivot + lift);
   }
 
   // チーク＆リップの描画（本加工とライブ盛れプレビューの共通処理・2026-07-31切り出し）
@@ -2987,6 +3036,8 @@
   const sliderNose = $('#slider-nose');
   const sliderCheek = $('#slider-cheek');
   const sliderLip = $('#slider-lip');
+  const sliderNamida = $('#slider-namida');
+  const sliderLegs = $('#slider-legs');
 
   /* ---------- 1枚ごとの盛り設定（2026-08-12 新設） ----------
      現行実機FLASHの「1枚の設定を全枚数にワンタッチ反映」を成立させるため、
@@ -3055,6 +3106,8 @@
     sliderNose.value = p.nose || 0;
     sliderCheek.value = p.cheek || 0;
     sliderLip.value = p.lip || 0;
+    sliderNamida.value = p.namida || 0;
+    sliderLegs.value = p.legs || 0;
     $('#val-skin').textContent = p.skin;
     $('#val-white').textContent = p.white || 0;
     $('#val-clear').textContent = p.clear || 0;
@@ -3063,6 +3116,8 @@
     $('#val-nose').textContent = p.nose || 0;
     $('#val-cheek').textContent = p.cheek || 0;
     $('#val-lip').textContent = p.lip || 0;
+    $('#val-namida').textContent = p.namida || 0;
+    $('#val-legs').textContent = p.legs || 0;
   }
 
   function markPresetActive(presetId) {
@@ -3205,7 +3260,7 @@
     setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
   });
 
-  [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderNose, 'nose'], [sliderCheek, 'cheek'], [sliderLip, 'lip']].forEach(([el, key]) => {
+  [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderNose, 'nose'], [sliderCheek, 'cheek'], [sliderLip, 'lip'], [sliderNamida, 'namida'], [sliderLegs, 'legs']].forEach(([el, key]) => {
     el.addEventListener('input', () => {
       const cur = curBeauty();
       cur[key] = Number(el.value);
@@ -3252,6 +3307,9 @@
   function startBeautyScreen() {
     showScreen('screen-beauty');
     playAnnounce('beauty'); // 案内は1本チャンネル経由（前画面の案内が残っていても止まる）
+    // 脚長バーは全身コースのときだけ出す（アップコースでは意味が無い・piemo型）
+    const legsRow = $('#row-legs');
+    if (legsRow) legsRow.style.display = state.shotMode === 'full' ? '' : 'none';
     state.beautySelected = 0;
     state.beautyRemaining = BEAUTY_SECONDS;
     state.beautyWarned = false;
