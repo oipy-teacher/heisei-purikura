@@ -630,8 +630,17 @@
     const conf = modeConf();
     state.curtain = conf.curtains[0];
     state.frame = conf.frames[0];
-    const preset = conf.presets.find(p => p.id === conf.defaultPreset);
-    state.beauty = { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, nose: preset.nose || 0, cheek: preset.cheek, lip: preset.lip, filter: 'none' };
+    /* 平成の分割選択は「落書きの後」（2026-08-13 オーナー裁定・実機の型: 撮影→落書き→分割→排出）。
+       落書き中の台紙は4分割で固定し、完成後の分割選択で選び直す。
+       前セッション（令和）のレイアウトを持ち越さないようここで必ず戻す */
+    if (mode === 'heisei') state.layout = LAYOUTS[0];
+    /* 平成に盛れプリセットは無い（2026-08-13 掃除でMODES.heiseiから削除）。
+       平成の写りは finishHeiseiProcessing の固定値が担うので、ここは全ゼロでよい
+       （filterだけは選択画面のフィルター選択が使う） */
+    const preset = (conf.presets || []).find(p => p.id === conf.defaultPreset);
+    state.beauty = preset
+      ? { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, nose: preset.nose || 0, cheek: preset.cheek, lip: preset.lip, filter: 'none' }
+      : { skin: 0, white: 0, clear: 0, eye: 0, face: 0, nose: 0, cheek: 0, lip: 0, filter: 'none' };
     buildSelectGrids();
     applyShotMode();
     buildDecoTools();
@@ -849,13 +858,17 @@
 
     /* モード別にセクションを並べ替える:
        平成 = コース＋フレーム＋フィルター＋BGMがデフォ（初代〜中期プリ機の流れ）。
-              分割・カラー・年代・デジタル背景は「こだわり設定」へ
+              カラー・年代・デジタル背景は「こだわり設定」へ。
+              分割はここでは選ばない（2026-08-13裁定: 実機の型どおり落書きの後に選ぶ）
        令和 = コース＋分割・カラー・フレームがデフォ。フィルター・BGM・デジタル背景は「こだわり設定」へ */
     const main = $('#select-main');
     const adv = $('#advanced-body');
     const order = state.mode === 'heisei'
       ? { main: ['sel-shotmode', 'sel-frame', 'sel-filter', 'sel-bgm'], adv: ['sel-eratone', 'sel-curtain', 'sel-chroma'] }
       : { main: ['sel-shotmode', 'sel-layout', 'sel-curtain', 'sel-frame'], adv: ['sel-filter', 'sel-bgm', 'sel-eratone', 'sel-chroma'] };
+    /* 平成では #sel-layout をどちらのリストにも入れない＝前モードの置き場所に残るため、
+       表示だけでなく必ず非表示にする（令和では戻す） */
+    $('#sel-layout').style.display = state.mode === 'heisei' ? 'none' : '';
     order.main.forEach(id => main.appendChild($('#' + id)));
     order.adv.forEach(id => adv.appendChild($('#' + id)));
     $('#sel-advanced').open = false;
@@ -4440,9 +4453,70 @@
     playSound(reason === 'manual' ? 'finish' : 'timeup');
     await sleep(1300);
     $('#deco-timeup').classList.add('hidden');
+    if (state.mode === 'heisei') {
+      /* 平成の実機の型（2026-08-13 オーナー裁定・era-designer乖離監査B-3）:
+         撮影→落書き→「分割数選択」→排出。落書きの出来を見てから何分割で持ち帰るかを決める。
+         タイマーはもう止まっているので、ここはゆっくり選んでよい */
+      showHeiseiLayoutGate();
+      return;
+    }
     composeFinal();
     showScreen('screen-print');
     startPrintSequence();
+  }
+
+  /* ---------- 平成: 落書き後の分割選択（2026-08-13 考証回帰） ----------
+     落書き中の台紙は4分割固定。ここで別の分割を選んだら、落書きを写真セル単位で
+     切り出して新しいセルへ再投影する（＝実機の「落書きは写真に付いていく」）。
+     セルの外（余白・ヘッダー）に描かれた落書きはシート座標のまま残す＝消失ゼロ。 */
+  function remapDoodleToLayout(target) {
+    if (target.id === state.layout.id) return; // 同じ分割なら座標もそのまま
+    const srcCells = layoutCells(state.layout);
+    // 1) いまの落書きを写真セルごとに切り出す（セルi＝撮影i枚目の落書き）
+    const perCell = srcCells.map(cell => {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(cell.w));
+      c.height = Math.max(1, Math.round(cell.h));
+      c.getContext('2d').drawImage(drawCanvas, cell.x, cell.y, cell.w, cell.h, 0, 0, c.width, c.height);
+      return c;
+    });
+    // 2) セルの外に描かれた分（フチの飾りなど）はシート座標のまま保持
+    const outside = document.createElement('canvas');
+    outside.width = SHEET_W; outside.height = SHEET_H;
+    const octx = outside.getContext('2d');
+    octx.drawImage(drawCanvas, 0, 0);
+    srcCells.forEach(cell => octx.clearRect(cell.x, cell.y, cell.w, cell.h));
+    // 3) 新しい分割へ再構成（新セルjには写真 j%4 が入るので、その写真の落書きを重ねる）
+    drawCtx.clearRect(0, 0, SHEET_W, SHEET_H);
+    drawCtx.drawImage(outside, 0, 0);
+    layoutCells(target).forEach((cell, j) => {
+      const src = perCell[j % perCell.length];
+      drawCtx.drawImage(src, cell.x, cell.y, cell.w, cell.h);
+    });
+  }
+
+  function showHeiseiLayoutGate() {
+    const gate = $('#layout-gate');
+    const list = $('#layout-gate-list');
+    list.innerHTML = '';
+    LAYOUTS.forEach((layout) => {
+      const el = document.createElement('div');
+      el.className = 'layout-item' + (layout.id === state.layout.id ? ' selected' : '');
+      el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>`;
+      el.addEventListener('click', () => {
+        list.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        remapDoodleToLayout(layout); // 先に落書きを移す（state.layoutが旧分割のうちに）
+        state.layout = layout;
+        composeSheet();
+        gate.classList.add('hidden');
+        composeFinal();
+        showScreen('screen-print');
+        startPrintSequence();
+      });
+      list.appendChild(el);
+    });
+    gate.classList.remove('hidden');
   }
 
   /* ===================== 4. プリント画面 ===================== */
