@@ -289,7 +289,6 @@
     textStampColor: null,  // 文字スタンプの色（null=おまかせ＝スタンプごとの標準色・2026-08-13）
     textStampAngle: 'auto', // 文字スタンプの角度（'auto'=従来の手の癖ランダム / 度数指定・2026-08-13）
     dstampId: null,
-    stampPush: 'pon',      // スタンプの押し方（平成のみ）。pon=1こずつ / roll=コロコロ（なぞって連打・当時の名物ツール）
     sampleSel: null,       // 選択中の落書き見本（写真タップで貼るモード・2026-08-13）,
     isDrawing: false,
     lastX: 0,
@@ -4260,11 +4259,8 @@
     if (angleRow) angleRow.style.display = isHeisei ? 'none' : '';
     const previewCv = $('#text-stamp-preview');
     if (previewCv) previewCv.style.display = isHeisei ? 'none' : '';
-    // コロコロは平成の名物ツール（令和には出さない）。モードが変わるたび「ポン」に戻す
-    const pushRow = $('#stamp-push-row');
-    if (pushRow) pushRow.style.display = isHeisei ? '' : 'none';
-    state.stampPush = 'pon';
-    document.querySelectorAll('#stamp-push-row .push-btn').forEach(b => b.classList.toggle('active', b.dataset.push === 'pon'));
+    /* コロコロはスタンプの標準挙動に統一（2026-08-14 オーナー裁定・両モード共通）:
+       「タップ=1個・なぞる=連なって押される」。ポン⇄コロコロの切替ボタンは廃止 */
     // 文字スタンプの色・角度を初期値へ（モードが変わるたびリセット・2026-08-13）
     state.textStampColor = null;
     state.textStampAngle = 'auto';
@@ -4363,20 +4359,13 @@
     }
 
     if ((state.tool === 'stamp' && state.stampChar) || (state.tool === 'dstamp' && state.dstampId)) {
-      // コロコロ（平成のみ）: ドラッグでスタンプが連なる。1こ目はこの場で置く
-      if (state.mode === 'heisei' && state.stampPush === 'roll') {
-        state.isDrawing = true;
-        rolling = true;
-        rollCount = 0;
-        placeRollStamp(x, y);
-        return;
-      }
-      const o = state.tool === 'dstamp'
-        ? { type: 'dstamp', id: state.dstampId, x, y, size: state.stampSize * 1.2 }
-        : { type: 'stamp', char: state.stampChar, x, y, size: state.stampSize };
-      decoObjects.push(o);
-      drawObject(drawCtx, o);
-      pushUndo({ op: 'add' });
+      /* スタンプの標準挙動（2026-08-14 オーナー裁定・両モード共通）:
+         タップ=1個・なぞる=コロコロ（連なって押される）。1こ目はこの場で置き、
+         ドラッグが続けば pointermove の rolling が連ねる。undoは1操作=タップ1個 or 1ドラッグの連なり全部 */
+      state.isDrawing = true;
+      rolling = true;
+      rollCount = 0;
+      placeRollStamp(x, y);
       return;
     }
     if (state.tool === 'textstamp' && state.textStampSel) {
@@ -4523,14 +4512,6 @@
       document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
-  // スタンプの押し方（ポン/コロコロ・平成のみ表示）
-  document.querySelectorAll('#stamp-push-row .push-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.stampPush = btn.dataset.push;
-      document.querySelectorAll('#stamp-push-row .push-btn').forEach(b => b.classList.toggle('active', b === btn));
-    });
-  });
-
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-clear').addEventListener('click', () => {
     // 「ぜんぶ消す」の対象は表示中の写真1枚ぶん（写真拡大表示方式）
