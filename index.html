@@ -387,15 +387,30 @@
       <div class="print-after">
         <p class="print-instruction">この1まいを保存して、プリントは<br>係(かかり)の人にお願いしてね🙏✨</p>
         <div class="print-actions">
-          <a id="btn-download" class="btn-main" download="purikura.png">📥 しゃしんを保存する</a>
+          <a id="btn-download" class="btn-main" href="#">📥 しゃしんを保存する</a>
           <button id="btn-restart" class="btn-sub">🔁 もう一回あそぶ</button>
         </div>
         <div class="print-actions extra">
-          <a id="btn-download-16" class="btn-sub" download>🎞 16分割シールver.も保存</a>
-          <a id="btn-download-story" class="btn-sub" download>📱 たて長ver.（ストーリー用）も保存</a>
+          <a id="btn-download-16" class="btn-sub" href="#">🎞 16分割シールver.も保存</a>
+          <a id="btn-download-story" class="btn-sub" href="#">📱 たて長ver.（ストーリー用）も保存</a>
           <!-- 証明プリ（Meidy型・2026-08-14・令和のみ表示） -->
-          <a id="btn-download-id" class="btn-sub" download>🪪 証明プリver.も保存</a>
+          <a id="btn-download-id" class="btn-sub" href="#">🪪 証明プリver.も保存</a>
+          <!-- どの環境でも必ず成功する出口（客が自分で降りられるように常設・2026-08-14）。
+               iPad実寸(1024x768)では下に足すと画面外に出て押せなくなるため、この行の中に入れる -->
+          <a id="btn-save-longpress" class="save-escape" href="#">うまく保存できないときは ▶ ながおしで保存</a>
         </div>
+        <!-- 保存の最後の砦（iOS対策・2026-08-14）: 画像を長押しして「“写真”に追加」 -->
+        <div id="save-modal" class="confirm-modal hidden">
+          <div class="confirm-box save-box">
+            <p class="confirm-text">この画像を<b>ながおし</b>して<br>「<b>“写真”に追加</b>」をえらんでね</p>
+            <img id="save-modal-img" alt="保存する画像">
+            <p class="save-hint">（パソコンなら 右クリック → 「画像を保存」）</p>
+            <div class="confirm-buttons">
+              <button id="btn-save-close" class="btn-sub">とじる</button>
+            </div>
+          </div>
+        </div>
+        <p id="save-toast" class="save-toast hidden"></p>
       </div>
     </div>
   </section>

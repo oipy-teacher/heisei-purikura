@@ -5226,16 +5226,145 @@
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
     ctx.drawImage(sheetCanvas, 0, 0);
     composeDoodleOntoSheet(ctx);
-    const dataUrl = finalCanvas.toDataURL('image/png');
-    const link = $('#btn-download');
-    link.href = dataUrl;
-    link.download = `purikura_${state.mode}_${fileStamp()}.png`;
-    // 追加出力（16分割・たて長）は押されたときに作る。前回セッションの生成結果は破棄
-    ['#btn-download-16', '#btn-download-story', '#btn-download-id'].forEach(sel => {
-      const el = $(sel);
-      el.removeAttribute('href');
-      delete el.dataset.done;
-    });
+    /* 保存は押された瞬間に deliverImage が生成して届ける（2026-08-14 保存経路の作り替え）。
+       以前ここで作っていた巨大dataURLのhrefは、iPad Safariで保存が無反応になる原因の
+       ひとつだったため廃止（a[download]+dataURLはiOSで信用しない） */
+  }
+
+  /* ===================== 保存経路（iOS対策・2026-08-14 実機指摘「写真保存できなかった」） =====================
+     以前は a[download] + toDataURL。iOS Safari は a の download 属性を実質サポートして
+     いないため、押しても何も起きない／別タブで開くだけでカメラロールには入らない。
+     実機で平成・令和とも保存に失敗した直接の原因はこれ。3段構えに作り替える:
+       ① navigator.share（ファイル共有シート）→「画像を保存」でカメラロール直行（iOS15+の定石）
+       ② shareが使えないPC系 → BlobURLの a[download]（通常のダウンロード）
+       ③ 最後の砦 → 画像を大きく表示して「長押し→“写真”に追加」モーダル（どの環境でも必ず成功する）
+     成功・失敗は save-toast で必ず客に見せる（無言で失敗しない）。
+
+     🚨 この経路で最も重要な制約（触るときは必ず守ること）:
+     **navigator.share はユーザーのタップと同じタスクの中で呼ばなければならない。**
+     iOSのWebKitはユーザージェスチャをタスク単位で判定するため、canvas.toBlob() の
+     コールバックや await をひとつでも挟むと、その時点でジェスチャが切れて
+     share は NotAllowedError で落ちる（＝また保存できない実機に戻る）。
+     そのため Blob は **同期の toDataURL→atob** で作る。toBlob（非同期）は使わない。
+     非同期化するくらいなら、多少重くても同期でよい——保存は客が持ち帰る最後の砦。 */
+  // canvas → Blob を「同期で」作る（await を挟まないための要）
+  function canvasToBlobSync(cv) {
+    try {
+      const dataUrl = cv.toDataURL('image/png');
+      const comma = dataUrl.indexOf(',');
+      const bin = atob(dataUrl.slice(comma + 1));
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: 'image/png' });
+    } catch (e) {
+      return null;
+    }
+  }
+  // iPhone/iPad判定（iPadOSはMacintoshを名乗るためタッチ点数も見る）
+  function isApplePhoneOrPad() {
+    const ua = navigator.userAgent;
+    return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+  const saveToastEl = $('#save-toast');
+  let saveToastId = null;
+  function showSaveToast(text) {
+    if (!saveToastEl) return;
+    saveToastEl.textContent = text;
+    saveToastEl.classList.remove('hidden');
+    if (saveToastId) clearTimeout(saveToastId);
+    saveToastId = setTimeout(() => saveToastEl.classList.add('hidden'), 4200);
+  }
+  let saveModalObjectUrl = null;
+  let lastSavedBlob = null; // 「うまく保存できないとき」用に直近の画像を持っておく
+  function showSaveFallback(blob, cv) {
+    // 最後の砦: 長押し保存。BlobURLで表示（巨大dataURL文字列をDOMに埋めない）
+    const img = $('#save-modal-img');
+    if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
+    if (blob) {
+      saveModalObjectUrl = URL.createObjectURL(blob);
+      img.src = saveModalObjectUrl;
+    } else if (cv) {
+      img.src = cv.toDataURL('image/png'); // Blobが作れなかった環境の保険
+    }
+    $('#save-modal').classList.remove('hidden');
+    showSaveToast('画像を ながおし して「“写真”に追加」でほぞんできるよ');
+  }
+  $('#btn-save-close').addEventListener('click', () => {
+    $('#save-modal').classList.add('hidden');
+    if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
+  });
+  // 「うまく保存できないとき」= どの環境でも成功する長押し保存へ客が自分で降りられる出口
+  $('#btn-save-longpress').addEventListener('click', (e) => {
+    e.preventDefault();
+    const blob = lastSavedBlob || canvasToBlobSync(finalCanvas);
+    lastSaveRoute = 'fallback';
+    showSaveFallback(blob, finalCanvas);
+  });
+  // 検証用: 直近にどの経路を通ったか（'share'|'download'|'fallback'|'share-cancel'|'share-failed'）
+  let lastSaveRoute = null;
+  /* 🚨 この関数は async にしてはいけない（await が入った瞬間にiOSのジェスチャが切れる）。
+     navigator.share までは一切の非同期を挟まず、タップと同じタスクの中で到達する。 */
+  function deliverImage(canvasOrMaker, filename) {
+    let cv;
+    try {
+      cv = typeof canvasOrMaker === 'function' ? canvasOrMaker() : canvasOrMaker;
+    } catch (e) {
+      lastSaveRoute = 'error';
+      showSaveToast('画像を作れなかった…もういちど押してみてね');
+      return;
+    }
+    const blob = canvasToBlobSync(cv); // 同期生成（ここで await しない）
+    lastSavedBlob = blob;
+    // ① 共有シート（iOSでカメラロールに入る一番確実な経路）
+    if (blob && navigator.share && navigator.canShare) {
+      // ファイルだけを渡す（text や url を混ぜると iOS で「画像を保存」が消えることがある）
+      const file = new File([blob], filename, { type: 'image/png' });
+      let canFiles = false;
+      try { canFiles = navigator.canShare({ files: [file] }); } catch (e) { canFiles = false; }
+      if (canFiles) {
+        let p = null;
+        try {
+          p = navigator.share({ files: [file] }); // ← タップと同じタスクの中で呼ぶ（最重要）
+        } catch (e) {
+          p = null;
+        }
+        if (p && typeof p.then === 'function') {
+          lastSaveRoute = 'share';
+          showSaveToast('📤 「画像を保存」をえらぶと カメラロールに入るよ！');
+          p.then(() => {
+            lastSaveRoute = 'share';
+            showSaveToast('✅ ほぞんメニューにわたしたよ！カメラロールを見てね');
+          }).catch((err) => {
+            if (err && err.name === 'AbortError') { // 客がやめただけ。責めない
+              lastSaveRoute = 'share-cancel';
+              showSaveToast('やめました。もう一度おせば保存できるよ');
+              return;
+            }
+            lastSaveRoute = 'share-failed'; // 失敗したら黙らず最後の砦へ降ろす
+            showSaveFallback(blob, cv);
+          });
+          return;
+        }
+        // share がその場で例外を投げた（＝ジェスチャ切れ等）ときは下の経路へ落ちる
+      }
+    }
+    // ② PC系ブラウザ: 普通のダウンロード（iOSではdownload属性が効かないので通さない）
+    if (blob && !isApplePhoneOrPad()) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      lastSaveRoute = 'download';
+      showSaveToast('✅ ダウンロードしたよ！');
+      return;
+    }
+    // ③ 最後の砦: 長押し保存（どの環境でも成功する）
+    lastSaveRoute = 'fallback';
+    showSaveFallback(blob, cv);
   }
 
   /* ---------- シール排出演出（2026-08-12 新設） ----------
@@ -5458,28 +5587,33 @@
     return cv;
   }
 
-  // 追加出力は押された瞬間に生成して同じタップで保存する（クリック処理内でhrefを確定させる）
-  $('#btn-download-16').addEventListener('click', function () {
-    if (this.dataset.done) return;
-    this.href = composeSixteenRetro().toDataURL('image/png');
-    this.download = `purikura16_${state.mode}_${fileStamp()}.png`;
-    this.dataset.done = '1';
+  /* 保存は全ボタン共通で deliverImage（share→download→長押しの3段構え）を通す。
+     押された瞬間に生成する（生成済みの持ち越しはしない） */
+  $('#btn-download').addEventListener('click', (e) => {
+    e.preventDefault();
+    deliverImage(finalCanvas, `purikura_${state.mode}_${fileStamp()}.png`);
   });
-  $('#btn-download-story').addEventListener('click', function () {
-    if (this.dataset.done) return;
-    this.href = composeStoryCollage().toDataURL('image/png');
-    this.download = `purikura_story_${state.mode}_${fileStamp()}.png`;
-    this.dataset.done = '1';
+  $('#btn-download-16').addEventListener('click', (e) => {
+    e.preventDefault();
+    deliverImage(composeSixteenRetro, `purikura16_${state.mode}_${fileStamp()}.png`);
   });
-  $('#btn-download-id').addEventListener('click', function () {
-    if (this.dataset.done) return;
-    this.href = composeIdPhoto().toDataURL('image/png');
-    this.download = `purikura_id_${state.mode}_${fileStamp()}.png`;
-    this.dataset.done = '1';
+  $('#btn-download-story').addEventListener('click', (e) => {
+    e.preventDefault();
+    deliverImage(composeStoryCollage, `purikura_story_${state.mode}_${fileStamp()}.png`);
+  });
+  $('#btn-download-id').addEventListener('click', (e) => {
+    e.preventDefault();
+    deliverImage(composeIdPhoto, `purikura_id_${state.mode}_${fileStamp()}.png`);
   });
 
   $('#btn-restart').addEventListener('click', () => {
     stopAnnounce(); // 案内ボイスも次の客へ持ち越さない
+    // 保存モーダル・トースト・直近画像も次の客へ持ち越さない（2026-08-14）
+    $('#save-modal').classList.add('hidden');
+    if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
+    if (saveToastEl) saveToastEl.classList.add('hidden');
+    lastSavedBlob = null;
+    lastSaveRoute = null;
     if (state.timerId) clearInterval(state.timerId);
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
     if (printReadyId) { clearTimeout(printReadyId); printReadyId = null; }
@@ -5549,6 +5683,7 @@
       played: waPlayCount,
     }),
     waDisable: () => { WA_KEYS.forEach(k => delete waBuffers[k]); }, // 無音環境の再現用
+    lastSaveRoute: () => lastSaveRoute, // 保存経路の検証用（share|download|fallback|share-cancel）
     // デザイン確認用: ダミー写真の入った盛り調整画面へ直行（カメラ不要・2026-08-13）
     gotoBeauty() {
       document.querySelectorAll('.debug-canvas').forEach(el => el.remove());
