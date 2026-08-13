@@ -58,14 +58,10 @@
         { t: '太子祭', style: 'sticker', color: '#d94a6a' },
       ],
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
-      // 盛れ感プリセット（2000年代後半の「ケバ盛れ」文化を反映して強め）
-      presets: [
-        { id: 'usu',      label: 'うす盛れ',     skin: 30, white: 20, clear: 20, eye: 20, face: 10, nose: 0, cheek: 20, lip: 15 },
-        { id: 'shikkari', label: 'しっかり盛れ', skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40 },
-        { id: 'keba',     label: 'ケバ盛れ',     skin: 90, white: 70, clear: 55, eye: 80, face: 50, nose: 0, cheek: 75, lip: 65 },
-      ],
-      defaultPreset: 'shikkari',
-      makeup: { cheek: '#ff5f8f', lip: '#ff2f6e' },
+      /* 盛れ感プリセット（presets/defaultPreset/makeup）は平成には定義しない（2026-08-13 掃除）:
+         平成は盛り調整画面をスキップする（2026-07-19 撤去はオーナーの設計判断）。
+         デカ目80などの死に設定が書いてあると将来の混入事故の芽になるため削除した
+         （era-designer乖離監査の豆指摘）。実際の写りは finishHeiseiProcessing の固定値が担う */
       // 平成の「美白」ブーム: 明るさ強め・彩度は少し下げて白肌に
       // （2026-08-12 desat 0.16→0.10: 彩度を落としすぎると血色が消えて灰色に見えるため）
       skinTone: { brightPerUnit: 0.16, desatPerUnit: 0.10 },
@@ -2943,7 +2939,8 @@
     // 盛れ感プリセット
     const presetRow = $('#beauty-preset-row');
     presetRow.innerHTML = '';
-    conf.presets.forEach(p => {
+    // 平成にpresetsは無い（盛り画面はスキップされる）。デバッグフック等で来ても落ちないように空扱い
+    (conf.presets || []).forEach(p => {
       const b = document.createElement('button');
       b.className = 'preset-btn' + (p.id === conf.defaultPreset ? ' active' : '');
       b.dataset.preset = p.id;
@@ -2968,7 +2965,8 @@
       b.textContent = lv.label;
       b.addEventListener('click', () => {
         const cur = curBeauty();
-        const basePreset = conf.presets.find(x => x.id === (cur._preset || conf.defaultPreset)) || conf.presets[0];
+        const basePreset = (conf.presets || []).find(x => x.id === (cur._preset || conf.defaultPreset)) || (conf.presets || [])[0];
+        if (!basePreset) return; // 平成にpresetsは無い（盛り画面はスキップされる）
         cur._preset = basePreset.id;
         cur._level = lv.id;
         applyPresetToCur(basePreset, lv.f);
@@ -3074,7 +3072,7 @@
     /* 1枚ごとの盛り設定を初期化: 撮影時のライブ盛れ設定（state.beauty）を4枚分に複製。
        撮影時の設定がどのプリセットと一致するかを調べてUIメモも入れておく */
     const conf = modeConf();
-    const matched = conf.presets.find(p =>
+    const matched = (conf.presets || []).find(p =>
       ['skin', 'white', 'clear', 'eye', 'face', 'nose', 'cheek', 'lip'].every(k => (state.beauty[k] || 0) === (p[k] || 0)));
     state.beautyShots = Array.from({ length: NUM_SHOTS }, () => ({
       ...state.beauty,
