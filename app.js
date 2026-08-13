@@ -274,7 +274,7 @@
     photoPick: null,     // シールに載せる写真の並び（shotsのインデックス列・2026-08-13新設）。nullなら撮影順
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
-    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, filter: 'none' },
+    beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, eyeType: 1, filter: 'none' },
     beautySelected: 0,
     beautyTimerId: null,
     beautyRemaining: BEAUTY_SECONDS,
@@ -728,8 +728,8 @@
        （filterだけは選択画面のフィルター選択が使う） */
     const preset = (conf.presets || []).find(p => p.id === conf.defaultPreset);
     state.beauty = preset
-      ? { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, nose: preset.nose || 0, cheek: preset.cheek, lip: preset.lip, filter: 'none' }
-      : { skin: 0, white: 0, clear: 0, eye: 0, face: 0, nose: 0, cheek: 0, lip: 0, filter: 'none' };
+      ? { skin: preset.skin, white: preset.white, clear: preset.clear, eye: preset.eye, face: preset.face, nose: preset.nose || 0, cheek: preset.cheek, lip: preset.lip, eyeType: 1, namida: 0, legs: 0, filter: 'none' }
+      : { skin: 0, white: 0, clear: 0, eye: 0, face: 0, nose: 0, cheek: 0, lip: 0, eyeType: 1, namida: 0, legs: 0, filter: 'none' };
     buildSelectGrids();
     applyShotMode();
     buildDecoTools();
@@ -2200,8 +2200,9 @@
          ブレンドモード（globalCompositeOperation）と縮小→拡大ぼかしで実装している --- */
 
   // ワープ（デカ目・小顔・小鼻）のみを適用したキャンバスを返す
-  function warpShot(srcCanvas, faces, eyeS, faceS, noseS) {
+  function warpShot(srcCanvas, faces, eyeS, faceS, noseS, eyeType) {
     noseS = noseS || 0;
+    eyeType = eyeType || 1;
     const w = srcCanvas.width, h = srcCanvas.height;
     const work = document.createElement('canvas');
     work.width = w; work.height = h;
@@ -2219,6 +2220,16 @@
           const rw = dist(lmToPx(lm[362], w, h), lmToPx(lm[263], w, h));
           radialWarp(work, li.x, li.y, lw * 1.5, eyeS * 0.28);
           radialWarp(work, ri.x, ri.y, rw * 1.5, eyeS * 0.28);
+          /* パーツTYPE 2択（2026-08-14・FLASH 2026の「パーツTYPE」の再現）:
+             TYPE01=くっきり（従来の拡大のみ）／TYPE02=たれ目（目尻を下外へ流す）。
+             目尻の外向きはランドマークの左右でなく「虹彩中心から見た向き」で決める
+             （前面カメラの鏡像保存でも破綻しない） */
+          if (eyeType === 2) {
+            [[lmToPx(lm[33], w, h), li, lw], [lmToPx(lm[263], w, h), ri, rw]].forEach(([corner, iris, ew]) => {
+              const dir = Math.sign(corner.x - iris.x) || 1;
+              directionalWarp(work, corner.x, corner.y, ew * 0.9, dir * eyeS * ew * 0.06, eyeS * ew * 0.16);
+            });
+          }
         }
         if (faceS > 0) {
           // 小顔：あご周辺3点を収縮して輪郭を内側へ
@@ -2773,7 +2784,7 @@
     const conf = modeConf();
     const w = srcCanvas.width, h = srcCanvas.height;
     const eyeS = params.eye / 100;
-    const work = preWarped || warpShot(srcCanvas, faces, eyeS, params.face / 100, (params.nose || 0) / 100);
+    const work = preWarped || warpShot(srcCanvas, faces, eyeS, params.face / 100, (params.nose || 0) / 100, params.eyeType || 1);
 
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
@@ -3007,7 +3018,7 @@
 
   // ワープ結果と美肌ベースをキャッシュ
   // （デカ目/小顔変更時のみワープ+ベースを再計算。美肌・チーク・リップ・フィルターは合成だけなので即応答）
-  const warpCache = { idx: -1, eye: -1, face: -1, nose: -1, facesRef: null, skinConfRef: null, canvas: null, base: null };
+  const warpCache = { idx: -1, eye: -1, face: -1, nose: -1, eyeType: 1, facesRef: null, skinConfRef: null, canvas: null, base: null };
 
   function renderBeautyPreview() {
     const idx = state.beautySelected;
@@ -3017,14 +3028,15 @@
     const faces = state.faceData[idx];
     const skinConfRef = state.skinConf[idx] || null;
     if (warpCache.idx !== idx || warpCache.eye !== p.eye || warpCache.face !== p.face || warpCache.nose !== (p.nose || 0)
-        || warpCache.facesRef !== faces || warpCache.skinConfRef !== skinConfRef) {
-      warpCache.canvas = warpShot(src, faces, p.eye / 100, p.face / 100, (p.nose || 0) / 100);
+        || warpCache.eyeType !== (p.eyeType || 1) || warpCache.facesRef !== faces || warpCache.skinConfRef !== skinConfRef) {
+      warpCache.canvas = warpShot(src, faces, p.eye / 100, p.face / 100, (p.nose || 0) / 100, p.eyeType || 1);
       const mask = getSkinMask(idx, src, faces, p.eye / 100);
       warpCache.base = (mask && !maskIsEmpty(mask)) ? buildBeautyBase(warpCache.canvas, mask) : null;
       warpCache.idx = idx;
       warpCache.eye = p.eye;
       warpCache.face = p.face;
       warpCache.nose = p.nose || 0;
+      warpCache.eyeType = p.eyeType || 1;
       warpCache.facesRef = faces;
       warpCache.skinConfRef = skinConfRef;
     }
@@ -3072,12 +3084,25 @@
   }
 
   // ショット切り替え・一括反映のあとに、選択中の1枚の設定をUI全体へ反映する
+  function markEyeType(t) {
+    document.querySelectorAll('#eye-type-row .eyetype-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.eyetype) === (t || 1)));
+  }
+  // パーツTYPE 2択（2026-08-14）: いま見ている1枚に適用（一括反映ボタンで全枚コピーされる）
+  document.querySelectorAll('#eye-type-row .eyetype-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      curBeauty().eyeType = Number(b.dataset.eyetype);
+      markEyeType(curBeauty().eyeType);
+      queueBeautyRender();
+    });
+  });
+
   function syncBeautyUIFromCur() {
     const p = curBeauty();
     syncSliders();
     markPresetActive(p._preset || '');
     markLevelActive(p._level || '');
     markFilterActive(p.filter);
+    markEyeType(p.eyeType || 1);
   }
 
   // プリセット値（＋盛れ感レベル倍率）を選択中の1枚に書き込む
