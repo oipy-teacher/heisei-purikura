@@ -288,6 +288,7 @@
     textStampColor: null,  // 文字スタンプの色（null=おまかせ＝スタンプごとの標準色・2026-08-13）
     textStampAngle: 'auto', // 文字スタンプの角度（'auto'=従来の手の癖ランダム / 度数指定・2026-08-13）
     dstampId: null,
+    sampleSel: null,       // 選択中の落書き見本（写真タップで貼るモード・2026-08-13）,
     isDrawing: false,
     lastX: 0,
     lastY: 0,
@@ -3976,18 +3977,27 @@
       lb.textContent = sample.label;
       b.appendChild(lb);
       b.addEventListener('click', () => {
-        // 毎回新しいオブジェクトを作る（なぞり消しと共存させるため）。
-        // レイアウトの全セルに展開しても1操作扱い＝「もどす」で丸ごと消える
-        const objs = buildSampleObjects(sample);
-        decoObjects.push(...objs);
-        renderDeco();
-        pushUndo({ op: 'addMany', count: objs.length });
+        /* 2026-08-13 実機テスト要望⑥: 全セル一括反映をやめ「見本を選ぶ→貼りたい写真をタップ」に。
+           実機同様、選んだ写真1枚ずつに貼れる。全部に貼りたいときは「ぜんぶのしゃしんに はる」ボタン */
+        setTool('sample', sample);
+        row.querySelectorAll('.sample-btn').forEach(x => x.classList.toggle('selected', x === b));
+        showDecoToast('👆 はりたい しゃしんを タップしてね！');
       });
       row.appendChild(b);
     });
     const group = $('#group-sample');
     if (group) group.style.display = samples.length ? '' : 'none';
   }
+
+  // 「ぜんぶのしゃしんに はる」: 選択中の見本を全セルへ（1操作＝「もどす」で丸ごと消える）
+  $('#btn-sample-all').addEventListener('click', () => {
+    if (state.remaining <= 0) return;
+    if (!state.sampleSel) { showDecoToast('さきに みほんを えらんでね！'); return; }
+    const objs = buildSampleObjects(state.sampleSel);
+    decoObjects.push(...objs);
+    renderDeco();
+    pushUndo({ op: 'addMany', count: objs.length });
+  });
 
   function buildDecoTools() {
     const conf = modeConf();
@@ -4021,10 +4031,17 @@
     state.stampChar = tool === 'stamp' ? extra : null;
     state.dstampId = tool === 'dstamp' ? extra : null;
     state.textStampSel = tool === 'textstamp' ? extra : null;
+    state.sampleSel = tool === 'sample' ? extra : null;
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
     if (tool === 'pen') $('.tool-btn[data-mode="pen"]').classList.add('active');
     if (tool === 'eraser') $('.tool-btn[data-mode="eraser"]').classList.add('active');
     if (tool === 'swipe') $('.tool-btn[data-mode="swipe"]').classList.add('active');
+    // 別ツールへ移ったら、見本・文字スタンプの選択ハイライトを消す（2026-08-13）
+    if (tool !== 'sample') document.querySelectorAll('.sample-btn').forEach(b => b.classList.remove('selected'));
+    if (tool !== 'textstamp') {
+      document.querySelectorAll('.text-stamp-btn').forEach(b => b.classList.remove('selected'));
+      renderTextStampPreview();
+    }
   }
 
   document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -4055,6 +4072,16 @@
       state.isDrawing = true;
       swipeRemoved = [];
       swipeEraseAt(x, y);
+      return;
+    }
+
+    if (state.tool === 'sample' && state.sampleSel) {
+      const cell = layoutCells(state.layout).find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+      if (!cell) { showDecoToast('👆 しゃしんの上を タップしてね！'); return; }
+      const objs = sampleCellObjects(state.sampleSel.items, cell);
+      decoObjects.push(...objs);
+      renderDeco();
+      pushUndo({ op: 'addMany', count: objs.length });
       return;
     }
 
