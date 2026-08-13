@@ -4754,6 +4754,10 @@
     // 次の客のために選択系もまっさらへ（2026-08-12 qa-tester指摘。無人運用では前の客の設定が残ると事故）
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
+    /* 分割も初期値へ（2026-08-13 考証回帰の回帰実走で発見）:
+       平成は落書き後のゲートで state.layout を書き換えるため、リセットしないと
+       前の客が選んだ分割が次の令和の客の初期選択に化ける */
+    state.layout = LAYOUTS[0];
     voiceGaveUp = false; // 次の客は音声から仕切り直す
     decoObjects = [];
     undoStack = [];
