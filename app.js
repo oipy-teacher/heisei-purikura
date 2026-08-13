@@ -451,7 +451,7 @@
     if (!a || soundMissing(key)) return Promise.resolve();
     if (voiceGaveUp) {
       // 鳴るかもしれないので再生自体は試すが、待ちは固定時間（96秒化の再発防止）
-      try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+      try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
       return sleep(nominalMs);
     }
     return new Promise((resolve) => {
@@ -467,6 +467,7 @@
       };
       const onEnded = () => finish(false);
       a.addEventListener('ended', onEnded);
+      a.muted = false; // 解錠レースの消音が残っていても本物の再生が無音にならないように（2026-08-13）
       a.currentTime = 0;
       a.play().catch(() => finish(true));
       // 保険: クリップ実測長+350ms・長さ不明なら1.5秒（旧4秒は無音環境で1枚25秒に化けた）。
@@ -1693,10 +1694,13 @@
     { key: 'countHai', label: 'ハイ！' },
   ];
 
-  /* ポーズ提案ボイス（2026-08-12 新設）: 実機は「テンポのよい掛け声とポーズ提案が
-     矢継ぎ早に流れる」（era-designerリサーチ）。pose_01〜06 を1プレイ内で重複しない
-     ランダム順に消化し、7回目以降はまたシャッフルして続ける。 */
-  const POSE_KEYS = ['pose1', 'pose2', 'pose3', 'pose4', 'pose5', 'pose6'];
+  /* ポーズ提案ボイス（2026-08-12 新設／2026-08-13 実機指摘修正）: 実機は「テンポのよい
+     掛け声とポーズ提案が矢継ぎ早に流れる」（era-designerリサーチ）。
+     pose_06（「ラスト！決めポーズ！」）は最終ショット専用のセリフなので
+     ランダムの母集団から外す。1〜3枚目は pose_01〜05 を重複なしランダムで消化し、
+     4枚目（最終）は必ず pose_06 を流す（2枚目で「ラスト！」が出ていた実機指摘の修正）。 */
+  const POSE_KEYS = ['pose1', 'pose2', 'pose3', 'pose4', 'pose5'];
+  const POSE_LAST_KEY = 'pose6'; // 最終ショット専用「ラスト！決めポーズ！」
   let poseOrder = [];
   let poseOrderIdx = 0;
   function resetPoseOrder() {
@@ -1756,10 +1760,17 @@
           flashCanvas.style.opacity = '0';
         }, 50);
       }
-      // 音声は数字表示と同時に開始（endedは待たない。失敗したら以降のセッションは無音進行）
+      /* 音声は数字表示と同時に開始（endedは待たない）。
+         2026-08-13 実機指摘「3・2・1だけ鳴らない」の修正: 以前は voiceGaveUp が
+         立っていると再生自体を諦めていた。voiceGaveUp は直前の前置き/ポーズボイスの
+         「ended待ちの保険タイムアウト」でも立つ（実機でメタデータ未取得だと
+         保険が1.5秒で誤発動しうる）ため、その巻き添えでカウント4本だけが無音になっていた。
+         voiceGaveUp は「待たない」の印であって「鳴らさない」の印ではない。
+         再生は常に試みる（playSoundAwait の gaveUp 分岐と同じ扱い）。
+         muted=false も明示する（unlockAudio の解錠が残っても消音で鳴らないことがないように） */
       const a = sounds[step.key];
-      if (a && !soundMissing(step.key) && !voiceGaveUp) {
-        try { a.currentTime = 0; a.play().catch(() => { voiceGaveUp = true; }); } catch (e) {}
+      if (a && !soundMissing(step.key)) {
+        try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
       }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
@@ -1835,7 +1846,8 @@
       setPoseGuide(POSE_GUIDES[i] || 'かわいく決めてね💕');
       /* 前置きボイス（「◯枚目いくよー」）は1枚目だけ。2枚目以降はポーズ提案ボイスが
          そのまま号令になる（毎枚2秒前後の前置きはテンポを殺す・実機は矢継ぎ早） */
-      await runCountdown(i, { skipIntro: i > 0, poseKey: nextPoseKey() });
+      /* 最終ショットは必ず pose_06（ラスト！決めポーズ！）。途中の枚では絶対に出さない（2026-08-13 実機指摘） */
+      await runCountdown(i, { skipIntro: i > 0, poseKey: i === NUM_SHOTS - 1 ? POSE_LAST_KEY : nextPoseKey() });
       const shot = captureFrame();
       playSound('seShutter');
       await flash();
