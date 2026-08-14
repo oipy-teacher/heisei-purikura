@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v23'; // 2026-08-15 Androidの保存経路とカメラ起動失敗の対策＋追加ボイス27本（新規アセット27件）
+const CACHE_NAME = 'purikura-v24'; // 2026-08-15 文言総点検の反映＋互換対応の仕上げ（新規アセットなし・CDN分岐のクエリ正規化あり）
 
 const PRECACHE = [
   '.',
@@ -140,14 +140,21 @@ self.addEventListener('fetch', (e) => {
       }).catch(() => caches.match(e.request, { ignoreSearch: true }))
     );
   } else if (url.hostname === 'cdn.jsdelivr.net' || url.hostname === 'storage.googleapis.com') {
-    // MediaPipe本体・モデル: キャッシュ優先（巨大ファイルの再取得を防ぐ）
+    /* MediaPipe本体・モデル: キャッシュ優先（巨大ファイルの再取得を防ぐ）。
+       🚨 2026-08-15: app.js 側が読み込みの再挑戦時に `?retry=N` を付けるようになった
+       （ブラウザは失敗した import() をモジュールマップに覚えており、同じURLでは
+       二度と取りに行かないため）。クエリ違いを別物として扱うと
+       ① 前回のセッションでキャッシュ済みでも取りに行ってしまい
+       ② `?retry=1` `?retry=2` … がキャッシュに積み上がる。
+       読むときは ignoreSearch で拾い、書くときはクエリを落として1本に正規化する。 */
+    const baseUrl = url.origin + url.pathname;
     e.respondWith(
-      caches.match(e.request).then((hit) => {
+      caches.match(e.request, { ignoreSearch: true }).then((hit) => {
         if (hit) return hit;
         return fetch(e.request).then((res) => {
           if (res.ok) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+            caches.open(CACHE_NAME).then((c) => c.put(baseUrl, clone));
           }
           return res;
         });

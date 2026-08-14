@@ -1219,10 +1219,20 @@
      瞬間的な詰まりが頻発するので、「開いた一瞬だけ電波が悪かった客」が最後まで
      盛れないまま終わっていた（直す手段はページ再読込だけで、客はそれを知らない）。
      → 失敗したらキャッシュを捨てて、次の呼び出しでもう一度取りに行く。 */
+  /* 🚨 再挑戦できるようにするために2つ必要（2026-08-15・検見 要修正4）。片方だけでは直らない。
+     ① 拒否されたPromiseを捨てる（以前は握りっぱなしで、以後ずっと拒否済みPromiseを返していた）
+     ② **URLを毎回変える**。ブラウザは `import()` の結果をモジュールマップに覚えており、
+        **失敗も覚える**。同じURLで呼び直しても再フェッチは起きず、同じ失敗が即座に返るだけ。
+        実測: ①だけ入れた状態で、13秒ごとに取りに行っているのに
+        ネットワークへの取得試行は最初の1回のまま増えなかった。
+        クエリを1つ足すとモジュールマップの別エントリになり、本当に取りに行く。 */
+  let mpLoadAttempt = 0;
+  const mpBust = () => (mpLoadAttempt > 0 ? `?retry=${mpLoadAttempt}` : '');
+
   function loadVision() {
     if (!visionModulePromise) {
-      visionModulePromise = import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`)
-        .catch(err => { visionModulePromise = null; throw err; });
+      visionModulePromise = import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs${mpBust()}`)
+        .catch(err => { visionModulePromise = null; mpLoadAttempt++; throw err; });
     }
     return visionModulePromise;
   }
@@ -3649,19 +3659,22 @@
      盛りタイムは2分あるので、そのあいだ静かに取りに行き直す。取れたら顔検出をやり直して
      バーを生き返らせる（客の操作は要らない）。 */
   let faceRetryId = null;
+  /* 🚨 tries は setInterval の外に置く。中で `let tries = 0` にすると、
+     再挑戦の中から detectFacesForShots → startFaceRetry と戻ってきたときに
+     0へ戻り、上限が効かず永久に回り続ける（2026-08-15 実装時に自分で踏んだ） */
+  let faceRetryTries = 0;
   const FACE_RETRY_EVERY_MS = 13000;
   const FACE_RETRY_MAX = 5;
   function stopFaceRetry() {
     if (faceRetryId) { clearInterval(faceRetryId); faceRetryId = null; }
   }
   function startFaceRetry() {
-    stopFaceRetry();
-    let tries = 0;
+    if (faceRetryId) return; // 既に回っているなら数え直さない
     faceRetryId = setInterval(async () => {
       // 盛り画面を離れていたら止める（次の客の回まで走り続けさせない）
       if (!screens['screen-beauty'].classList.contains('active')) { stopFaceRetry(); return; }
       if (faceLandmarker) { stopFaceRetry(); return; }
-      if (++tries > FACE_RETRY_MAX) { stopFaceRetry(); return; }
+      if (++faceRetryTries > FACE_RETRY_MAX) { stopFaceRetry(); return; }
       await detectFacesForShots();
     }, FACE_RETRY_EVERY_MS);
   }
@@ -3738,6 +3751,8 @@
     beautyFaceNote.textContent = '👀 お顔を さがしてるよ…'; // B-6: 「検出」を客に見せない
     beautyFaceNote.classList.remove('hidden');
     setFaceSlidersEnabled(true); // 前の客の回で無効化されたままにならないよう毎回戻す
+    stopFaceRetry();
+    faceRetryTries = 0; // 回ごとに再挑戦の回数をリセット（前の客の分を持ち越さない）
     buildBeautyControls();
     syncBeautyUIFromCur();
     beautyTimerDisplay.textContent = formatTime(state.beautyRemaining);
