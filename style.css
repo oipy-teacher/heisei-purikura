@@ -2936,3 +2936,42 @@ body.theme-reiwa .save-alt { background: var(--r-accent, #c9a227); color: #fff; 
   .print-actions.extra { margin-top: 8px; gap: 8px; }
   .print-actions.extra .btn-sub { padding: 9px 16px; }
 }
+
+/* 保存画面の横持ち2段組（2026-08-15・独立した高さ条件）
+   🚨 直した理由: 平成モードの横持ちで **主保存ボタン（しゃしんを保存する）が
+   初期表示の下へ 29px はみ出していた**（844x390 で実測。v23 でも同じ値で、私が入れた退行ではない）。
+   保存は文化祭の生命線で、ここに届かない客は手ぶらで帰る。
+   シールと案内を縦に積むと高さ390pxにはどう詰めても届かないので、
+   左＝シール／右＝案内と保存ボタン、の横並びに組み替えて縦を半分にする。
+   縦持ちと iPad横（高さ768px）はこの条件に入らないので従来のまま。 */
+@media (max-height: 520px) {
+  #screen-print .print-stage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 20px;
+    padding: 4px 0 8px;
+  }
+  #screen-print .print-progress { flex-basis: 100%; margin: 0 0 4px; font-size: 15px; }
+  #screen-print .printer-slot { padding: 8px; }
+  #screen-print #final-canvas { max-height: 62vh; max-width: 38vw; }
+  #screen-print .print-caption { margin-top: 4px; font-size: 12px; }
+  #screen-print .print-after { flex: 0 1 auto; max-width: 56vw; }
+  #screen-print .print-instruction { margin-top: 0; font-size: 14px; line-height: 1.5; }
+  #screen-print .print-actions { margin-top: 10px; gap: 10px; }
+  #screen-print .print-extra { margin-top: 8px; }
+  #screen-print .print-extra > summary { padding: 8px 14px; font-size: 12px; }
+  #screen-print .print-actions.escape-row { margin-top: 8px; }
+}
+
+/* iPad横（1024x768）は上の2段組の条件（高さ520px）に入らないので、縦積みのまま少しだけ詰める。
+   「ほかの形でも保存する」の畳みボタンを1行足したぶん、非常口（ながおしで保存）が
+   v23より 28px 下がっていた。主ボタンは初期表示内・非常口はスクロールで届く、という
+   2026-08-15に決めた2本立ての基準は満たすが、v23より悪くはしない（2026-08-15） */
+@media (orientation: landscape) and (min-height: 521px) and (max-height: 820px) {
+  #screen-print #final-canvas { max-height: 46vh; }
+  #screen-print .print-instruction { margin-top: 12px; }
+  #screen-print .print-actions { margin-top: 14px; }
+  #screen-print .print-extra { margin-top: 8px; }
+}
