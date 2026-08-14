@@ -142,6 +142,19 @@
           <p class="darkroom-text" data-text="げんぞうちゅう…">げんぞうちゅう…</p>
           <span class="darkroom-film bottom"><i></i></span>
         </div>
+        <!-- カメラ準備中（2026-08-14 実機指摘「カメラが起動しないケース」）:
+             黒画面のまま放置しない。起動要求中はここを出す -->
+        <div id="cam-loading" class="cam-loading hidden">
+          <span class="cam-loading-lens" aria-hidden="true"></span>
+          <p class="cam-loading-text">📷 カメラを準備中…</p>
+        </div>
+        <!-- カメラが起動できなかったときの案内（原因ごとに文面を出し分ける・再試行つき） -->
+        <div id="cam-fail" class="cam-fail hidden">
+          <p class="cam-fail-title" id="cam-fail-title">カメラを起動できませんでした</p>
+          <p class="cam-fail-body" id="cam-fail-body"></p>
+          <button id="btn-cam-retry" class="btn-main cam-retry">🔄 もう一度ためす</button>
+          <p class="cam-fail-detail" id="cam-fail-detail"></p>
+        </div>
       </div>
       <div class="camera-side">
         <p class="cam-caption">のこり <span id="shots-left">4</span> ポーズ！</p>
@@ -426,13 +439,17 @@
                iPad実寸(1024x768)では下に足すと画面外に出て押せなくなるため、この行の中に入れる -->
           <a id="btn-save-longpress" class="save-escape" href="#">うまく保存できないときは ▶ ながおしで保存</a>
         </div>
-        <!-- 保存の最後の砦（iOS対策・2026-08-14）: 画像を長押しして「“写真”に追加」 -->
+        <!-- 保存の最後の砦（2026-08-14）: 端末に合わせて文言を出し分ける長押し保存。
+             iOSは「“写真”に追加」／Androidは「画像をダウンロード」。
+             さらに、別経路（ダウンロード／共有）へ客が自分で乗り換えられるボタンを併設する -->
         <div id="save-modal" class="confirm-modal hidden">
           <div class="confirm-box save-box">
-            <p class="confirm-text">この画像を<b>ながおし</b>して<br>「<b>“写真”に追加</b>」をえらんでね</p>
+            <p class="confirm-text" id="save-modal-text">この画像を<b>ながおし</b>して<br>「<b>“写真”に追加</b>」をえらんでね</p>
             <img id="save-modal-img" alt="保存する画像">
-            <p class="save-hint">（パソコンなら 右クリック → 「画像を保存」）</p>
-            <div class="confirm-buttons">
+            <p class="save-hint" id="save-modal-hint">（パソコンなら 右クリック → 「画像を保存」）</p>
+            <div class="confirm-buttons save-alt-row">
+              <button id="btn-save-alt-download" class="btn-sub save-alt hidden">⬇ ダウンロードでほぞん</button>
+              <button id="btn-save-alt-share" class="btn-sub save-alt hidden">📤 共有でほぞん</button>
               <button id="btn-save-close" class="btn-sub">とじる</button>
             </div>
           </div>

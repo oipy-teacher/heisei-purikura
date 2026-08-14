@@ -443,6 +443,37 @@
     decoOwaru: 'audio/doodle_owaru.mp3',          // 落書き「おわる」ボタン
     decoHalftime: 'audio/doodle_halftime.mp3',    // 落書き残り時間の中間通知
     printOut: 'audio/print_out.mp3',              // シール排出
+    /* --- 新機能向け 追加ボイスパック（2026-08-15 音羽納品・27本） ---
+       `heisei_` / `reiwa_` の対になっているものは announceByMode() で自動的に選ぶ。
+       キー名は末尾に H/R を付けて対を作る（announceByMode がこの規約に依存している）。
+       🚨 ここに足したら **sw.js の PRECACHE にも足すこと**（漏れるとオフラインだけ無音になる） */
+    decoGateH: 'audio/heisei_deco_gate.mp3',              // らくがきスタートゲート
+    decoGateR: 'audio/reiwa_deco_gate.mp3',
+    photoPickR: 'audio/reiwa_photo_pick.mp3',             // シールに載せる写真えらび（令和のみ）
+    decoPhotoSwitchH: 'audio/heisei_deco_photo_switch.mp3', // 写真拡大表示と切り替えの案内
+    decoPhotoSwitchR: 'audio/reiwa_deco_photo_switch.mp3',
+    layoutGateH: 'audio/heisei_layout_gate.mp3',          // 分割えらび
+    layoutGateR: 'audio/reiwa_layout_gate.mp3',
+    korokoroH: 'audio/heisei_korokoro.mp3',               // スタンプのコロコロ（初回のみ）
+    korokoroR: 'audio/reiwa_korokoro.mp3',
+    cameraWaitH: 'audio/heisei_camera_wait.mp3',          // カメラ起動待ち
+    cameraWaitR: 'audio/reiwa_camera_wait.mp3',
+    cameraReadyH: 'audio/heisei_camera_ready.mp3',        // プレビュー開始
+    cameraReadyR: 'audio/reiwa_camera_ready.mp3',
+    thanksH: 'audio/heisei_thanks.mp3',                   // もう一回あそぶ→タイトルへ
+    thanksR: 'audio/reiwa_thanks.mp3',
+    moriageLevelR: 'audio/reiwa_moriage_level.mp3',       // 盛れ感レベル（令和のみ）
+    makeupHistoryR: 'audio/reiwa_makeup_history.mp3',     // メイクりれきボタンを出したとき
+    beautyPartsR: 'audio/reiwa_beauty_parts.mp3',         // 盛りスライダー初回操作（令和のみ）
+    toolUgokasuR: 'audio/reiwa_tool_ugokasu.mp3',         // 「うごかす」初回選択（令和のみ）
+    idPhotoR: 'audio/reiwa_id_photo.mp3',                 // 証明プリ保存（令和のみ）
+    saveGuide: 'audio/save_guide.mp3',                    // 共有シートが出る瞬間
+    saveSuccess: 'audio/save_success.mp3',                // 共有シートに渡せた瞬間
+    saveLongpress: 'audio/save_longpress.mp3',            // 長押し保存モーダル
+    saveRetry: 'audio/save_retry.mp3',                    // 共有をやめたとき
+    saveError: 'audio/save_error.mp3',                    // 画像を作れなかったとき
+    cameraError: 'audio/camera_error.mp3',                // カメラを起動できなかったとき
+    resumeOffer: 'audio/resume_offer.mp3',                // 落書きの復帰モーダル
   };
 
   const sounds = {};
@@ -562,6 +593,37 @@
   // 案内の後続を予約する（stopAnnounceでまとめて取り消せる）
   function queueAnnounce(fn, ms) {
     announceTimers.push(setTimeout(fn, ms));
+  }
+  /* モード別ボイスの選択（2026-08-15 追加ボイスパック）。
+     `decoGate` を渡すと平成なら decoGateH・令和なら decoGateR を鳴らす。
+     片側しか無いもの（moriageLevelR 等）はキーを直接 playAnnounce に渡すこと */
+  function announceByMode(base) {
+    playAnnounce(base + (state.mode === 'heisei' ? 'H' : 'R'));
+  }
+  /* 「1本目のあとに続けて2本目」を安全に繋ぐ。
+     playAnnounce を2回続けて呼ぶと1本目が即座に切れるため、
+     1本目の実測長ぶん待ってから2本目を予約する（stopAnnounceで一括取り消し可能）。
+     長さが取れない環境では既定値で繋ぐ（鳴らないより、少し重なる方がマシ、にはしない設計） */
+  function chainAnnounce(firstKey, secondKey, gapMs = 250, fallbackMs = 4200) {
+    const d = soundDurationMs(firstKey);
+    queueAnnounce(() => playAnnounce(secondKey), (d > 0 ? d : fallbackMs) + gapMs);
+  }
+  /* 「その回はじめて」だけ鳴らす案内の管理（音羽さんの注意3）。
+     道具を持ち替えるたびに喋ると、3分の落書きタイムが説明で埋まる。
+     「もう一回あそぶ」で resetOnceVoices() を呼んでリセットする */
+  const onceVoiceDone = {};
+  function announceOnce(id, key) {
+    if (onceVoiceDone[id]) return;
+    onceVoiceDone[id] = true;
+    playAnnounce(key);
+  }
+  function announceOnceByMode(id, base) {
+    if (onceVoiceDone[id]) return;
+    onceVoiceDone[id] = true;
+    announceByMode(base);
+  }
+  function resetOnceVoices() {
+    Object.keys(onceVoiceDone).forEach(k => delete onceVoiceDone[k]);
   }
 
   /* 音声が鳴らせない環境の印（2026-08-12 検見の実測指摘対応）。
@@ -914,6 +976,10 @@
       el.className = 'layout-item' + (layout.id === state.layout.id ? ' selected' : '');
       el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>`;
       el.addEventListener('click', () => {
+        /* 令和の分割えらびは撮影後ではなく **この選択画面の中** にある（2026-08-15 音羽さんの申し送り）。
+           はじめて分割に触れたときだけ「２枚ワイドから１６分割まで」を一度だけ言う。
+           平成はここを表示しない（落書き後のゲートで layoutGateH を鳴らす） */
+        if (state.mode !== 'heisei') announceOnce('layoutGateR', 'layoutGateR');
         container.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
         state.layout = layout;
@@ -1812,23 +1878,153 @@
       segmenterStatus.classList.add('hidden');
     }
 
+    // 全身モードは三脚に固定して背面（アウト）カメラで撮る。バストアップは従来どおり前面。
+    // （前面/背面の割り当ては現行仕様のまま。取れなかったときだけ下でフォールバックする）
+    const facing = state.shotMode === 'full' ? 'environment' : 'user';
+    hideCamFail();
+    showCamLoading(true);
+    /* 「カメラ、じゅんび中ー！」は **待たされたときだけ** 鳴らす（2026-08-15）。
+       すぐ起動する端末で鳴らすと、直後の cameraReady に即座に切られて
+       言いかけで途切れた音になる。1.2秒たっても起動しないときが「待たされた」 */
+    if (camWaitVoiceId) clearTimeout(camWaitVoiceId);
+    camWaitVoiceId = setTimeout(() => { camWaitVoiceId = null; announceByMode('cameraWait'); }, 1200);
     try {
-      // 全身モードは三脚に固定して背面（アウト）カメラで撮る。バストアップは従来どおり前面。
-      const facing = state.shotMode === 'full' ? 'environment' : 'user';
-      state.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } },
-        audio: false,
-      });
+      state.stream = await acquireCamera(facing);
       video.srcObject = state.stream;
+      /* 端末がスリープした・他アプリに奪われた等でトラックが終わったら、黙って黒画面にせず案内を出す */
+      state.stream.getTracks().forEach((t) => {
+        t.addEventListener('ended', () => {
+          if (!previewRunning) return;
+          previewRunning = false;
+          showCamFail({ name: 'NotReadableError', message: 'track ended' });
+        });
+      });
+      showCamLoading(false);
+      if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
+      announceByMode('cameraReady'); // 「カメラ、オッケー！」（2026-08-15）
       previewRunning = true;
       previewLoop();
     } catch (err) {
-      camError.textContent = 'カメラを起動できませんでした。ブラウザのカメラ許可設定をご確認ください。(' + err.message + ')';
+      showCamLoading(false);
+      if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
+      showCamFail(err);
     }
   }
+  let camWaitVoiceId = null; // 「じゅんび中」ボイスの遅延タイマー
+
+  /* ===================== カメラ取得（2026-08-14 実機指摘「カメラが起動しないケース」） =====================
+     以前は1回きりの getUserMedia。失敗したら 13px の小さな文字が出るだけで、
+     撮影スタートは押せるまま＝黒画面のまま4枚撮り切ってしまう可能性があった。
+     いまは段階的にフォールバックして「必ず何かのカメラで起動する」ことを狙う:
+       ① 希望の向き＋高解像度（従来と同じ。これが通れば見た目は今までどおり）
+       ② 希望の向きだけ（解像度の希望を捨てる）
+       ③ 反対の向き（背面が無い/使えない端末でも前面で起動する）
+       ④ 制約なし（video: true。最後の望み）
+     それでも駄目なら、原因ごとに文面を出し分けた案内＋「もう一度ためす」を出す。 */
+  function acquireCamera(facing) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const e = new Error('getUserMedia unavailable');
+      e.name = 'UnsupportedError';
+      return Promise.reject(e);
+    }
+    const other = facing === 'environment' ? 'user' : 'environment';
+    const plans = [
+      { video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false },
+      { video: { facingMode: { ideal: facing } }, audio: false },
+      { video: { facingMode: { ideal: other } }, audio: false },
+      { video: true, audio: false },
+    ];
+    return (async () => {
+      let lastErr = null;
+      for (const constraints of plans) {
+        try {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          lastErr = err;
+          /* 許可されていない／安全でない文脈は、制約を変えても結果は変わらない。
+             無駄に4回試すと案内が出るまで客を待たせるだけなので、ここで打ち切る */
+          if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) throw err;
+        }
+      }
+      throw lastErr || new Error('camera unavailable');
+    })();
+  }
+
+  const camLoadingEl = $('#cam-loading');
+  const camFailEl = $('#cam-fail');
+  function showCamLoading(on) {
+    if (camLoadingEl) camLoadingEl.classList.toggle('hidden', !on);
+  }
+  function hideCamFail() {
+    if (camFailEl) camFailEl.classList.add('hidden');
+    if (camError) camError.textContent = '';
+  }
+  /* 案内文の出し分け（2026-08-14 柄本仕様書 C-1 に従って全面改稿）。
+     守る方針は3つ:
+       ① **客が実際に取れる行動だけを書く。** 「ブラウザのカメラ許可設定を確認」は
+          無人のiPadの前に立った客には実行不可能。文化祭で唯一いつでも取れる行動は
+          「係の人を呼ぶ」なので、どの文面も最後は必ずそこへ着地させる
+       ② **英語のエラーを客の画面に出さない。** 原因の生データは console.error だけに出す
+       ③ この画面の他の文言と同じ口調（ですます調で客に指示しない） */
+  function camFailMessage(err) {
+    const name = (err && err.name) || '';
+    const env = saveEnv(); // 端末判定は保存経路と同じものを使い回す
+    const CALL = 'ちかくの 係の人を よんでください🙏';
+    const TITLE = 'カメラが うまく始まりませんでした';
+    if (!window.isSecureContext) {
+      return { title: TITLE, body: CALL };
+    }
+    if (name === 'UnsupportedError' || name === 'TypeError') {
+      return {
+        title: 'この画面では カメラが つかえません',
+        // アプリ内ブラウザだけは、客が自分の指で直せる（＝書く価値のある）唯一の手順
+        body: env.isInApp
+          ? 'LINEなどの中で ひらいていると つかえないことがあるよ。画面のすみの「…」から「ブラウザでひらく」を えらんでみてね。それでも だめなら ' + CALL
+          : CALL,
+      };
+    }
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+      return { title: TITLE, body: 'カメラを つかう せっていが オフに なっているみたい。' + CALL };
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+      return {
+        title: TITLE,
+        body: 'ほかの アプリが カメラを つかっているみたい。下の「もう一度ためす」を おして、それでも だめなら ' + CALL,
+      };
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+      return { title: 'カメラが 見つかりませんでした', body: CALL };
+    }
+    return { title: TITLE, body: CALL };
+  }
+  function showCamFail(err) {
+    const msg = camFailMessage(err);
+    if ($('#cam-fail-title')) $('#cam-fail-title').textContent = msg.title;
+    if ($('#cam-fail-body')) $('#cam-fail-body').textContent = msg.body;
+    /* 原因の生データは **客の画面には出さない**（柄本 C-1・英語のエラーを客に貼らない）。
+       調べるときは console を見る。URLに #debug を付けたときだけ画面にも小さく出す */
+    console.error('[camera]', (err && err.name) || 'Error', (err && err.message) || '', err);
+    if ($('#cam-fail-detail')) {
+      $('#cam-fail-detail').textContent = (location.hash === '#debug' && err)
+        ? ('（' + ((err.name || 'Error') + ': ' + (err.message || '')).slice(0, 80) + '）')
+        : '';
+    }
+    if (camFailEl) camFailEl.classList.remove('hidden');
+    playAnnounce('cameraError'); // 「あわてなくて だいじょうぶ。かかりの人を よんでね。」（2026-08-15）
+    /* 黒画面のまま撮影が始まる事故を止める（4枚とも真っ暗で撮れてしまうため）。
+       起動できるまで「撮影スタート」は押させない */
+    btnStartShooting.disabled = true;
+    if (camError) camError.textContent = '';
+  }
+  $('#btn-cam-retry').addEventListener('click', () => {
+    hideCamFail();
+    startCamera();
+  });
 
   function stopCamera() {
     previewRunning = false;
+    showCamLoading(false);
+    if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
     if (state.stream) {
       state.stream.getTracks().forEach(t => t.stop());
       state.stream = null;
@@ -3331,6 +3527,8 @@
 
   [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderNose, 'nose'], [sliderCheek, 'cheek'], [sliderLip, 'lip'], [sliderNamida, 'namida'], [sliderLegs, 'legs']].forEach(([el, key]) => {
     el.addEventListener('input', () => {
+      // はじめてバーを触ったときだけ、こまかい項目があることを教える（2026-08-15・令和のみ）
+      if (state.mode !== 'heisei') announceOnce('beautyParts', 'beautyPartsR');
       const cur = curBeauty();
       cur[key] = Number(el.value);
       cur._preset = '';
@@ -3376,6 +3574,8 @@
   function startBeautyScreen() {
     showScreen('screen-beauty');
     playAnnounce('beauty'); // 案内は1本チャンネル経由（前画面の案内が残っていても止まる）
+    // 令和は続けて「盛れ感レベルは三だんかい」（2026-08-15。平成に盛り画面は無い）
+    if (state.mode !== 'heisei') chainAnnounce('beauty', 'moriageLevelR');
     // 脚長バーは全身コースのときだけ出す（アップコースでは意味が無い・piemo型）
     const legsRow = $('#row-legs');
     if (legsRow) legsRow.style.display = state.shotMode === 'full' ? '' : 'none';
@@ -3385,6 +3585,9 @@
       let has = false;
       try { has = !!localStorage.getItem('purikura.makeupHistory.v1'); } catch (e) { /* 読めない環境では出さない */ }
       histBtn.classList.toggle('hidden', !has);
+      /* ボタンを出したときだけ案内する（2026-08-15）。beauty→moriageLevel の
+         あとに来るよう、りれきがある回はさらに後ろへ繋ぐ */
+      if (has) chainAnnounce('moriageLevelR', 'makeupHistoryR');
     }
     state.beautySelected = 0;
     state.beautyRemaining = BEAUTY_SECONDS;
@@ -4828,6 +5031,14 @@
   $('#pen-size').addEventListener('input', (e) => { state.penSize = Number(e.target.value); });
 
   function setTool(tool, extra) {
+    /* その回はじめて選んだときだけ、その道具のコツを一度だけ言う（2026-08-15）。
+       持ち替えるたびに喋ると3分の落書きタイムが説明で埋まるため announceOnce で1回に絞る */
+    /* コロコロ（なぞって連続で押す）は絵文字スタンプ・手描きスタンプの **両方** で効く
+       （5098行付近の判定と対応）。片方だけに結線すると、手描きスタンプから入った客には
+       一度も説明が届かない（2026-08-15の結線確認で実際に取りこぼしていた） */
+    const isStamp = (t) => t === 'stamp' || t === 'dstamp';
+    if (isStamp(tool) && !isStamp(state.tool)) announceOnceByMode('korokoro', 'korokoro');
+    if (tool === 'edit' && state.tool !== 'edit' && state.mode !== 'heisei') announceOnce('toolUgokasu', 'toolUgokasuR');
     state.tool = tool;
     state.stampChar = tool === 'stamp' ? extra : null;
     state.dstampId = tool === 'dstamp' ? extra : null;
@@ -5303,12 +5514,18 @@
       state.photoPick = null; // 平成は撮影順固定
     }
     $('#deco-start-gate').classList.remove('hidden');
+    /* ゲートの案内（2026-08-15 追加ボイスパック）。令和はこのゲートに
+       「シールに載せる写真えらび」があるので、1本目に続けて2本目を繋ぐ */
+    announceByMode('decoGate');
+    if (pickOn) chainAnnounce('decoGateR', 'photoPickR');
   }
 
   $('#btn-deco-start').addEventListener('click', () => {
     $('#deco-start-gate').classList.add('hidden');
     drawCanvas.style.pointerEvents = 'auto';
     playAnnounce('decoStart'); // 案内は1本チャンネル経由
+    // 08_deco_start のあとに続けて「写真は1枚ずつ大きく描ける」を鳴らす（2026-08-15）
+    chainAnnounce('decoStart', state.mode === 'heisei' ? 'decoPhotoSwitchH' : 'decoPhotoSwitchR');
     startDecoTimer();
   });
 
@@ -5391,6 +5608,7 @@
     const gate = $('#layout-gate');
     const list = $('#layout-gate-list');
     list.innerHTML = '';
+    playAnnounce('layoutGateH'); // 「なんぶんかつで もってかえる？」（2026-08-15）
     LAYOUTS.forEach((layout) => {
       const el = document.createElement('div');
       el.className = 'layout-item' + (layout.id === state.layout.id ? ' selected' : '');
@@ -5474,13 +5692,25 @@
        ひとつだったため廃止（a[download]+dataURLはiOSで信用しない） */
   }
 
-  /* ===================== 保存経路（iOS対策・2026-08-14 実機指摘「写真保存できなかった」） =====================
-     以前は a[download] + toDataURL。iOS Safari は a の download 属性を実質サポートして
-     いないため、押しても何も起きない／別タブで開くだけでカメラロールには入らない。
-     実機で平成・令和とも保存に失敗した直接の原因はこれ。3段構えに作り替える:
-       ① navigator.share（ファイル共有シート）→「画像を保存」でカメラロール直行（iOS15+の定石）
-       ② shareが使えないPC系 → BlobURLの a[download]（通常のダウンロード）
-       ③ 最後の砦 → 画像を大きく表示して「長押し→“写真”に追加」モーダル（どの環境でも必ず成功する）
+  /* ===================== 保存経路（2026-08-14 実機指摘「Androidだと保存できませんでした」） =====================
+     経緯を残す。ここは2回作り替えている:
+       v18（iOS対策）… a[download] を全廃し「共有シート優先」の一本道にした。
+                        iOS Safari は download 属性を実質サポートしておらず、押しても
+                        何も起きない／別タブで開くだけでカメラロールに入らないため。
+       今回（Android対策）… その一本道が **Androidの確実な経路を奪っていた**。
+                        Android Chrome は canShare({files}) が true を返すので必ず①の
+                        共有シートに入るが、Androidの共有シートには「画像を保存」に相当する
+                        項目が無いことが多く（アプリ一覧が出るだけ）、客は保存できない。
+                        最後の砦の長押しも、Chrome では blob: 画像に「画像をダウンロード」が
+                        出ないことがあり、二重に詰んでいた。
+
+     結論: **一本道にせず、端末ごとに「その端末で確実に成功する経路」を先頭に置く。**
+       Android / PC → ① BlobURL + a[download]（ダウンロードフォルダに確実に落ちる）
+       iOS         → ① 共有シート（v18の成果。カメラロール直行はこれしかない）
+       どちらも不可 → ② もう一方の経路 → ③ 端末別の文言を出す長押しモーダル（最後の砦）
+     判定は機能検出を優先し（navigator.canShare({files}) / a.download の有無）、
+     どうしても機能検出で割れないところだけ UA を見る
+     （download 属性は iOS でも "download" in a が true になってしまうため、ここだけは UA が要る）。
      成功・失敗は save-toast で必ず客に見せる（無言で失敗しない）。
 
      🚨 この経路で最も重要な制約（触るときは必ず守ること）:
@@ -5505,8 +5735,30 @@
   }
   // iPhone/iPad判定（iPadOSはMacintoshを名乗るためタッチ点数も見る）
   function isApplePhoneOrPad() {
-    const ua = navigator.userAgent;
+    const ua = navigator.userAgent || '';
     return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+  /* 保存経路をえらぶための環境判定（2026-08-14 Android対策）。
+     毎回その場で作る（キャッシュしない）。検証時に差し替えやすくするため。 */
+  function saveEnv() {
+    const ua = navigator.userAgent || '';
+    const isIOS = isApplePhoneOrPad();
+    /* 機能検出: download 属性が「存在する」か。ただし iOS Safari は属性が存在しても
+       無視するため、機能検出だけでは割れない。ここだけ UA で iOS を除外する */
+    let hasDownloadAttr = false;
+    try { hasDownloadAttr = 'download' in document.createElement('a'); } catch (e) { hasDownloadAttr = false; }
+    return {
+      isIOS,
+      isAndroid: /Android/.test(ua),
+      // アプリ内ブラウザ（LINE / Facebook / Instagram）はダウンロードが黙って失敗することがある
+      isInApp: /\bLine\/|FBAN|FBAV|Instagram|\bMicroMessenger/i.test(ua),
+      canDownload: hasDownloadAttr && !isIOS,
+    };
+  }
+  // 機能検出: このBlobを共有シートに渡せるか（Fileごと作って canShare に聞く）
+  function canShareFile(file) {
+    if (!file || !navigator.share || !navigator.canShare) return false;
+    try { return !!navigator.canShare({ files: [file] }); } catch (e) { return false; }
   }
   const saveToastEl = $('#save-toast');
   let saveToastId = null;
@@ -5519,17 +5771,70 @@
   }
   let saveModalObjectUrl = null;
   let lastSavedBlob = null; // 「うまく保存できないとき」用に直近の画像を持っておく
+  let lastSavedName = 'purikura.png';
   function showSaveFallback(blob, cv) {
     // 最後の砦: 長押し保存。BlobURLで表示（巨大dataURL文字列をDOMに埋めない）
     const img = $('#save-modal-img');
-    if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
+    try {
+      if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
+    } catch (e) { saveModalObjectUrl = null; }
+    /* 🚨 ここは最後の砦なので、何があっても画像を出し切る。
+       BlobURLが作れない環境（2026-08-14の検証で発見）でも dataURL に落ちて必ず表示する。
+       以前はここが素通しで、createObjectURL が例外を投げると保存処理ごと落ちていた */
+    let shown = false;
     if (blob) {
-      saveModalObjectUrl = URL.createObjectURL(blob);
-      img.src = saveModalObjectUrl;
-    } else if (cv) {
-      img.src = cv.toDataURL('image/png'); // Blobが作れなかった環境の保険
+      try {
+        saveModalObjectUrl = URL.createObjectURL(blob);
+        img.src = saveModalObjectUrl;
+        shown = true;
+      } catch (e) { saveModalObjectUrl = null; }
+    }
+    if (!shown && cv) {
+      try { img.src = cv.toDataURL('image/png'); shown = true; } catch (e) { /* ここまで来たら画像は出せない */ }
+    }
+    /* 案内文は端末別に出し分ける（2026-08-14 Android対策）。
+       長押しメニューの項目名が iOS と Android で違うため、
+       「“写真”に追加」とだけ書いてあるとAndroidの客はその項目を探し続けて詰む */
+    const env = saveEnv();
+    const textEl = $('#save-modal-text');
+    const hintEl = $('#save-modal-hint');
+    if (textEl) {
+      if (env.isIOS) {
+        textEl.innerHTML = 'この画像を<b>ながおし</b>して<br>「<b>“写真”に追加</b>」をえらんでね';
+      } else if (env.isAndroid) {
+        textEl.innerHTML = 'この画像を<b>ながおし</b>して<br>「<b>画像をダウンロード</b>」をえらんでね';
+      } else {
+        textEl.innerHTML = 'この画像を<b>ながおし</b>（パソコンは<b>右クリック</b>）して<br>「<b>画像を保存</b>」をえらんでね';
+      }
+    }
+    if (hintEl) {
+      hintEl.textContent = env.isAndroid
+        ? '（出てこないときは下の「⬇ ダウンロードでほぞん」をおしてね）'
+        : '（パソコンなら 右クリック → 「画像を保存」）';
+    }
+    /* 別経路への乗り換え口。長押しが効かない環境でも、客がここから必ず抜けられるようにする。
+       使える経路だけ出す（押しても何も起きないボタンを見せない） */
+    const dlBtn = $('#btn-save-alt-download');
+    const shBtn = $('#btn-save-alt-share');
+    if (dlBtn) dlBtn.classList.toggle('hidden', !(blob && env.canDownload));
+    if (shBtn) {
+      let sharable = false;
+      if (blob) {
+        try { sharable = canShareFile(new File([blob], lastSavedName, { type: 'image/png' })); } catch (e) { sharable = false; }
+      }
+      shBtn.classList.toggle('hidden', !sharable);
     }
     $('#save-modal').classList.remove('hidden');
+    /* ホーム画面追加の案内バーは z-index 310 でモーダル(290)より上にいる。
+       横持ちでは「とじる」に重なって押せなくなるため、保存モーダルを出す間は引っ込める
+       （2026-08-15 横持ちのスクショで発見。最後の砦が袋小路になっていた） */
+    const pwaBar = $('#pwa-hint');
+    if (pwaBar) pwaBar.classList.add('hidden');
+    /* 「がぞうを ながおしして…」（2026-08-15）。iOSは「しゃしんに追加」で文言が一致するが、
+       Androidの長押しメニューは「画像をダウンロード」なので、そのままだと客が探す項目とズレる。
+       ボイスは iOS のときだけ鳴らし、Androidは画面の文字（端末別に出し分け済み）に任せる。
+       ※Android用の言い回しは音羽さんへ追加依頼済みとして growth-log に残す */
+    if (env.isIOS) playAnnounce('saveLongpress');
     /* ここでトーストは出さない（2026-08-14 実機指摘「横向きで文字被り」）。
        トーストは画面上端に出るため、横持ちではモーダルの案内文
        「この画像をながおしして…」に重なって読めなくなっていた。
@@ -5547,8 +5852,92 @@
     lastSaveRoute = 'fallback';
     showSaveFallback(blob, finalCanvas);
   });
+  /* 長押しモーダルの中の乗り換え口（2026-08-14 Android対策）。
+     長押しメニューが出ない端末でも、ここから別経路で必ず保存できるようにする */
+  $('#btn-save-alt-download').addEventListener('click', (e) => {
+    e.preventDefault();
+    const blob = lastSavedBlob || canvasToBlobSync(finalCanvas);
+    if (!blob) { showSaveToast('うまくいかなかった… もういちど おしてみてね。だめなら 係の人を よんでね🙏'); return; }
+    if (tryDownloadBlob(blob, lastSavedName)) {
+      lastSaveRoute = 'download';
+      showSaveToast(saveEnv().isAndroid
+        ? '✅ 「ダウンロード」に保存したよ！ギャラリーかFilesで見てね'
+        : '✅ ダウンロードしたよ！');
+    } else {
+      showSaveToast('この画面ではダウンロードできなかった…ながおしをためしてね');
+    }
+  });
+  $('#btn-save-alt-share').addEventListener('click', (e) => {
+    e.preventDefault();
+    // 🚨 ここも同期でshareへ到達する（await/toBlobを挟まない）
+    const blob = lastSavedBlob || canvasToBlobSync(finalCanvas);
+    if (!blob) { showSaveToast('うまくいかなかった… もういちど おしてみてね。だめなら 係の人を よんでね🙏'); return; }
+    if (!tryShareBlob(blob, lastSavedName, finalCanvas)) {
+      showSaveToast('この画面では共有できなかった…ながおしをためしてね');
+    }
+  });
   // 検証用: 直近にどの経路を通ったか（'share'|'download'|'fallback'|'share-cancel'|'share-failed'）
   let lastSaveRoute = null;
+
+  /* 経路①-A: BlobURL + a[download]。Android / PC で確実に落ちる方法。
+     成功したら true、その場で例外になったら false（＝次の経路へ降りる）。
+     🚨 「クリックしたのに何も落ちない」黙った失敗（アプリ内ブラウザ等）は検出できない。
+        そのため保存後も「うまく保存できないときは▶ながおしで保存」を常設したままにする */
+  function tryDownloadBlob(blob, filename) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* 経路①-B: 共有シート。iOS でカメラロールに入る唯一の道。
+     🚨 ここへは同期で（await を挟まずに）到達しなければならない。理由は上のコメント参照。
+     渡せない・その場で例外＝false を返し、呼び手が次の経路へ降ろす */
+  function tryShareBlob(blob, filename, cv) {
+    const file = (() => {
+      try { return new File([blob], filename, { type: 'image/png' }); } catch (e) { return null; }
+    })();
+    if (!canShareFile(file)) return false;
+    let p = null;
+    try {
+      p = navigator.share({ files: [file] }); // ← タップと同じタスクの中で呼ぶ（最重要）
+    } catch (e) {
+      return false;
+    }
+    if (!p || typeof p.then !== 'function') return false;
+    lastSaveRoute = 'share';
+    showSaveToast('📤 「画像を保存」をえらぶと カメラロールに入るよ！');
+    playAnnounce('saveGuide'); // 「ほぞんメニューが出るよ。画像を保存、をえらんでね！」（2026-08-15）
+    p.then(() => {
+      lastSaveRoute = 'share';
+      showSaveToast('✅ ほぞんメニューにわたしたよ！カメラロールを見てね');
+      /* 🚨 saveSuccess は「カメラロールを見てみてね」と言う。
+         **共有シートに渡せたときだけ** 事実と一致するので、この経路でしか鳴らさない
+         （Androidのダウンロード保存で鳴らすと保存先の案内がズレる。下の①-A参照） */
+      playAnnounce('saveSuccess');
+    }).catch((err) => {
+      if (err && err.name === 'AbortError') { // 客がやめただけ。責めない
+        lastSaveRoute = 'share-cancel';
+        showSaveToast('やめました。もう一度おせば保存できるよ');
+        playAnnounce('saveRetry'); // 「だいじょうぶ。もういちど おせば、ほぞんできるよ！」
+        return;
+      }
+      lastSaveRoute = 'share-failed'; // 失敗したら黙らず最後の砦へ降ろす
+      showSaveFallback(blob, cv);
+    });
+    return true;
+  }
+
   /* 🚨 この関数は async にしてはいけない（await が入った瞬間にiOSのジェスチャが切れる）。
      navigator.share までは一切の非同期を挟まず、タップと同じタスクの中で到達する。 */
   function deliverImage(canvasOrMaker, filename) {
@@ -5557,59 +5946,34 @@
       cv = typeof canvasOrMaker === 'function' ? canvasOrMaker() : canvasOrMaker;
     } catch (e) {
       lastSaveRoute = 'error';
-      showSaveToast('画像を作れなかった…もういちど押してみてね');
+      showSaveToast('うまくいかなかった… もういちど おしてみてね。だめなら 係の人を よんでね🙏');
+      playAnnounce('saveError'); // 「がぞうが うまく作れなかったみたい」（2026-08-15）
       return;
     }
     const blob = canvasToBlobSync(cv); // 同期生成（ここで await しない）
     lastSavedBlob = blob;
-    // ① 共有シート（iOSでカメラロールに入る一番確実な経路）
-    if (blob && navigator.share && navigator.canShare) {
-      // ファイルだけを渡す（text や url を混ぜると iOS で「画像を保存」が消えることがある）
-      const file = new File([blob], filename, { type: 'image/png' });
-      let canFiles = false;
-      try { canFiles = navigator.canShare({ files: [file] }); } catch (e) { canFiles = false; }
-      if (canFiles) {
-        let p = null;
-        try {
-          p = navigator.share({ files: [file] }); // ← タップと同じタスクの中で呼ぶ（最重要）
-        } catch (e) {
-          p = null;
-        }
-        if (p && typeof p.then === 'function') {
-          lastSaveRoute = 'share';
-          showSaveToast('📤 「画像を保存」をえらぶと カメラロールに入るよ！');
-          p.then(() => {
-            lastSaveRoute = 'share';
-            showSaveToast('✅ ほぞんメニューにわたしたよ！カメラロールを見てね');
-          }).catch((err) => {
-            if (err && err.name === 'AbortError') { // 客がやめただけ。責めない
-              lastSaveRoute = 'share-cancel';
-              showSaveToast('やめました。もう一度おせば保存できるよ');
-              return;
-            }
-            lastSaveRoute = 'share-failed'; // 失敗したら黙らず最後の砦へ降ろす
-            showSaveFallback(blob, cv);
-          });
-          return;
-        }
-        // share がその場で例外を投げた（＝ジェスチャ切れ等）ときは下の経路へ落ちる
+    lastSavedName = filename;
+    const env = saveEnv();
+
+    /* ① その端末で「確実に成功する方」を先頭にする。
+       iOS: 共有シート（download属性が効かないため他に道が無い）
+       それ以外(Android/PC): ダウンロード（Androidの共有シートには保存項目が無いことが多い） */
+    if (blob && !env.canDownload) {
+      // iOS など、ダウンロードが効かない端末 → 共有シートが第一経路
+      if (tryShareBlob(blob, filename, cv)) return;
+    } else if (blob) {
+      // Android / PC → ダウンロードが第一経路
+      if (tryDownloadBlob(blob, filename)) {
+        lastSaveRoute = 'download';
+        showSaveToast(env.isAndroid
+          ? '✅ 「ダウンロード」に保存したよ！ギャラリーかFilesで見てね'
+          : '✅ ダウンロードしたよ！');
+        return;
       }
+      // ② ダウンロードがその場で失敗 → もう一方の経路（共有シート）へ
+      if (tryShareBlob(blob, filename, cv)) return;
     }
-    // ② PC系ブラウザ: 普通のダウンロード（iOSではdownload属性が効かないので通さない）
-    if (blob && !isApplePhoneOrPad()) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      lastSaveRoute = 'download';
-      showSaveToast('✅ ダウンロードしたよ！');
-      return;
-    }
-    // ③ 最後の砦: 長押し保存（どの環境でも成功する）
+    // ③ 最後の砦: 長押し保存（案内文は端末別。showSaveFallback が出し分ける）
     lastSaveRoute = 'fallback';
     showSaveFallback(blob, cv);
   }
@@ -5877,11 +6241,14 @@
   });
   $('#btn-download-id').addEventListener('click', (e) => {
     e.preventDefault();
+    playAnnounce('idPhotoR'); // 「あそび用だから、ほんものの証明写真には使えないよ」（2026-08-15）
     deliverImage(composeIdPhoto, `purikura_id_${state.mode}_${fileStamp()}.png`);
   });
 
   $('#btn-restart').addEventListener('click', () => {
     stopAnnounce(); // 案内ボイスも次の客へ持ち越さない
+    announceByMode('thanks'); // 「またプリクラ とりに きてねー！」（2026-08-15）
+    resetOnceVoices();        // 初回だけ鳴らす案内を次の客のために戻す
     // 保存モーダル・トースト・直近画像も次の客へ持ち越さない（2026-08-14）
     $('#save-modal').classList.add('hidden');
     if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
@@ -5945,7 +6312,16 @@
   /* ===================== Service Worker（オフライン対応） ===================== */
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* file://等では失敗するが動作に影響なし */ });
+      /* 🚨 失敗を握り潰さない（2026-08-15 検見の互換検収【致命】）。
+         以前は catch を空にしていたため、SWの登録が失敗しても
+         コンソールに何も出ず「見た目は正常なのにオフライン対応だけ死んでいる」
+         状態になっていた。file:// で失敗するのは想定内なので、そこだけ静かに流す */
+      navigator.serviceWorker.register('sw.js')
+        .then((reg) => { console.log('[sw] 登録OK', reg.scope); })
+        .catch((err) => {
+          if (location.protocol === 'file:') return; // file://での失敗は想定内
+          console.error('[sw] 登録に失敗しました（オフライン対応が働きません）', err);
+        });
     });
   }
 
@@ -6129,6 +6505,7 @@
       prev.appendChild(cv);
     });
     modal.classList.remove('hidden');
+    playAnnounce('resumeOffer'); // 「まえの らくがきが のこっているよ」（2026-08-15）
     $('#btn-resume-yes').addEventListener('click', async () => {
       modal.classList.add('hidden');
       const ok = await restoreSessionSnapshot(p);
@@ -6179,6 +6556,12 @@
     }),
     waDisable: () => { WA_KEYS.forEach(k => delete waBuffers[k]); }, // 無音環境の再現用
     lastSaveRoute: () => lastSaveRoute, // 保存経路の検証用（share|download|fallback|share-cancel）
+    saveEnv, // 端末判定の検証用（isIOS/isAndroid/canDownload/isInApp）
+    deliverImage, // 保存経路の分岐だけを撃つ検証用（画面遷移なしで呼べる）
+    // カメラ起動の検証用（getUserMediaをスタブに差し替えて経路と案内を確かめる）
+    startCamera,
+    acquireCamera,
+    camFailMessage,
     // 盛れ感プリセットの実値（検証で値を直書きしないため・2026-08-14）
     presetOf: (id) => (MODES.reiwa.presets || []).find(p => p.id === id) || null,
     // デザイン確認用: ダミー写真の入った盛り調整画面へ直行（カメラ不要・2026-08-13）

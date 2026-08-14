@@ -2661,24 +2661,42 @@ body.theme-reiwa .text-stamp-btn.selected, body.theme-reiwa .sample-btn.selected
 body.theme-reiwa .save-toast { background: rgba(74,63,56,.94); font-weight: 600; }
 
 /* 常設の逃げ道（うまく保存できないとき→長押し保存へ）。目立ちすぎず、でも必ず見つかる大きさ */
+/* 🚨 2026-08-15 検見の互換検収【要修正】: ここは共有シートが無反応な環境での
+   **唯一の出口**。以前は 258x18px の下線テキスト1本で、指のあたり判定としても
+   「押せるもの」の見た目としても足りていなかった。ボタンにして、
+   指のあたり判定を44px以上（Appleのヒューマンインターフェースの最小寸法）確保する。
+   主ボタン（しゃしんを保存する）より目立たせないため、枠線ボタンにとどめる */
 .save-escape {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center; /* 追加出力ボタンと同じ行に並べる（縦に足すとiPadで画面外に出る） */
   margin: 0;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 2px solid #ffe27a;
+  background: rgba(255, 226, 122, .14);
   font-size: 13px;
   font-weight: 800;
   color: #ffe27a;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
 }
-body.theme-heisei .save-escape { color: var(--h-ink); font-family: "Hiragino Maru Gothic ProN", sans-serif; }
+body.theme-heisei .save-escape {
+  color: var(--h-ink);
+  border-color: var(--h-ink);
+  background: rgba(255, 255, 255, .5);
+  font-family: "Hiragino Maru Gothic ProN", sans-serif;
+}
 body.theme-reiwa .save-escape {
   color: var(--r-ink);
+  border-color: var(--r-ink);
+  background: rgba(255, 255, 255, .45);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .04em;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 /* 長押し保存の案内文（モーダル内）はテーマの confirm-box / confirm-text をそのまま継承する */
 .save-box .save-hint { margin: 6px 0 0; font-size: 12px; opacity: .8; }
@@ -2749,3 +2767,96 @@ body.theme-reiwa .stamp-btn.selected {
   transform: scale(1.08);
 }
 
+
+/* ===================== カメラ起動の状態表示（2026-08-14 実機指摘「カメラが起動しないケース」） =====================
+   黒いビューポートのまま放置しない。準備中と失敗をビューポートいっぱいに出す。
+   .darkroom（z-index:25）より上に置き、現像演出とは排他に使う */
+.cam-loading {
+  position: absolute; inset: 0;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(20, 10, 20, .82);
+  color: #fff;
+}
+.cam-loading.hidden { display: none; }
+.cam-loading-lens {
+  width: 44px; height: 44px;
+  border: 4px solid rgba(255,255,255,.28);
+  border-top-color: #ff8ad4;
+  border-radius: 50%;
+  animation: camSpin 900ms linear infinite;
+}
+@keyframes camSpin { to { transform: rotate(360deg); } }
+.cam-loading-text { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: .04em; }
+
+.cam-fail {
+  position: absolute; inset: 0;
+  z-index: 27;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  box-sizing: border-box;
+  background: rgba(28, 12, 26, .93);
+  color: #fff;
+  text-align: center;
+}
+.cam-fail.hidden { display: none; }
+.cam-fail-title { margin: 0; font-size: 17px; font-weight: 900; color: #ffd76e; line-height: 1.35; }
+.cam-fail-body { margin: 0; font-size: 13.5px; line-height: 1.65; max-width: 30em; }
+.cam-fail-detail { margin: 0; font-size: 10.5px; opacity: .55; word-break: break-all; }
+.cam-retry { margin: 2px 0 0; }
+/* せまい端末（スマホ縦・横）では文字を詰める。ビューポートは4:3で高さが取れないため */
+@media (max-width: 780px) {
+  .cam-fail { gap: 7px; padding: 12px; }
+  .cam-fail-title { font-size: 14.5px; }
+  .cam-fail-body { font-size: 12px; line-height: 1.5; }
+  .cam-fail-detail { display: none; }
+  .cam-retry { padding: 8px 16px; font-size: 14px; }
+}
+
+/* 長押し保存モーダルの乗り換えボタン（2026-08-14 Android対策）。
+   長押しメニューが出ない端末のための出口なので、「とじる」より目立たせる */
+.save-alt-row { flex-wrap: wrap; gap: 8px; }
+.save-alt {
+  background: #ff5fc0;
+  color: #fff;
+  font-weight: 900;
+}
+body.theme-reiwa .save-alt { background: var(--r-accent, #c9a227); color: #fff; }
+.save-alt.hidden { display: none; }
+
+/* 横持ち（低い画面）の保存モーダル（2026-08-15）。
+   別経路への乗り換えボタンを足したぶん背が伸び、iPhone横持ち(高さ390px)では
+   「とじる」がPWA案内バーの下へ潜って押せなくなっていた。
+   ゲート類（.deco-gate-inner）と同じ手当てで、モーダルの中をスクロールさせる。
+   🚨 ここを消すと横持ちで保存モーダルから出られなくなる（最後の砦が袋小路になる） */
+@media (max-height: 520px) {
+  .save-box {
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 14px 18px;
+  }
+  .save-box .confirm-text { font-size: 16px; margin: 0 0 8px; }
+  .save-box img { max-height: 40vh; margin: 6px auto; border-width: 3px; }
+  .save-hint { margin: 4px 0 8px; }
+  .save-alt-row { gap: 8px; }
+}
+
+/* 保存エリアの縦詰め（2026-08-15）。
+   最後の砦「ながおしで保存」を18px下線テキストから44pxのボタンにしたぶん背が伸び、
+   スマホ縦（高さ844px）で画面の折り返しをまたいでいた。
+   **押せる大きさは削らず**、上の余白と行間で26px以上を取り戻す。
+   🚨 ここを緩めると最後の砦が折り返しの下へ落ちる。詰めた理由を消さないこと */
+@media (max-width: 480px) {
+  .print-instruction { margin-top: 10px; font-size: 15px; line-height: 1.55; }
+  .print-actions { margin-top: 14px; gap: 12px; }
+  .print-actions.extra { margin-top: 8px; gap: 8px; }
+  .print-actions.extra .btn-sub { padding: 9px 16px; }
+}
