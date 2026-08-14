@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v24'; // 2026-08-15 文言総点検の反映＋互換対応の仕上げ（新規アセットなし・CDN分岐のクエリ正規化あり）
+const CACHE_NAME = 'purikura-v25'; // 2026-08-15 総合検収の指摘対応（キャプティブポータルのキャッシュ汚染を構造で止める）
 
 const PRECACHE = [
   '.',
@@ -117,6 +117,36 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+/* 🚨 2026-08-15 検見の総合検収【要修正①】: キャプティブポータルのキャッシュ汚染。
+   前回 `res.ok && res.type !== 'opaqueredirect'` を足したが **これでは止まらなかった**。
+   キャプティブポータル（会場Wi-Fiの「ログインしてください」画面）は
+   **リダイレクトではなく、あらゆるGETに 200 OK で自分のログインHTMLを返す。**
+   res.ok は true・同一オリジンなので res.type も 'basic' で、判定を素通りしていた。
+   検見の実測: トップページのキャッシュが 118バイトのログインHTMLに差し替わる（100%再現）。
+
+   ステータスコードで見分けるのは原理的に不可能なので、**中身の型で見分ける**:
+   ① HTMLは runtime で一切 put しない。index.html は install のプリキャッシュで
+      既に入っており、上書きする必要が無い（汚染経路そのものを消す）。
+   ② HTML以外を頼んだのにHTMLが返ってきたら、それは差し込まれた偽物。put しない
+      （ポータルは app.js や音声ファイルの要求にもログインHTMLを返すため、
+      ①だけでは app.js/style.css/mp3 が汚染される道が残る）。
+   返すレスポンス自体には手を触れない（画面には今までどおりポータルが出る）。
+
+   ⚠️ 代償: index.html の更新が **キャッシュに** 入るのは install のときだけになる。
+   オンラインの客はネットワーク優先なので常に最新を見るが、
+   **index.html を直したら sw.js の CACHE_NAME も必ず上げること**
+   （上げないと、オフライン時だけ古いHTMLが出る）。 */
+function isCacheableResponse(req, res) {
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
+  const dest = req.destination; // '' | 'document' | 'script' | 'style' | 'audio' | 'image' ...
+  const path = new URL(req.url).pathname;
+  const wantsHtml = dest === 'document' || path === '/' || path.endsWith('/') || path.endsWith('.html');
+  if (wantsHtml) return false;  // ① HTMLは runtime で上書きしない
+  if (isHtml) return false;     // ② HTML以外を頼んだのにHTMLが来た＝差し込まれた偽物
+  return true;
+}
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
@@ -124,15 +154,11 @@ self.addEventListener('fetch', (e) => {
   const sameOrigin = url.origin === self.location.origin;
   if (sameOrigin) {
     /* ネットワーク優先 + キャッシュ更新（オフライン時はキャッシュから）。
-       🚨 res.ok を必ず見る（2026-08-15 検見の互換検収【要修正】）。
-       以前は無条件に put していたため、会場のWi-Fiが **キャプティブポータル**
-       （接続前にログイン画面を返す方式）だと、そのログインHTMLが index.html として
-       キャッシュに焼き付き、以後オフラインでログイン画面が開くようになっていた。
-       CDN側の分岐には元から res.ok の判定があり、こちら側だけ抜けていた（非対称）。
-       リダイレクト（type: 'opaqueredirect'）も同じ理由で弾く */
+       put してよいレスポンスかは isCacheableResponse() が判定する（上のコメント参照）。
+       res.ok / opaqueredirect の判定も残す（明らかな失敗を焼き付けない） */
     e.respondWith(
       fetch(e.request).then((res) => {
-        if (res && res.ok && res.type !== 'opaqueredirect') {
+        if (res && res.ok && res.type !== 'opaqueredirect' && isCacheableResponse(e.request, res)) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
         }
