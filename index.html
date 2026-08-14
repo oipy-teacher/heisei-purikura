@@ -180,17 +180,28 @@
           <span class="timer-label">盛りタイム</span>
           <span id="beauty-timer-display" class="timer-display">2:00</span>
         </div>
-        <p class="beauty-heading">✨ 盛りチェック！ ✨</p>
+        <p class="beauty-heading">✨ 盛りチェック ✨</p>
+        <!-- タイマーが切れたら何が起きるかを先に書く（B-12・2026-08-15 柄本仕様書）。
+             落書き画面のゲートでは書けていたのに、この画面だけ抜けていた -->
+        <p class="beauty-timer-note">0になったら らくがきへ すすむよ</p>
       </div>
       <div class="beauty-main">
         <div class="beauty-preview-holder">
           <canvas id="beauty-canvas"></canvas>
-          <div id="beauty-shot-tabs" class="beauty-shot-tabs"></div>
+          <!-- どの1枚をいじっているかを示すラベル（B-2・2026-08-15 柄本仕様書）。
+               盛りの設定は「いま見ている1枚」にだけ効くのに、画面に枚数の手がかりが
+               数字タブしか無く、4枚のうち1枚しか盛れていないシールが出来る事故が起きうる -->
+          <div class="beauty-shot-pick">
+            <p class="beauty-shot-pick-label">どの1まいを 盛る？</p>
+            <div id="beauty-shot-tabs" class="beauty-shot-tabs"></div>
+          </div>
           <p id="beauty-face-note" class="beauty-face-note hidden"></p>
         </div>
         <div class="beauty-controls">
           <div class="beauty-presets">
-            <p class="tool-label">盛れ感をえらぶ</p>
+            <!-- 「（いま見ている1枚）」を必ず添える（B-1・2026-08-15 柄本仕様書）。
+                 下の「盛れ感レベル」にだけ書いてあると、客はプリセットを全体設定だと読む -->
+            <p class="tool-label">盛れ感をえらぶ（いま見ている1枚）</p>
             <!-- メイクりれき（Bloomit型・2026-08-14）: 前回の設定値だけをこの端末に保存（写真・個人情報は保存しない） -->
             <button id="btn-makeup-history" class="btn-sub makeup-history hidden">🕘 まえの盛れを再現</button>
             <div id="beauty-preset-row" class="preset-row"></div>
@@ -216,7 +227,9 @@
             <div class="slider-group">
               <label>👁️ デカ目 <span id="val-eye" class="slider-val">0</span></label>
               <input type="range" id="slider-eye" min="0" max="100" value="0">
-              <!-- パーツTYPE 2択（FLASH 2026の型・2026-08-14）: 目の形の方向性を先に選ぶ -->
+              <!-- パーツTYPE 2択（FLASH 2026の型・2026-08-14）: 目の形の方向性を先に選ぶ。
+                   何のTYPEかが分かる見出しを足した（B-7・2026-08-15 柄本仕様書） -->
+              <p class="tool-label sub">目のかたち</p>
               <div class="preset-row eye-type-row" id="eye-type-row">
                 <button class="preset-btn eyetype-btn active" data-eyetype="1">TYPE01 くっきり</button>
                 <button class="preset-btn eyetype-btn" data-eyetype="2">TYPE02 たれ目</button>
@@ -252,9 +265,11 @@
             <p class="tool-label">フィルター</p>
             <div id="filter-row" class="preset-row"></div>
           </div>
-          <!-- 一括反映（現行実機FLASHの「1枚の設定を全枚数にワンタッチ反映」の型） -->
-          <button id="btn-beauty-apply-all" class="btn-sub apply-all">💫 この設定を全部の写真に一括反映</button>
-          <button id="btn-beauty-done" class="btn-main">これでOK♪ らくがきへ ▶</button>
+          <!-- 一括反映（現行実機FLASHの「1枚の設定を全枚数にワンタッチ反映」の型）。
+               「一括反映」は業務システムの語で、これは客がB-1の事故から自力で戻れる
+               唯一のボタン。数を書いて一読で通す（B-3・2026-08-15 柄本仕様書） -->
+          <button id="btn-beauty-apply-all" class="btn-sub apply-all">💫 4まい ぜんぶ おなじにする</button>
+          <button id="btn-beauty-done" class="btn-main">これでOK ▶ らくがきへ</button>
         </div>
       </div>
     </div>

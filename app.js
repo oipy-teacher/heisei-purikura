@@ -1152,9 +1152,16 @@
   let visionModulePromise = null;
   let filesetPromise = null;
 
+  /* 🚨 2026-08-15（検見 要修正4）: 以前はここで作った Promise を握りっぱなしにしていたため、
+     一度でも読み込みに失敗すると **拒否済みPromise** を永久に返し続け、
+     そのセッションのあいだ二度と再挑戦しなかった。数百人が同じWi-Fiを使う文化祭では
+     瞬間的な詰まりが頻発するので、「開いた一瞬だけ電波が悪かった客」が最後まで
+     盛れないまま終わっていた（直す手段はページ再読込だけで、客はそれを知らない）。
+     → 失敗したらキャッシュを捨てて、次の呼び出しでもう一度取りに行く。 */
   function loadVision() {
     if (!visionModulePromise) {
-      visionModulePromise = import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`);
+      visionModulePromise = import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/vision_bundle.mjs`)
+        .catch(err => { visionModulePromise = null; throw err; });
     }
     return visionModulePromise;
   }
@@ -1165,10 +1172,17 @@
         return vision.FilesetResolver.forVisionTasks(
           `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
         );
-      })();
+      })().catch(err => { filesetPromise = null; throw err; });
     }
     return filesetPromise;
   }
+
+  /* 失敗フラグの有効期限（2026-08-15・検見 要修正4）。
+     ずっと諦めたままにせず、この秒数を過ぎたら1回だけ再挑戦してよいことにする。
+     秒数を短くしすぎると回線が死んでいる会場で毎フレーム取りに行って重くなるため、
+     「客が次の画面へ進むまでのあいだに1〜2回試せる」くらいを狙って12秒。 */
+  const MP_RETRY_AFTER_MS = 12000;
+  const mpGaveUp = (t) => t > 0 && (Date.now() - t) < MP_RETRY_AFTER_MS;
 
   /* ===================== 人物くり抜き（選択式） ===================== */
   const previewCanvas = $('#preview-canvas');
@@ -1179,7 +1193,7 @@
 
   let imageSegmenter = null;
   let segmenterLoading = false;
-  let segmenterFailed = false;
+  let segmenterFailedAt = 0; // 0=まだ失敗していない／>0=最後に失敗した時刻（期限つき・2026-08-15）
   let segmenterIsMulticlass = false;
   let previewRunning = false;
   let personWorkCanvas = null, personWorkCtx = null;
@@ -1221,6 +1235,7 @@
         });
         segmenterIsMulticlass = false;
       }
+      segmenterFailedAt = 0; // 読めたので失敗の記録は消す
       if (state.chromaOn) {
         segmenterStatus.textContent = '✨ 背景くりぬき 準備OK！';
         segmenterStatus.classList.remove('hidden');
@@ -1228,7 +1243,7 @@
       }
     } catch (err) {
       console.warn('人物くり抜きモデルの読み込みに失敗しました。通常のカメラ映像で撮影します。', err);
-      segmenterFailed = true;
+      segmenterFailedAt = Date.now();
       if (state.chromaOn) {
         segmenterStatus.textContent = '（背景くりぬきは今回お休み中）';
         segmenterStatus.classList.remove('hidden');
@@ -1330,7 +1345,7 @@
   // ライブ用顔ランドマーク（VIDEOモード・盛り画面のIMAGEモードとは別インスタンス）
   let faceLandmarkerLive = null;
   let landmarkerLiveLoading = false;
-  let landmarkerLiveFailed = false;
+  let landmarkerLiveFailedAt = 0;
   let liveFaces = null;
   let liveFrameCount = 0;
 
@@ -1343,7 +1358,7 @@
   }
 
   async function initFaceLandmarkerLive() {
-    if (faceLandmarkerLive || landmarkerLiveLoading || landmarkerLiveFailed) return;
+    if (faceLandmarkerLive || landmarkerLiveLoading || mpGaveUp(landmarkerLiveFailedAt)) return;
     landmarkerLiveLoading = true;
     try {
       const vision = await loadVision();
@@ -1358,9 +1373,10 @@
         minFaceDetectionConfidence: 0.3,
         minFacePresenceConfidence: 0.3,
       });
+      landmarkerLiveFailedAt = 0;
     } catch (err) {
       console.warn('ライブ用顔ランドマークの読み込みに失敗しました。ライブ盛れは肌のみになります。', err);
-      landmarkerLiveFailed = true;
+      landmarkerLiveFailedAt = Date.now();
     }
     landmarkerLiveLoading = false;
   }
@@ -1597,7 +1613,7 @@
     } else if (!imageSegmenter) {
       liveSkinReady = false;
       // モデルが読めなかった場合、「準備中…」を出しっぱなしにしない
-      if (liveBeauty && segmenterFailed && !liveReadyNoted && !state.chromaOn) {
+      if (liveBeauty && segmenterFailedAt > 0 && !liveReadyNoted && !state.chromaOn) {
         liveReadyNoted = true;
         segmenterStatus.textContent = '（ライブ盛れは今回お休み中。撮影後にしっかり盛れます）';
         segmenterStatus.classList.remove('hidden');
@@ -1660,10 +1676,10 @@
   /* ===================== 顔ランドマーク（盛り機能用） ===================== */
   let faceLandmarker = null;
   let landmarkerLoading = false;
-  let landmarkerFailed = false;
+  let landmarkerFailedAt = 0;
 
   async function initFaceLandmarker() {
-    if (faceLandmarker || landmarkerLoading || landmarkerFailed) return;
+    if (faceLandmarker || landmarkerLoading || mpGaveUp(landmarkerFailedAt)) return;
     landmarkerLoading = true;
     try {
       const vision = await loadVision();
@@ -1679,9 +1695,10 @@
         minFaceDetectionConfidence: 0.3,
         minFacePresenceConfidence: 0.3,
       });
+      landmarkerFailedAt = 0;
     } catch (err) {
       console.warn('顔ランドマークモデルの読み込みに失敗しました。デカ目・小顔はスキップされます。', err);
-      landmarkerFailed = true;
+      landmarkerFailedAt = Date.now();
     }
     landmarkerLoading = false;
   }
@@ -1691,10 +1708,10 @@
      色ベースの肌検出と違い、髪・服・背景の誤検出が原理的に起きない。 */
   let skinSegmenter = null;
   let skinSegmenterLoading = false;
-  let skinSegmenterFailed = false;
+  let skinSegmenterFailedAt = 0;
 
   async function initSkinSegmenter() {
-    if (skinSegmenter || skinSegmenterLoading || skinSegmenterFailed) return;
+    if (skinSegmenter || skinSegmenterLoading || mpGaveUp(skinSegmenterFailedAt)) return;
     skinSegmenterLoading = true;
     try {
       const vision = await loadVision();
@@ -1707,9 +1724,10 @@
         runningMode: 'IMAGE',
         outputConfidenceMasks: true,
       });
+      skinSegmenterFailedAt = 0;
     } catch (err) {
       console.warn('肌セグメンテーションモデルの読み込みに失敗しました。色ベースの肌検出にフォールバックします。', err);
-      skinSegmenterFailed = true;
+      skinSegmenterFailedAt = Date.now();
     }
     skinSegmenterLoading = false;
   }
@@ -1806,7 +1824,7 @@
     }
     if (state.liveBeautyOn) {
       initFaceLandmarkerLive();
-      if (!imageSegmenter && !segmenterFailed && !segmenterLoading) initSegmenter();
+      if (!imageSegmenter && !mpGaveUp(segmenterFailedAt) && !segmenterLoading) initSegmenter();
     }
     syncLiveBeautyUI();
   });
@@ -1854,7 +1872,7 @@
     syncLiveBeautyUI();
     if (state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled) {
       initFaceLandmarkerLive();
-      if (!imageSegmenter && !segmenterFailed && !segmenterLoading) initSegmenter();
+      if (!imageSegmenter && !mpGaveUp(segmenterFailedAt) && !segmenterLoading) initSegmenter();
       // 準備中の一言（くり抜きONのときは既存の案内を優先）
       if (!state.chromaOn && !(imageSegmenter && segmenterIsMulticlass)) {
         segmenterStatus.textContent = '✨ ライブ盛れを準備中…';
@@ -1865,7 +1883,7 @@
     if (state.chromaOn) {
       if (imageSegmenter) {
         segmenterStatus.classList.add('hidden');
-      } else if (segmenterFailed) {
+      } else if (mpGaveUp(segmenterFailedAt)) {
         segmenterStatus.textContent = '（背景くりぬきは今回お休み中）';
         segmenterStatus.classList.remove('hidden');
         setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
@@ -3520,7 +3538,7 @@
     const src = curBeauty();
     state.beautyShots = state.beautyShots.map(() => ({ ...src }));
     playSoundOr('moriageSelect', 'seDecide');
-    beautyFaceNote.textContent = '💫 全部の写真にこの設定を反映したよ！';
+    beautyFaceNote.textContent = '💫 4まい ぜんぶ おなじにしたよ！';
     beautyFaceNote.classList.remove('hidden');
     setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
   });
@@ -3540,12 +3558,64 @@
     });
   });
 
+  /* ---------- 顔まかせのバーを「触れない状態」にする（2026-08-15 検見 要修正3） ----------
+     顔が取れない回（MediaPipe未読込・横向き・逆光・マスク）は、デカ目・小顔・小鼻・涙袋・
+     目のかたち が**まったく効かない**。それまでは押せてつまみも動き数値も変わるのに
+     絵だけ1ピクセルも変わらず、客には「このアプリ壊れてる」に見えていた。
+     案内文を出すだけでは足りない（中高生は文章より先に手が動く）ので、実際に触れなくする。 */
+  const FACE_ONLY_SLIDERS = ['eye', 'face', 'nose', 'namida'];
+  function setFaceSlidersEnabled(on) {
+    FACE_ONLY_SLIDERS.forEach(key => {
+      const el = document.getElementById('slider-' + key);
+      if (!el) return;
+      el.disabled = !on;
+      const group = el.closest('.slider-group');
+      if (group) group.classList.toggle('face-unavailable', !on);
+    });
+    const eyeRow = $('#eye-type-row');
+    if (eyeRow) {
+      eyeRow.classList.toggle('face-unavailable', !on);
+      eyeRow.querySelectorAll('.eyetype-btn').forEach(b => { b.disabled = !on; });
+    }
+    const eyeRowLabel = eyeRow && eyeRow.previousElementSibling;
+    if (eyeRowLabel && eyeRowLabel.classList.contains('tool-label')) {
+      eyeRowLabel.classList.toggle('face-unavailable', !on);
+    }
+  }
+
+  /* モデルが読めなかったときの再挑戦（2026-08-15・検見 要修正4）。
+     失敗フラグに期限を入れただけでは、この画面は最初の1回しか呼ばないので客には届かない。
+     盛りタイムは2分あるので、そのあいだ静かに取りに行き直す。取れたら顔検出をやり直して
+     バーを生き返らせる（客の操作は要らない）。 */
+  let faceRetryId = null;
+  const FACE_RETRY_EVERY_MS = 13000;
+  const FACE_RETRY_MAX = 5;
+  function stopFaceRetry() {
+    if (faceRetryId) { clearInterval(faceRetryId); faceRetryId = null; }
+  }
+  function startFaceRetry() {
+    stopFaceRetry();
+    let tries = 0;
+    faceRetryId = setInterval(async () => {
+      // 盛り画面を離れていたら止める（次の客の回まで走り続けさせない）
+      if (!screens['screen-beauty'].classList.contains('active')) { stopFaceRetry(); return; }
+      if (faceLandmarker) { stopFaceRetry(); return; }
+      if (++tries > FACE_RETRY_MAX) { stopFaceRetry(); return; }
+      await detectFacesForShots();
+    }, FACE_RETRY_EVERY_MS);
+  }
+
   async function detectFacesForShots() {
     // 顔ランドマークとML肌セグメンテーションを並行で準備
     await Promise.all([initFaceLandmarker(), initSkinSegmenter()]);
     if (!faceLandmarker) {
-      beautyFaceNote.textContent = '顔検出が使えないため、美肌とフィルターのみ反映されます';
+      // 何がきかないかを、客が触るバーの名前で言う（B-4・2026-08-15 柄本仕様書）
+      beautyFaceNote.textContent = 'デカ目・小顔は 今回きかないみたい。美肌とフィルターは ちゃんときくよ！';
       beautyFaceNote.classList.remove('hidden');
+      setFaceSlidersEnabled(false);
+      startFaceRetry(); // 電波が戻ったら勝手に復活する（肌マスクの取得は下でそのまま続ける）
+    } else {
+      stopFaceRetry();
     }
     let anyFace = false;
     for (let i = 0; i < state.shots.length; i++) {
@@ -3563,10 +3633,12 @@
     }
     skinMaskCache.clear(); // ML肌マスクが揃ったので、仮マスクのキャッシュを破棄して作り直す
     if (faceLandmarker && !anyFace) {
-      beautyFaceNote.textContent = '顔が見つからなかったよ…美肌とフィルターだけ反映されます';
+      beautyFaceNote.textContent = 'お顔が 見つからなかったよ… デカ目・小顔は きかないけど、美肌とフィルターは きくよ！';
       beautyFaceNote.classList.remove('hidden');
+      setFaceSlidersEnabled(false);
     } else if (faceLandmarker) {
       beautyFaceNote.classList.add('hidden');
+      setFaceSlidersEnabled(true);
     }
     queueBeautyRender();
   }
@@ -3602,8 +3674,9 @@
       _preset: matched ? matched.id : '',
       _level: matched ? 'l100' : '',
     }));
-    beautyFaceNote.textContent = '👀 顔を検出中…';
+    beautyFaceNote.textContent = '👀 お顔を さがしてるよ…'; // B-6: 「検出」を客に見せない
     beautyFaceNote.classList.remove('hidden');
+    setFaceSlidersEnabled(true); // 前の客の回で無効化されたままにならないよう毎回戻す
     buildBeautyControls();
     syncBeautyUIFromCur();
     beautyTimerDisplay.textContent = formatTime(state.beautyRemaining);
@@ -3635,6 +3708,7 @@
     if (screens['screen-beauty'].classList.contains('active') === false) return;
     if (beautyFinished) return;
     beautyFinished = true;
+    stopFaceRetry(); // モデルの取り直しは画面を出るときに必ず止める（2026-08-15）
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
     /* メイクりれき（Bloomit型・2026-08-14）: レタッチの設定値だけをこの端末のlocalStorageへ保存。
        写真・氏名等の個人情報は一切保存しない（守屋ライン: 端末外への送信もゼロ）。次回の盛り画面で

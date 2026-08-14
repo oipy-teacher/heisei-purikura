@@ -701,6 +701,18 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
   gap: 16px;
 }
 .tool-label { font-size: 13px; font-weight: 800; color: #7a3fb0; margin: 0 0 6px; }
+/* 小見出し（「目のかたち」など、すぐ上の項目にぶら下がる名前・2026-08-15） */
+.tool-label.sub { font-size: 12px; opacity: .85; margin: 4px 0 4px; }
+/* 顔が取れなかった回に、効かないバーを触れなくする（検見 要修正3・2026-08-15）。
+   触れないものは触らせない。押せて動くのに絵が変わらない状態が最も不信を招く */
+.face-unavailable { opacity: .38; filter: grayscale(1); pointer-events: none; }
+.slider-group.face-unavailable label::after {
+  content: 'お顔が見つからないと つかえないよ';
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: .9;
+}
 .color-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .color-swatch {
   width: 30px; height: 30px; border-radius: 50%;
@@ -969,6 +981,8 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
   padding: 6px 4px 10px;
 }
 .beauty-heading { font-size: 20px; font-weight: 900; color: #a03cae; margin: 0; }
+/* タイマーが0になったら何が起きるかの予告（B-12・2026-08-15） */
+.beauty-timer-note { font-size: 12px; font-weight: 700; color: #a03cae; margin: 0; opacity: .9; }
 .beauty-main { flex: 1; display: flex; gap: 16px; min-height: 0; }
 .beauty-preview-holder {
   position: relative;
@@ -985,11 +999,30 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
   box-shadow: 0 8px 24px rgba(0,0,0,.3);
   border: 6px solid #fff;
 }
-.beauty-shot-tabs {
+/* どの1枚を盛っているかの明示（B-2・2026-08-15）。
+   タブだけだと「押せること」も「4枚あること」も伝わらないため見出しを重ねる */
+.beauty-shot-pick {
   position: absolute;
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.beauty-shot-pick-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 900;
+  color: #a03cae;
+  background: rgba(255,255,255,.92);
+  padding: 3px 12px;
+  border-radius: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.beauty-shot-tabs {
   display: flex;
   gap: 8px;
 }
@@ -1015,7 +1048,12 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
   font-weight: 800;
   padding: 8px 16px;
   border-radius: 20px;
-  white-space: nowrap;
+  /* 2026-08-15: 顔検出まわりの案内を「何がきかないか」まで書く形に改稿したため、
+     nowrap をやめて折り返せるようにした（nowrap のままだと画面外へはみ出す） */
+  white-space: normal;
+  max-width: 92%;
+  text-align: center;
+  line-height: 1.5;
   box-shadow: 0 3px 8px rgba(0,0,0,.2);
 }
 .beauty-controls {
@@ -2130,6 +2168,8 @@ body.theme-reiwa .beauty-shot-tab {
 }
 body.theme-reiwa .beauty-shot-tab.active { background: var(--r-accent); border-color: var(--r-accent); }
 body.theme-reiwa .beauty-face-note { background: rgba(250,247,242,.95); color: var(--r-ink); }
+body.theme-reiwa .beauty-shot-pick-label { background: rgba(250,247,242,.95); color: var(--r-ink); font-weight: 600; letter-spacing: .06em; }
+body.theme-reiwa .beauty-timer-note { color: var(--r-ink); font-weight: 500; }
 body.theme-reiwa .btn-sub.apply-all { width: 100%; }
 
 /* ================================================
