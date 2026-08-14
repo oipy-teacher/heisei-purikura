@@ -944,6 +944,14 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
   animation: blink 1s infinite;
 }
 .print-stage.ready .print-progress { visibility: hidden; animation: none; }
+/* 令和の「printing ...」に添える日本語（P-4・2026-08-15）。静けさを壊さない大きさで。
+   absolute で重ねる: 通常フローに置くと行が1つ増えて保存画面全体が21px下がり、
+   iPad横で非常口（ながおしで保存）が折り返しの下に落ちる（実測で発見） */
+.print-progress { position: relative; }
+.print-progress-sub {
+  position: absolute; left: 0; right: 0; top: 100%;
+  font-size: 11px; font-weight: 500; letter-spacing: .08em; margin-top: 2px; opacity: .8;
+}
 .printer-slot {
   background: #fff;
   padding: 16px;
@@ -2593,6 +2601,9 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 /* プリント画面: 縦が足りない端末では縮めず縦スクロールで全部に届くようにする */
 #screen-print { overflow-y: auto; }
 .print-stage { margin: auto; padding: 10px 0 16px; }
+/* 排出中はシールが縦いっぱいになり、上の「プリント中…」が画面の外へ押し出されていた
+   （v23では丸ごと見えなくなっていた）。演出中だけ上に逃げ場を作る（2026-08-15・P-4） */
+.print-stage.printing { padding-top: 52px; }
 
 @media (max-width: 600px) {
   /* 落書きヘッダー: タイマーとボタン3つが1列に入らない幅では折り返す */

@@ -6142,10 +6142,16 @@
   const printStage = $('#print-stage');
   let printReadyId = null;
   function startPrintSequence() {
-    // 文言もテーマで着せ替え（令和は小英字のフェード明滅・柄本仕様書3-8）
-    $('#print-progress').textContent = document.body.classList.contains('theme-reiwa')
-      ? 'printing ...'
-      : '🖨 プリント中…　シールが出てくるよ！';
+    /* 文言もテーマで着せ替え（令和は小英字のフェード明滅・柄本仕様書3-8）。
+       P-4（2026-08-15）: 平成は「シールが出てくるよ！」と次に起きることまで書けているのに、
+       令和は英語1語だけで**様式のために情報を落としていた**。
+       令和の静けさは保ったまま、小さい文字で日本語を添えて両立させる */
+    const pp = $('#print-progress');
+    if (document.body.classList.contains('theme-reiwa')) {
+      pp.innerHTML = 'printing ...<small class="print-progress-sub">シールが 出てくるよ</small>';
+    } else {
+      pp.textContent = '🖨 プリント中…　シールが出てくるよ！';
+    }
     printStage.classList.remove('ready');
     printStage.classList.add('printing');
     playSound('printOut');
