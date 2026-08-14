@@ -1022,13 +1022,27 @@ body.theme-reiwa .print-extra > summary { color: var(--r-ink); font-weight: 500;
 /* タイマーが0になったら何が起きるかの予告（B-12・2026-08-15） */
 .beauty-timer-note { font-size: 12px; font-weight: 700; color: #a03cae; margin: 0; opacity: .9; }
 .beauty-main { flex: 1; display: flex; gap: 16px; min-height: 0; }
+/* プレビュー欄は「写真の場所」と「写真の外の案内」を縦に分ける（2026-08-15【要修正④】）。
+   案内を写真の上に重ねると、いちばん不安な回（顔が取れなかった回）に限って
+   写真が隠れる。案内は下段に置き、出ているときだけ高さを取る（.hidden は display:none）。 */
 .beauty-preview-holder {
-  position: relative;
   flex: 1.3;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  gap: 6px;
+}
+.beauty-preview-stage {
+  position: relative;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
+  min-height: 0;
 }
 #beauty-canvas {
   max-width: 100%;
@@ -1076,23 +1090,44 @@ body.theme-reiwa .print-extra > summary { color: var(--r-ink); font-weight: 500;
   box-shadow: 0 3px 8px rgba(0,0,0,.25);
 }
 .beauty-shot-tab.active { background: #ff2fa0; color: #fff; }
+/* 顔まわりの案内（2026-08-15 検見の総合検収【要修正④】で作り替え）。
+   v24: プレビューの上に absolute で重ね、改稿で1行→5行に伸びて写真の21〜35%を覆っていた。
+   v25: プレビューの下（写真の外）に置く。見出しは1行に収め、詳しい話は details で畳む。
+        情報は減らしていない（「▼ くわしく」を開けば全部読める）。 */
 .beauty-face-note {
-  position: absolute;
-  top: 10px; left: 50%;
-  transform: translateX(-50%);
+  flex: none;
+  align-self: center;
+  max-width: 100%;
   background: rgba(255,255,255,.92);
   color: #a03cae;
   font-size: 12px;
   font-weight: 800;
-  padding: 8px 16px;
-  border-radius: 20px;
-  /* 2026-08-15: 顔検出まわりの案内を「何がきかないか」まで書く形に改稿したため、
-     nowrap をやめて折り返せるようにした（nowrap のままだと画面外へはみ出す） */
-  white-space: normal;
-  max-width: 92%;
+  padding: 6px 14px;
+  border-radius: 16px;
+  line-height: 1.45;
   text-align: center;
-  line-height: 1.5;
   box-shadow: 0 3px 8px rgba(0,0,0,.2);
+}
+.beauty-face-note > summary {
+  cursor: pointer;
+  list-style: none;
+  white-space: normal;
+}
+.beauty-face-note > summary::-webkit-details-marker { display: none; }
+/* 「開ける」ことが分かる印。詳細を持たない一言だけの案内（no-detail）には出さない */
+.beauty-face-note > summary::after {
+  content: '　▼ くわしく';
+  font-weight: 700;
+  opacity: .75;
+}
+.beauty-face-note[open] > summary::after { content: '　▲ とじる'; }
+.beauty-face-note.no-detail > summary { cursor: default; }
+.beauty-face-note.no-detail > summary::after { content: ''; }
+.beauty-face-note-body {
+  margin: 5px 0 1px;
+  font-weight: 700;
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 .beauty-controls {
   flex: 1;
@@ -2992,3 +3027,42 @@ body.theme-reiwa .save-alt { background: var(--r-accent, #c9a227); color: #fff; 
   #screen-print .print-actions { margin-top: 14px; }
   #screen-print .print-extra { margin-top: 8px; }
 }
+
+/* ================================================
+   押せないボタンは「押せない見た目」にする
+   （2026-08-15 検見の総合検収【要修正③】）
+   ================================================
+   カメラの起動に失敗すると `#btn-start-shooting` は disabled になる（app.js:2107）。
+   ところが :disabled の指定は `.shot-nav:disabled` の1行しか無く、
+   有効時と無効時の computed style が **7項目すべて同値** だった。
+   ＝ 客はピカピカ光った「撮影スタート！」を押し、何も起きず、連打し、係の人を呼ぶ。
+
+   両テーマの様式に合わせる:
+   平成＝色を落として沈める（ネオンが消えた見た目）／
+   令和＝彩度を抜いて薄くする（にじみや影を足さない）。
+   .btn-main / .btn-sub / .btn-small の3系統にまとめて掛ける（今後 disabled にする
+   ボタンが増えても、ここに来れば必ず「押せない見た目」になる）。
+   テーマ側の指定（body.theme-* .btn-main）に負けないよう body 付きの選択子で書く。 */
+body .btn-main:disabled,
+body .btn-sub:disabled,
+body .btn-small:disabled,
+body.theme-heisei .btn-main:disabled,
+body.theme-heisei .btn-sub:disabled,
+body.theme-heisei .btn-small:disabled,
+body.theme-reiwa .btn-main:disabled,
+body.theme-reiwa .btn-sub:disabled,
+body.theme-reiwa .btn-small:disabled {
+  opacity: .4;
+  filter: grayscale(.75);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+/* 無効なのに点滅・拡大していると「押せる」に見える。動きも止める */
+body .btn-main.pulse:disabled,
+body.theme-heisei .btn-main.pulse:disabled,
+body.theme-reiwa .btn-main.pulse:disabled { animation: none; }
+/* 押し込みの手応えも返さない（押せたと勘違いさせない） */
+body .btn-main:disabled:active,
+body.theme-heisei .btn-main:disabled:active,
+body.theme-reiwa .btn-main:disabled:active { transform: none; box-shadow: none; }

@@ -328,6 +328,15 @@
     currentScreenId = id;
     // タイトルへ戻ったら待機デモのアイドル計測を仕掛け直す（関数はこの後で定義される）
     if (id === 'screen-title' && typeof armAttractIdle === 'function') armAttractIdle();
+    /* 保存画面ではホーム画面追加の案内バー（#pwa-hint）を引っ込める
+       （2026-08-15 検見の総合検収【軽微⑨】）。z-index 310 で最前面にいるため、
+       非常口「▶ ながおしで保存」や「16分割ver.」の上に乗り、
+       落書き中に一度も画面を触らなかった客だけ最後の出口が押せなくなっていた。
+       ここまで来た客に「ホーム画面に追加」を勧める意味はもう無い */
+    if (id === 'screen-print') {
+      const pwaBar = document.getElementById('pwa-hint');
+      if (pwaBar) pwaBar.classList.add('hidden');
+    }
     if (typeof updateThemeFx === 'function') updateThemeFx(id);
   }
 
@@ -398,6 +407,8 @@
     '#pose-guide': { heisei: 'かわいく決めてね💕', reiwa: 'いい感じに どうぞ' },     // C-7
     // --- 選択画面 ---
     '#btn-to-camera': { heisei: 'この組み合わせでOK！ ▶', reiwa: 'これで撮る ▶' },  // S-13
+    // --- 完成の確認（2026-08-15 検見の総合検収【軽微⑥】。3つ名指しした中でここだけ入れ漏れていた） ---
+    '#btn-confirm-yes': { heisei: 'うん！これでOK♪', reiwa: 'これでOK' },
     // --- 落書き画面 ---
     // D-5: 挙動の統一はオーナー裁定済みなので触らず、文言だけ動作が分かる形にする。
     //      「コロコロ」は当時のローラースタンプの名前なので平成側にだけ残す
@@ -2353,7 +2364,8 @@
         await sleep(SHOT_GAP_MS);
       }
     }
-    setPoseGuide('かわいく決めてね💕');
+    // モードで出し分ける（2026-08-15【軽微⑦】。ここだけ平成の文言を直書きしていた）
+    setPoseGuide(poseGuideIdle());
     stopCamera();
     if (state.mode === 'heisei') {
       // 平成モードに盛り調整（デカ目・美肌スライダー等）は存在しない時代。
@@ -3365,6 +3377,24 @@
   const beautyCtx = beautyCanvas.getContext('2d');
   const beautyTimerDisplay = $('#beauty-timer-display');
   const beautyFaceNote = $('#beauty-face-note');
+  const beautyFaceNoteHead = $('#beauty-face-note-head');
+  const beautyFaceNoteBody = $('#beauty-face-note-body');
+  /* 顔まわりの案内の出し方（2026-08-15 検見の総合検収【要修正④】）。
+     v24でこの案内を「何がきかないか」まで書く形に改稿したところ、1行が5行に伸び、
+     プレビュー写真の21〜35%を覆っていた（しかも出るのは、顔が取れず不安な回）。
+     いまはプレビューの **外（下）** に置き、見出し1行＋畳んだ詳細の形にしてある。
+     text だけで呼べば1行の帯、detail を添えれば「▼くわしく」で開く形になる。 */
+  function setFaceNote(head, detail) {
+    beautyFaceNoteHead.textContent = head;
+    beautyFaceNoteBody.textContent = detail || '';
+    beautyFaceNote.classList.toggle('no-detail', !detail);
+    if (!detail) beautyFaceNote.open = false;
+    beautyFaceNote.classList.remove('hidden');
+  }
+  function hideFaceNote() {
+    beautyFaceNote.open = false;
+    beautyFaceNote.classList.add('hidden');
+  }
 
   const sliderSkin = $('#slider-skin');
   const sliderWhite = $('#slider-white');
@@ -3600,9 +3630,8 @@
     }
     syncBeautyUIFromCur();
     queueBeautyRender();
-    beautyFaceNote.textContent = '🕘 前回の盛れ設定を再現したよ！';
-    beautyFaceNote.classList.remove('hidden');
-    setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
+    setFaceNote('🕘 前回の盛れ設定を再現したよ！');
+    setTimeout(hideFaceNote, 1800);
   });
 
   /* 一括反映（FLASH式・2026-08-12）: いま見ている1枚の盛り設定を4枚全部へコピーする */
@@ -3611,9 +3640,8 @@
     const src = curBeauty();
     state.beautyShots = state.beautyShots.map(() => ({ ...src }));
     playSoundOr('moriageSelect', 'seDecide');
-    beautyFaceNote.textContent = '💫 4まい ぜんぶ おなじにしたよ！';
-    beautyFaceNote.classList.remove('hidden');
-    setTimeout(() => beautyFaceNote.classList.add('hidden'), 1800);
+    setFaceNote('💫 4まい ぜんぶ おなじにしたよ！');
+    setTimeout(hideFaceNote, 1800);
   });
 
   [[sliderSkin, 'skin'], [sliderWhite, 'white'], [sliderClear, 'clear'], [sliderEye, 'eye'], [sliderFace, 'face'], [sliderNose, 'nose'], [sliderCheek, 'cheek'], [sliderLip, 'lip'], [sliderNamida, 'namida'], [sliderLegs, 'legs']].forEach(([el, key]) => {
@@ -3685,9 +3713,10 @@
     // 顔ランドマークとML肌セグメンテーションを並行で準備
     await Promise.all([initFaceLandmarker(), initSkinSegmenter()]);
     if (!faceLandmarker) {
-      // 何がきかないかを、客が触るバーの名前で言う（B-4・2026-08-15 柄本仕様書）
-      beautyFaceNote.textContent = 'デカ目・小顔は 今回きかないみたい。美肌とフィルターは ちゃんときくよ！';
-      beautyFaceNote.classList.remove('hidden');
+      // 何がきかないかを、客が触るバーの名前で言う（B-4・2026-08-15 柄本仕様書）。
+      // 見出しは1行・詳しい話は畳む（2026-08-15【要修正④】。写真を覆わない）
+      setFaceNote('デカ目・小顔は 今回きかないよ',
+        '美肌・美白・透明感・チーク・リップは ちゃんときくよ！ネットがもどれば デカ目・小顔も じどうで つかえるようになるよ。');
       setFaceSlidersEnabled(false);
       startFaceRetry(); // 電波が戻ったら勝手に復活する（肌マスクの取得は下でそのまま続ける）
     } else {
@@ -3709,11 +3738,11 @@
     }
     skinMaskCache.clear(); // ML肌マスクが揃ったので、仮マスクのキャッシュを破棄して作り直す
     if (faceLandmarker && !anyFace) {
-      beautyFaceNote.textContent = 'お顔が 見つからなかったよ… デカ目・小顔は きかないけど、美肌とフィルターは きくよ！';
-      beautyFaceNote.classList.remove('hidden');
+      setFaceNote('お顔が 見つからなかったよ…',
+        'デカ目・小顔・小鼻・涙袋は きかないけど、美肌・美白・透明感・チーク・リップは きくよ！');
       setFaceSlidersEnabled(false);
     } else if (faceLandmarker) {
-      beautyFaceNote.classList.add('hidden');
+      hideFaceNote();
       setFaceSlidersEnabled(true);
     }
     queueBeautyRender();
@@ -3750,8 +3779,7 @@
       _preset: matched ? matched.id : '',
       _level: matched ? 'l100' : '',
     }));
-    beautyFaceNote.textContent = '👀 お顔を さがしてるよ…'; // B-6: 「検出」を客に見せない
-    beautyFaceNote.classList.remove('hidden');
+    setFaceNote('👀 お顔を さがしてるよ…'); // B-6: 「検出」を客に見せない
     setFaceSlidersEnabled(true); // 前の客の回で無効化されたままにならないよう毎回戻す
     stopFaceRetry();
     faceRetryTries = 0; // 回ごとに再挑戦の回数をリセット（前の客の分を持ち越さない）
@@ -5964,9 +5992,19 @@
       }
     }
     if (hintEl) {
-      hintEl.textContent = env.isAndroid
-        ? '（出てこないときは下の「⬇ ダウンロードでほぞん」をおしてね）'
-        : '（パソコンなら 右クリック → 「画像を保存」）';
+      /* アプリ内ブラウザ（LINE等）は長押しメニューも代替ボタンも出ないことがある
+         （2026-08-15 検見の総合検収【提案⑭】: LINE(iOS)で代替ボタンが1つも出ず、
+         残るヒントが「パソコンなら右クリック」だけで、iPhoneの客に手がかりが無かった）。
+         その場合の最後の手は「ふつうのブラウザで開き直す」なので、それを名指しで書く */
+      if (env.isInApp) {
+        hintEl.textContent = env.isIOS
+          ? '（できないときは 右上の「…」から「Safariで開く」をえらんでね）'
+          : '（できないときは 右上の「⋮」から「ブラウザで開く」をえらんでね）';
+      } else {
+        hintEl.textContent = env.isAndroid
+          ? '（出てこないときは下の「⬇ ダウンロードでほぞん」をおしてね）'
+          : '（パソコンなら 右クリック → 「画像を保存」）';
+      }
     }
     /* 別経路への乗り換え口。長押しが効かない環境でも、客がここから必ず抜けられるようにする。
        使える経路だけ出す（押しても何も起きないボタンを見せない） */
@@ -6072,15 +6110,29 @@
     }
     if (!p || typeof p.then !== 'function') return false;
     lastSaveRoute = 'share';
-    showSaveToast('📤 「画像を保存」をえらぶと カメラロールに入るよ！');
-    playAnnounce('saveGuide'); // 「ほぞんメニューが出るよ。画像を保存、をえらんでね！」（2026-08-15）
+    /* 🚨 2026-08-15 検見の総合検収【要修正⑤】: この経路の文言だけ端末別の出し分けが
+       漏れていた。Androidでダウンロードが失敗するとここへ降りてくるのに、
+       **Androidの端末に「カメラロールに入るよ」と表示していた**（Androidにカメラロールは無い）。
+       しかもここへ落ちるのは「共有シートに保存項目が無い」いちばん困っている客。
+       ①-A のトーストと同じ判定（saveEnv().isAndroid）をこの経路にも通す。 */
+    const shareEnv = saveEnv();
+    showSaveToast(shareEnv.isAndroid
+      ? '📤 ほぞんメニューから 保存を えらんでね！（ギャラリーかFilesに入るよ）'
+      : '📤 「画像を保存」をえらぶと カメラロールに入るよ！');
+    /* ボイスは端末と一致するときだけ鳴らす。
+       saveGuide 「ほぞんメニューが出るよ。画像を保存、をえらんでね！」は
+       Androidの共有シートに「画像を保存」が無いことがあるので鳴らさない
+       （Android用の言い回しは音羽さんへ追加依頼済み。届くまでは画面の文字に任せる） */
+    if (!shareEnv.isAndroid) playAnnounce('saveGuide'); // （2026-08-15）
     p.then(() => {
       lastSaveRoute = 'share';
-      showSaveToast('✅ ほぞんメニューにわたしたよ！カメラロールを見てね');
+      showSaveToast(shareEnv.isAndroid
+        ? '✅ ほぞんメニューにわたしたよ！ギャラリーかFilesを見てね'
+        : '✅ ほぞんメニューにわたしたよ！カメラロールを見てね');
       /* 🚨 saveSuccess は「カメラロールを見てみてね」と言う。
-         **共有シートに渡せたときだけ** 事実と一致するので、この経路でしか鳴らさない
-         （Androidのダウンロード保存で鳴らすと保存先の案内がズレる。下の①-A参照） */
-      playAnnounce('saveSuccess');
+         カメラロールがあるのは iOS だけなので、**iOSのときだけ**鳴らす
+         （Androidのダウンロード保存でも、Androidの共有シート経路でも保存先の案内がズレる） */
+      if (shareEnv.isIOS) playAnnounce('saveSuccess');
     }).catch((err) => {
       if (err && err.name === 'AbortError') { // 客がやめただけ。責めない
         lastSaveRoute = 'share-cancel';

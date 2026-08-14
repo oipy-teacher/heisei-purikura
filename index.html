@@ -191,15 +191,24 @@
       </div>
       <div class="beauty-main">
         <div class="beauty-preview-holder">
-          <canvas id="beauty-canvas"></canvas>
-          <!-- どの1枚をいじっているかを示すラベル（B-2・2026-08-15 柄本仕様書）。
-               盛りの設定は「いま見ている1枚」にだけ効くのに、画面に枚数の手がかりが
-               数字タブしか無く、4枚のうち1枚しか盛れていないシールが出来る事故が起きうる -->
-          <div class="beauty-shot-pick">
-            <p class="beauty-shot-pick-label">どの1まいを 盛る？</p>
-            <div id="beauty-shot-tabs" class="beauty-shot-tabs"></div>
+          <div class="beauty-preview-stage">
+            <canvas id="beauty-canvas"></canvas>
+            <!-- どの1枚をいじっているかを示すラベル（B-2・2026-08-15 柄本仕様書）。
+                 盛りの設定は「いま見ている1枚」にだけ効くのに、画面に枚数の手がかりが
+                 数字タブしか無く、4枚のうち1枚しか盛れていないシールが出来る事故が起きうる -->
+            <div class="beauty-shot-pick">
+              <p class="beauty-shot-pick-label">どの1まいを 盛る？</p>
+              <div id="beauty-shot-tabs" class="beauty-shot-tabs"></div>
+            </div>
           </div>
-          <p id="beauty-face-note" class="beauty-face-note hidden"></p>
+          <!-- 顔まわりの案内（2026-08-15 検見の総合検収【要修正④】）。
+               v24までプレビューの上に重ねていたが、5行に伸びて写真の21〜35%を覆っていた。
+               盛り画面は「いま自分がどう見えるか」を見る画面なので、写真の外（下）へ出す。
+               短い見出しだけ常に出し、詳しい話は details で畳む（情報は削っていない） -->
+          <details id="beauty-face-note" class="beauty-face-note hidden">
+            <summary id="beauty-face-note-head"></summary>
+            <p id="beauty-face-note-body" class="beauty-face-note-body"></p>
+          </details>
         </div>
         <div class="beauty-controls">
           <div class="beauty-presets">
@@ -522,7 +531,10 @@
       <div class="attract-slide as-reiwa">
         <p class="as-cap-r">- now -</p>
         <p class="as-logo-r">令和モード</p>
-        <p class="as-mid-r">ナチュラル盛れ × くすみカラー<br>ライブ盛れで「撮る前から盛れてる」</p>
+        <!-- 「ライブ盛れ」は制作側の造語（柄本が「撮る前から盛る」へ統一済み）。
+             撮影画面のボタンはJSが上書きするが、この待機デモはJSが触らないため残っていた
+             （2026-08-15 検見の総合検収【軽微⑧】） -->
+        <p class="as-mid-r">ナチュラル盛れ × くすみカラー<br>「撮る前から盛る」で うつりを確かめながら</p>
         <p class="as-cap-r under">- natural / film / mood -</p>
       </div>
       <div class="attract-slide as-split">
