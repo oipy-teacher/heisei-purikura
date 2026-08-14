@@ -22,7 +22,7 @@
     <div class="confirm-box">
       <p class="confirm-text">さっきの らくがき、<br>のこってるよ！</p>
       <div class="resume-preview" id="resume-preview"></div>
-      <p class="resume-note">とちゅうで がめんが かわっちゃったみたい。<br>つづきから やりなおせるよ。</p>
+      <p class="resume-note">とちゅうで がめんが かわっちゃったみたい。<br>つづきから できるよ。</p>
       <div class="confirm-buttons">
         <button id="btn-resume-yes" class="btn-main small">▶ つづきから</button>
         <button id="btn-resume-no" class="btn-sub">さいしょから</button>
@@ -32,7 +32,7 @@
 
   <!-- ホーム画面に追加して使うと、あやまって画面が変わらない（iOS Safariのタブで開いた時だけ） -->
   <div id="pwa-hint" class="pwa-hint hidden">
-    <span id="pwa-hint-text">📱 ホーム画面に追加して開くと、らくがき中に画面が変わりません（共有 → ホーム画面に追加）</span>
+    <span id="pwa-hint-text">【係の人へ】📱 ホーム画面に追加して開くと、らくがき中に画面が変わりません（共有 → ホーム画面に追加）</span>
     <button id="btn-pwa-hint-close" class="pwa-hint-close" aria-label="とじる">✕</button>
   </div>
 
@@ -49,15 +49,15 @@
       </button>
       <button id="btn-mode-reiwa" class="door door-reiwa">
         <span class="door-en-r">- now -</span>
-        <span class="door-logo-r">令和</span>
+        <span class="door-logo-r">令和プリクラ</span>
         <span class="door-sub-r">- photo sticker -</span>
-        <span class="door-desc-r">ナチュラル盛れ × くすみカラー</span>
+        <span class="door-desc-r">いまのプリクラの写り × くすみカラー</span>
       </button>
       <div class="title-band">
         <p class="title-band-name">文化祭スペシャル プリクラ機</p>
         <p class="title-band-touch">▼ どっちの時代であそぶ？ ▼</p>
       </div>
-      <p class="title-note">※ iPad推奨・カメラを使用します</p>
+      <p class="title-note">※ 上か下をタッチしてね。カメラを使います</p>
     </div>
   </section>
 
@@ -67,7 +67,7 @@
       <button id="btn-back-title" class="btn-back">◀ モードえらびに もどる</button>
       <div id="select-main"></div>
       <details id="sel-advanced" class="sel-advanced">
-        <summary>⚙️ こだわり設定（ひらく）</summary>
+        <summary>⚙️ もっと えらびたい人はこちら（ひらく）</summary>
         <div id="advanced-body"></div>
       </details>
 
@@ -78,11 +78,11 @@
         <div class="shotmode-row">
           <button class="shotmode-btn active" data-shotmode="bust">
             <span class="shotmode-name">📱 アップコース</span>
-            <span class="shotmode-note">手に持って自撮り。顔メインのいつもの写り</span>
+            <span class="shotmode-note">顔をアップで。いつもの自撮りの写り</span>
           </button>
           <button class="shotmode-btn" data-shotmode="full">
             <span class="shotmode-name">🧍 全身コース</span>
-            <span class="shotmode-note">三脚にセット。うしろのカメラで全身を撮るよ</span>
+            <span class="shotmode-note">そのまま立って全身を撮るよ（カメラはさわらなくてOK）</span>
           </button>
         </div>
       </div>
@@ -93,9 +93,11 @@
       </div>
       <!-- うつりの年代（平成考証: 〜2006年ごろは黄み肌・加工感少なめが史実） -->
       <div class="sel-section" id="sel-eratone">
-        <h2 class="step-heading" data-title="うつりの年代（平成考証）" data-en="era"></h2>
+        <!-- S-1（2026-08-15 柄本仕様書）: 「考証」は制作側の内輪の言葉。客はこの機械が
+             何かを「考証」していることに興味がない。年代はボタン側（〜2006 黄み肌）が示している -->
+        <h2 class="step-heading" data-title="しゃしんの ふんいき" data-en="era"></h2>
         <div id="eratone-row" class="preset-row select-filters"></div>
-        <p class="eratone-note">「〜2006 黄み肌」は当時の実機の写りを再現：黄みがかった肌・加工ひかえめ・ちょっと粗い画質</p>
+        <p class="eratone-note">「〜2006 黄み肌」は 当時のプリクラの写り。肌が黄色っぽくて、ちょっと画質があらい</p>
       </div>
       <div class="sel-section" id="sel-layout">
         <h2 class="step-heading" data-title="ぶんかつ（レイアウト）をえらんでね" data-en="layout"></h2>
@@ -110,16 +112,16 @@
         <div id="frame-list" class="choice-grid"></div>
       </div>
       <div class="sel-section" id="sel-filter">
-        <h2 class="step-heading" data-title="うつり（フィルター）をえらんでね" data-en="filter"></h2>
+        <h2 class="step-heading" data-title="しゃしんの いろ（フィルター）をえらんでね" data-en="filter"></h2>
         <div id="select-filter-row" class="preset-row select-filters"></div>
       </div>
       <div class="sel-section" id="sel-chroma">
         <div class="chroma-row">
           <div class="chroma-label">
-            <p class="chroma-title">🪄 デジタル背景（くりぬき）</p>
-            <p class="chroma-note">会場のカーテン背景をそのまま写すなら OFF のまま！</p>
+            <p class="chroma-title">🪄 うしろを 好きな色にする</p>
+            <p class="chroma-note">会場のかざりを そのまま写すなら OFF のままでOK！</p>
           </div>
-          <button id="btn-chroma-toggle" class="chroma-toggle" data-on="false">OFF</button>
+          <button id="btn-chroma-toggle" class="chroma-toggle" data-on="false">つかわない</button>
         </div>
       </div>
 
@@ -321,8 +323,11 @@
             <button id="btn-shot-next" class="shot-nav next" aria-label="次のしゃしん">▶</button>
             <!-- 編集ツールの操作バー（選択中だけ表示） -->
             <div id="edit-bar" class="edit-bar hidden">
-              <button id="btn-edit-dup" class="btn-small">⧉ ふくせい</button>
-              <button id="btn-edit-done" class="btn-small">✓ かくてい</button>
+              <!-- D-3（2026-08-15 柄本仕様書）: 「ふくせい」＝複製・「かくてい」＝確定。
+                   漢語をひらがなに開いただけで、かえって読めなくなっていた。
+                   ひらがな化は語を易しくする作業であって、表記を変える作業ではない -->
+              <button id="btn-edit-dup" class="btn-small">⧉ おなじのを ふやす</button>
+              <button id="btn-edit-done" class="btn-small">✓ おわり</button>
             </div>
           </div>
           <div id="deco-thumbs" class="deco-thumbs"></div>
@@ -338,20 +343,29 @@
               <button class="pen-type-btn" data-pentype="kira">キラキラ</button>
             </div>
             <div class="color-row" id="color-row"></div>
-            <input type="range" id="pen-size" min="4" max="52" value="16">
+            <!-- 無名だったペンの太さスライダーに名前をつけた（D-4・2026-08-15 柄本仕様書）。
+                 隣の「スタンプ」には 小/中/大 があるのに、ペンだけ何のバーか
+                 画面のどこにも書いていなかった -->
+            <p class="tool-label sub" id="pen-size-label">ふとさ</p>
+            <input type="range" id="pen-size" min="4" max="52" value="16" aria-labelledby="pen-size-label">
+            <!-- D-1/D-2（2026-08-15 柄本仕様書）: 「消しゴム」と「なぞり消し」は名前だけでは
+                 違いが分からないのに、実装はまったく別の動作（eraser=描いた線を画素として削る／
+                 swipe=触れたオブジェクトを丸ごと消す）。3分の勝負のなかで試して覚える時間はない。
+                 「うごかす」も何を動かすのか（画面？写真？スタンプ？）が書かれていなかった。
+                 → 各ボタンに動作の一言を添え、2列に組み直して字数を確保する -->
             <div class="mode-row">
-              <button class="tool-btn active" data-mode="pen">ペン</button>
-              <button class="tool-btn" data-mode="eraser">消しゴム</button>
-              <button class="tool-btn" data-mode="swipe">なぞり消し</button>
+              <button class="tool-btn active" data-mode="pen"><b>ペン</b><small>かく</small></button>
+              <button class="tool-btn" data-mode="eraser"><b>消しゴム</b><small>なぞって けずる</small></button>
+              <button class="tool-btn" data-mode="swipe"><b>まるごと消し</b><small>さわったのが 消える</small></button>
               <!-- 落書き編集ツール（√me2型・令和のみ表示・2026-08-14） -->
-              <button class="tool-btn" data-mode="edit" id="btn-tool-edit">うごかす</button>
+              <button class="tool-btn" data-mode="edit" id="btn-tool-edit"><b>うごかす</b><small>スタンプの ばしょ</small></button>
             </div>
           </div>
 
           <div class="tool-group" id="group-stamp">
             <p class="tool-label"><span class="tl-emoji">✨</span><img class="tl-icon" src="assets/reiwa-icon-stamp.svg" alt=""> スタンプ</p>
             <!-- スタンプの押し方は統一（2026-08-14 オーナー裁定）: タップ=1個・なぞる=コロコロ -->
-            <p class="stamp-hint">タップで1こ・なぞると コロコロ（れんだ）</p>
+            <p class="stamp-hint">タップで1こ。なぞると つながって おされるよ</p>
             <div class="size-row" id="stamp-size-row">
               <button class="size-btn" data-stampsize="64">小</button>
               <button class="size-btn active" data-stampsize="96">中</button>
@@ -378,7 +392,7 @@
 
           <!-- 落書き見本（現行実機Meidyの「完成見本を選ぶと配置済みになる」型） -->
           <div class="tool-group" id="group-sample">
-            <p class="tool-label">🖼 らくがき見本（えらんで→はりたいしゃしんをタップ）</p>
+            <p class="tool-label">🖼 らくがき見本</p>
             <div class="sample-row" id="sample-row"></div>
             <button id="btn-sample-all" class="btn-small sample-all-btn">🖼 ぜんぶのしゃしんに はる</button>
           </div>
@@ -407,7 +421,10 @@
     <!-- 平成のみ: 落書きのあとの分割選択（2026-08-13 考証回帰・実機の型: 撮影→落書き→分割→排出） -->
     <div id="layout-gate" class="deco-gate hidden">
       <div class="deco-gate-inner">
-        <p class="deco-gate-title">ぶんかつ（レイアウト）をえらんでね！</p>
+        <!-- D-15（2026-08-15 柄本仕様書）: 直前に「✨ できあがり！」と言われた客に
+             もう1画面あることを予告する。実機の型（撮影→落書き→分割→排出）に沿った
+             正しい流れなので、導線は変えず文言だけで肩透かしを消す -->
+        <p class="deco-gate-title">もうひとつだけ！ ぶんかつを えらんでね</p>
         <p class="deco-gate-note">らくがきの できあがりを見て、<br>なんぶんかつで もってかえるか きめよう！</p>
         <div id="layout-gate-list" class="layout-grid layout-gate-list"></div>
       </div>
@@ -442,16 +459,25 @@
       <div class="print-after">
         <p class="print-instruction">この1まいを保存して、プリントは<br>係(かかり)の人にお願いしてね🙏✨</p>
         <div class="print-actions">
-          <a id="btn-download" class="btn-main" href="#">📥 しゃしんを保存する</a>
+          <a id="btn-download" class="btn-main" href="#">📥 まずは これを保存！</a>
           <button id="btn-restart" class="btn-sub">🔁 もう一回あそぶ</button>
         </div>
-        <div class="print-actions extra">
-          <a id="btn-download-16" class="btn-sub" href="#">🎞 16分割シールver.も保存</a>
-          <a id="btn-download-story" class="btn-sub" href="#">📱 たて長ver.（ストーリー用）も保存</a>
-          <!-- 証明プリ（Meidy型・2026-08-14・令和のみ表示） -->
-          <a id="btn-download-id" class="btn-sub" href="#">🪪 証明プリver.も保存</a>
+        <!-- P-2（2026-08-15 柄本仕様書）: 「保存」と書かれたボタンが5つ横並びだと、
+             初見の客は「どれを押せば持ち帰れるか」を判断できずその場で止まる。
+             主ボタンだけを出し、追加の形は畳んでおく。
+             ※ 平成では「たて長ver.（ストーリー用）」と「証明プリ」はCSSで非表示（P-6/考証） -->
+        <details id="print-extra" class="print-extra">
+          <summary>⚙️ ほかの形でも保存する（ひらく）</summary>
+          <div class="print-actions extra">
+            <a id="btn-download-16" class="btn-sub" href="#">🎞 16分割シールver.も保存</a>
+            <a id="btn-download-story" class="btn-sub" href="#">📱 たて長ver.（ストーリー用）も保存</a>
+            <!-- 証明プリ（Meidy型・2026-08-14・令和のみ表示） -->
+            <a id="btn-download-id" class="btn-sub" href="#">🪪 証明プリver.も保存</a>
+          </div>
+        </details>
+        <div class="print-actions escape-row">
           <!-- どの環境でも必ず成功する出口（客が自分で降りられるように常設・2026-08-14）。
-               iPad実寸(1024x768)では下に足すと画面外に出て押せなくなるため、この行の中に入れる -->
+               畳んだ中に入れると、いちばん困っている客が見つけられないので常設のまま残す -->
           <a id="btn-save-longpress" class="save-escape" href="#">うまく保存できないときは ▶ ながおしで保存</a>
         </div>
         <!-- 保存の最後の砦（2026-08-14）: 端末に合わせて文言を出し分ける長押し保存。

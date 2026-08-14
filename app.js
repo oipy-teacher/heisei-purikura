@@ -251,13 +251,26 @@
     return cells;
   }
 
-  // 撮影ポーズガイド（実機の「次は◯◯で！」を再現）
-  const POSE_GUIDES = [
-    'まずはにっこり笑顔で💕',
-    'つぎはアップでかわいく！',
-    'おちゃめなポーズいっちゃお！',
-    'ラストはさいこうの決めポーズ！',
-  ];
+  /* 撮影ポーズガイド（実機の「次は◯◯で！」を再現）。
+     2026-08-15（柄本 C-8）: 平成と令和で別に持つ。「おちゃめなポーズいっちゃお！」は
+     完全に平成の号令調で、令和は絵文字をCSSで消すところまで作り込んであるのに、
+     撮影中いちばん目に入るこの吹き出しだけ平成語のままだった。 */
+  const POSE_GUIDES_BY_MODE = {
+    heisei: [
+      'まずはにっこり笑顔で💕',
+      'つぎはアップでかわいく！',
+      'おちゃめなポーズいっちゃお！',
+      'ラストはさいこうの決めポーズ！',
+    ],
+    reiwa: [
+      'まずは 自然に',
+      'つぎは 顔ちかめで',
+      'すこし ふざけてみる？',
+      'ラスト！ きめて',
+    ],
+  };
+  const poseGuides = () => POSE_GUIDES_BY_MODE[state.mode === 'heisei' ? 'heisei' : 'reiwa'];
+  const poseGuideIdle = () => (state.mode === 'heisei' ? 'かわいく決めてね💕' : 'いい感じに どうぞ');
 
   /* ===================== 状態 ===================== */
   const state = {
@@ -364,9 +377,47 @@
     'screen-deco': 'らくがきは３ぷんしょうぶ！　しゃしんを きりかえて ４まいぜんぶ かきこめ！　スタンプれんだ かいきん！　我等友情永久不滅成！　',
   };
 
+  /* ---------- 文言のモード出し分け（2026-08-15・柄本仕様書 付記） ----------
+     この画面群は元々1本の共通UIとして書かれ、あとから平成/令和に割った。
+     そのため **最初に書いた平成の言い回しが令和側にも残っている**（`らくがき かんせーい♪`
+     `かわいく決めてね💕` `これでOK♪`）。CSSの着せ替えはここまで作り込んであるのに
+     文字だけ共通だと「見た目は令和・口調は平成」という不一致が起きる。客は文字を読む。
+
+     機能の出し分けは `state.mode === 'heisei'` で丁寧にやっているのに、文言を出し分けて
+     いる箇所は `MARQUEE_TEXTS` と `#print-progress` の2つしか無かった。
+     ここに1本の表を作り、テーマ切替のたびにまとめて流し込む。
+     **今後、文言を足すときはこの表に足せば出し分け漏れが起きない。**
+
+     `heisei` / `reiwa` の両方を書く。片方だけ書いた場合、もう片方はHTMLの初期値のまま。 */
+  const COPY_BY_MODE = {
+    // --- 保存画面 ---
+    '.print-caption': { heisei: 'らくがき かんせーい♪', reiwa: 'できあがり' },      // P-3
+    // --- 撮影画面 ---
+    '#pose-guide': { heisei: 'かわいく決めてね💕', reiwa: 'いい感じに どうぞ' },     // C-7
+    // --- 選択画面 ---
+    '#btn-to-camera': { heisei: 'この組み合わせでOK！ ▶', reiwa: 'これで撮る ▶' },  // S-13
+    // --- 落書き画面 ---
+    // D-5: 挙動の統一はオーナー裁定済みなので触らず、文言だけ動作が分かる形にする。
+    //      「コロコロ」は当時のローラースタンプの名前なので平成側にだけ残す
+    '.stamp-hint': {
+      heisei: 'タップで1こ・なぞると コロコロ！（つながって おされるよ）',
+      reiwa: 'タップで1こ。なぞると つながって おされるよ',
+    },
+  };
+
+  function applyCopyByMode(mode) {
+    const key = mode === 'heisei' ? 'heisei' : 'reiwa';
+    Object.keys(COPY_BY_MODE).forEach(sel => {
+      const t = COPY_BY_MODE[sel][key];
+      if (t == null) return;
+      document.querySelectorAll(sel).forEach(el => { el.textContent = t; });
+    });
+  }
+
   function setTheme(mode) {
     document.body.classList.remove('theme-heisei', 'theme-reiwa');
     if (mode) document.body.classList.add('theme-' + mode);
+    if (mode) applyCopyByMode(mode);
   }
 
   function updateThemeFx(screenId) {
@@ -684,9 +735,9 @@
      'auto' はモードおまかせ（従来どおり平成=ユーロビート／令和=ローファイ）。 */
   const BGM_TRACKS = [
     { id: 'auto', label: '♪ おまかせ', src: null },
-    { id: 'euro', label: 'ユーロビート', src: 'audio/bgm.mp3' },
-    { id: 'lofi', label: 'ローファイ', src: 'audio/bgm_reiwa.mp3' },
-    { id: 'pop',  label: 'ポップ', src: 'audio/bgm_title.mp3' },
+    { id: 'euro', label: 'ユーロビート（ノリノリ）', src: 'audio/bgm.mp3' },
+    { id: 'lofi', label: 'ローファイ（しずかめ）', src: 'audio/bgm_reiwa.mp3' },
+    { id: 'pop',  label: 'ポップ（あかるめ）', src: 'audio/bgm_title.mp3' },
   ];
 
   function playBgmSrc(src) {
@@ -1024,6 +1075,16 @@
       });
       row.appendChild(b);
     });
+    /* S-10（2026-08-15 柄本仕様書）: 「押すとその場で聞ける」ことが画面のどこにも
+       書かれておらず、実装済みの試聴機能が誰にも使われていなかった。1行足すだけで機能が生きる */
+    let note = $('#bgm-try-note');
+    if (!note) {
+      note = document.createElement('p');
+      note.id = 'bgm-try-note';
+      note.className = 'sel-hint';
+      row.parentNode.insertBefore(note, row.nextSibling);
+    }
+    note.textContent = '（押すと その場で 聞けるよ）';
   }
 
   // うつりの年代（平成考証・2026-08-12）。〜2006年ごろの実機は黄み肌・加工感少なめが史実
@@ -1112,7 +1173,7 @@
       // 全身モードは実物のスクリーン投影が背景。くりぬきは邪魔になるので切る
       state.chromaOn = false;
       const t = $('#btn-chroma-toggle');
-      if (t) { t.dataset.on = 'false'; t.textContent = 'OFF'; }
+      if (t) { t.dataset.on = 'false'; t.textContent = 'つかわない'; }
     }
     const chromaSec = $('#sel-chroma');
     if (chromaSec) chromaSec.style.display = full ? 'none' : '';
@@ -1131,7 +1192,7 @@
   chromaToggle.addEventListener('click', () => {
     state.chromaOn = !state.chromaOn;
     chromaToggle.dataset.on = String(state.chromaOn);
-    chromaToggle.textContent = state.chromaOn ? 'ON' : 'OFF';
+    chromaToggle.textContent = state.chromaOn ? 'つかう' : 'つかわない';
     if (state.chromaOn && !imageSegmenter && !segmenterLoading) initSegmenter();
   });
 
@@ -1237,7 +1298,7 @@
       }
       segmenterFailedAt = 0; // 読めたので失敗の記録は消す
       if (state.chromaOn) {
-        segmenterStatus.textContent = '✨ 背景くりぬき 準備OK！';
+        segmenterStatus.textContent = '✨ うしろの色がえ 準備OK！';
         segmenterStatus.classList.remove('hidden');
         setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
       }
@@ -1245,7 +1306,7 @@
       console.warn('人物くり抜きモデルの読み込みに失敗しました。通常のカメラ映像で撮影します。', err);
       segmenterFailedAt = Date.now();
       if (state.chromaOn) {
-        segmenterStatus.textContent = '（背景くりぬきは今回お休み中）';
+        segmenterStatus.textContent = '（うしろの色がえは 今回おやすみ。そのまま撮れるよ）';
         segmenterStatus.classList.remove('hidden');
         setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
       }
@@ -1566,7 +1627,7 @@
       livePerf.disabled = true;
       if (!livePerf.noted) {
         livePerf.noted = true;
-        segmenterStatus.textContent = '⚡ この端末では重いため、盛れはシャッター後に反映します';
+        segmenterStatus.textContent = '⚡ いまは 撮ったあとで 盛るよ！ そのまま撮ってOK🙆';
         segmenterStatus.classList.remove('hidden');
         setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
         syncLiveBeautyUI();
@@ -1599,7 +1660,7 @@
         // 準備が整った最初のフレームで一言（くり抜きONのときは既存の案内を優先）
         if (liveSkinReady && !liveReadyNoted && !state.chromaOn) {
           liveReadyNoted = true;
-          segmenterStatus.textContent = '✨ ライブ盛れ ON！';
+          segmenterStatus.textContent = '✨ 撮る前から盛る ON！';
           segmenterStatus.classList.remove('hidden');
           setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
         }
@@ -1615,7 +1676,7 @@
       // モデルが読めなかった場合、「準備中…」を出しっぱなしにしない
       if (liveBeauty && segmenterFailedAt > 0 && !liveReadyNoted && !state.chromaOn) {
         liveReadyNoted = true;
-        segmenterStatus.textContent = '（ライブ盛れは今回お休み中。撮影後にしっかり盛れます）';
+        segmenterStatus.textContent = '（撮ったあとで しっかり盛れるよ！）';
         segmenterStatus.classList.remove('hidden');
         setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
       }
@@ -1787,7 +1848,7 @@
     liveBeautyPanel.classList.toggle('hidden', !isReiwa);
     if (!isReiwa) return;
     const on = state.liveBeautyOn && !livePerf.disabled;
-    btnLiveBeauty.textContent = on ? '✨ ライブ盛れ ON' : 'ライブ盛れ OFF';
+    btnLiveBeauty.textContent = on ? '✨ 撮る前から盛る ON' : '撮る前から盛る OFF';
     btnLiveBeauty.classList.toggle('on', on);
     livePresetRow.classList.toggle('dimmed', !on);
     // 盛れ感プリセット（無加工風/ナチュ盛れ/プリ盛れ）。選ぶと撮影後の盛り調整の初期値にもなる
@@ -1875,7 +1936,7 @@
       if (!imageSegmenter && !mpGaveUp(segmenterFailedAt) && !segmenterLoading) initSegmenter();
       // 準備中の一言（くり抜きONのときは既存の案内を優先）
       if (!state.chromaOn && !(imageSegmenter && segmenterIsMulticlass)) {
-        segmenterStatus.textContent = '✨ ライブ盛れを準備中…';
+        segmenterStatus.textContent = '✨ 撮る前から盛る 準備中…';
         segmenterStatus.classList.remove('hidden');
       }
     }
@@ -1884,11 +1945,11 @@
       if (imageSegmenter) {
         segmenterStatus.classList.add('hidden');
       } else if (mpGaveUp(segmenterFailedAt)) {
-        segmenterStatus.textContent = '（背景くりぬきは今回お休み中）';
+        segmenterStatus.textContent = '（うしろの色がえは 今回おやすみ。そのまま撮れるよ）';
         segmenterStatus.classList.remove('hidden');
         setTimeout(() => segmenterStatus.classList.add('hidden'), 2500);
       } else {
-        segmenterStatus.textContent = '🪄 背景くりぬきを読み込み中…';
+        segmenterStatus.textContent = '🪄 うしろの色を じゅんび中…';
         segmenterStatus.classList.remove('hidden');
         if (!segmenterLoading) initSegmenter();
       }
@@ -2224,7 +2285,7 @@
   async function runPrepCountdown() {
     const note = document.createElement('div');
     note.className = 'prep-note';
-    note.textContent = 'カメラを回して、立ちいちへ！';
+    note.textContent = 'しるしのところに 立ってね！';
     countdownEl.parentElement.appendChild(note);
     countdownEl.classList.add('prep');
     countdownEl.style.opacity = '1';
@@ -2248,14 +2309,14 @@
     if (state.shotMode === 'full') {
       setPoseGuide('じゅんびちゅう…');
       await runPrepCountdown();
-      setPoseGuide('かわいく決めてね💕');
+      setPoseGuide(poseGuideIdle());
     }
     resetPoseOrder();
     /* 実機のテンポ: 撮ったら次へ矢継ぎ早に流れる。確認・撮り直しは無し
        （2026-08-12 オーナー指摘対応で「この画像でオッケー？！」確認を撤去。
        　柄本リサーチどおり、実機は撮影中に立ち止まる操作を挟まない） */
     for (let i = 0; i < NUM_SHOTS; i++) {
-      setPoseGuide(POSE_GUIDES[i] || 'かわいく決めてね💕');
+      setPoseGuide(poseGuides()[i] || poseGuideIdle());
       /* 前置きボイス（「◯枚目いくよー」）は1枚目だけ。2枚目以降はポーズ提案ボイスが
          そのまま号令になる（毎枚2秒前後の前置きはテンポを殺す・実機は矢継ぎ早） */
       /* 最終ショットは必ず pose_06（ラスト！決めポーズ！）。途中の枚では絶対に出さない（2026-08-13 実機指摘） */
@@ -5538,7 +5599,9 @@
     const hint = $('#photo-pick-hint');
     if (!hint) return;
     if (cellCount < state.photoPick.length) {
-      hint.textContent = `このレイアウトには えらんだ じゅんに ${cellCount}まいが のるよ`;
+      /* D-8（2026-08-15 柄本仕様書）: 「4まい のるよ」だけでは5枚目以降が捨てられることが
+         読み取れなかった（半点灯で示してはいるが、その凡例が画面のどこにも無い） */
+      hint.textContent = `このぶんかつは ${cellCount}マス。えらんだ じゅんに さいしょの${cellCount}まいが のるよ（のこりは のらないよ）`;
     } else if (cellCount > state.photoPick.length) {
       hint.textContent = `えらんだ ${state.photoPick.length}まいが じゅんばんに くりかえし ならぶよ`;
     } else {
@@ -5657,7 +5720,9 @@
        一時保存はまだ消さない。分割えらび中に離脱しても、描いたものは戻せるようにする */
     decoActive = false;
     disarmHistorySentinel();
-    $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ できあがり！' : '⏰ タイムアップ！';
+    /* D-14（2026-08-15 柄本仕様書）: ボタンと同じ「✨ できあがり！」を結果側にも出していたため、
+       押せたのかどうかが分からなかった。結果側は「かんせい！」にして操作と結果を分ける */
+    $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ かんせい！' : '⏰ タイムアップ！';
     $('#deco-timeup').classList.remove('hidden');
     playSound(reason === 'manual' ? 'finish' : 'timeup');
     await sleep(1300);
@@ -6100,7 +6165,17 @@
     ctx.font = '900 30px -apple-system, sans-serif';
     ctx.fillStyle = inkOnColor(cc, '#c2185b');
     // 「プリント倶楽部/Print Club」はセガの登録商標のため自前の名称を使う（2026-08-12 era-designer指摘）
-    ctx.fillText('★ 太子プリ ★', SHEET_W / 2, 52);
+    /* 焼き込み文字はやり直しがきかない（客が持ち帰って何年も残る）ので、
+       モードで様式を分ける（P-9・2026-08-15 柄本仕様書）。
+       令和の客の16分割シールに平成の★装飾が焼かれていた。 */
+    if (state.mode === 'heisei') {
+      ctx.fillText('★ 太子プリ ★', SHEET_W / 2, 52);
+    } else {
+      ctx.font = '500 24px -apple-system, sans-serif';
+      ctx.letterSpacing = '0.22em'; // 非対応ブラウザでは無視されるだけ（見た目が少し詰まる）
+      ctx.fillText('taishi puri', SHEET_W / 2, 50);
+      ctx.letterSpacing = '0px';
+    }
 
     const shots = state.processedShots.length ? state.processedShots : state.shots;
     if (shots.length) {
@@ -6482,7 +6557,9 @@
     // 戻るジェスチャを吸収して積み直す。客には「戻れない」ことだけ伝える
     try { history.pushState({ puri: 'deco' }, ''); } catch (e) { /* 何もできないときは黙る */ }
     saveSessionSnapshot();
-    if (typeof showDecoToast === 'function') showDecoToast('✋ らくがき中は もどれないよ！');
+    /* D-9（2026-08-15 柄本仕様書）: このトーストは端スワイプの誤爆でも出る。
+       禁止だけ告げると客は「自分が何か壊した」と思って固まるので、続けてよいことを添える */
+    if (typeof showDecoToast === 'function') showDecoToast('✋ らくがき中は もどれないよ。そのまま つづけてね！');
   });
 
   /* ② 端で始まった指の動きを吸収する。

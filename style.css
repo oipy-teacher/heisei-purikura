@@ -413,10 +413,14 @@ body[data-mode="reiwa"] .eratone-note { color: #ab9a8a; }
   text-align: left;
 }
 .chroma-title { margin: 0; font-size: 15px; font-weight: 900; color: #7a3fb0; }
+/* 選択画面の小さな一言（「押すと その場で 聞けるよ」など・2026-08-15 S-10） */
+.sel-hint { margin: 6px 0 0; font-size: 11px; font-weight: 700; color: #a08cb8; }
+body.theme-reiwa .sel-hint { color: var(--r-ink); font-weight: 500; opacity: .75; }
 .chroma-note { margin: 4px 0 0; font-size: 11px; color: #a08cb8; }
+/* ラベルを日本語（つかう／つかわない）にしたぶん幅を広げる（S-13・2026-08-15） */
 .chroma-toggle {
-  min-width: 74px;
-  font-size: 16px;
+  min-width: 108px;
+  font-size: 14px;
   font-weight: 900;
   padding: 10px 18px;
   border-radius: 30px;
@@ -721,9 +725,12 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
 }
 .color-swatch.selected { box-shadow: 0 0 0 3px #333; }
 #pen-size { width: 100%; }
-.mode-row { display: flex; gap: 8px; margin-top: 8px; }
+/* 道具の切替は2列（2026-08-15・D-1/D-2）。1行4列だと1つ40px前後しか取れず、
+   動作の一言（「なぞって けずる」等）が入らなかった */
+.mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.tool-btn b { display: block; font-weight: 800; }
+.tool-btn small { display: block; font-size: 10px; font-weight: 600; opacity: .78; line-height: 1.25; margin-top: 2px; }
 .tool-btn {
-  flex: 1;
   padding: 8px 4px;
   border-radius: 10px;
   border: 2px solid #b98ee0;
@@ -968,6 +975,27 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
 .print-actions { margin-top: 22px; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
 .print-actions.extra { margin-top: 12px; }
 .print-actions.extra .btn-sub { font-size: 14px; padding: 10px 18px; }
+.print-actions.escape-row { margin-top: 10px; }
+/* ほかの形での保存は畳んでおく（P-2・2026-08-15）。
+   「保存」と書かれたボタンが5つ横並びだと、初見の客はどれを押せばよいか判断できず止まる */
+.print-extra { margin-top: 12px; }
+.print-extra > summary {
+  display: inline-block;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 16px;
+  min-height: 20px;
+  color: #7a3fb0;
+  background: rgba(255,255,255,.75);
+  border: 2px solid #cbb3e3;
+  border-radius: 22px;
+}
+.print-extra > summary::-webkit-details-marker { display: none; }
+.print-extra[open] > summary { margin-bottom: 4px; }
+body.theme-heisei .print-extra > summary { color: var(--h-ink); }
+body.theme-reiwa .print-extra > summary { color: var(--r-ink); font-weight: 500; border-radius: 2px; border-color: rgba(74,63,56,.25); background: #fefcf9; }
 
 /* ============ 2.5 beauty（盛り調整） ============ */
 #screen-beauty {
@@ -1276,6 +1304,7 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   /* 道具箱は省スペース化して、空いた分を写真に回す */
   .deco-toolbar { flex: 0 1 200px; min-width: 170px; max-width: 230px; gap: 9px; padding: 9px; }
   .deco-toolbar .tool-btn { font-size: 11px; padding: 6px 4px; }
+  .deco-toolbar .tool-btn small { font-size: 9px; }
   .deco-toolbar .tool-group { gap: 6px; }
   /* 写真の左右に出す送りボタン（横持ちのみ・タップでも切り替えられるように）。
      .shot-nav の既定(display:none)はこの後ろで定義されるため、
@@ -2775,6 +2804,12 @@ body.theme-reiwa .edit-bar .btn-small { background: #fff; border: 1px solid var(
 
 /* 証明プリは令和のみ（Meidy型・2026-08-14。平成の年代設定1999-2003に証明プリは無い） */
 body[data-mode="heisei"] #btn-download-id { display: none; }
+/* 「たて長ver.（ストーリー用）」も平成では出さない（P-6・2026-08-15 柄本仕様書）。
+   Instagramストーリーズは2010年代後半の概念で、1999-2003の世界観に完全な異物。
+   証明プリ（btn-download-id）だけ隠してあって、こちらは漏れていた。
+   data-mode / theme-heisei の両方に効かせる（片方だけだと出し分けが抜ける） */
+body[data-mode="heisei"] #btn-download-story,
+body.theme-heisei #btn-download-story { display: none; }
 
 /* メイクりれき（Bloomit型・2026-08-14） */
 .makeup-history { margin-bottom: 8px; width: 100%; }
@@ -2859,6 +2894,7 @@ body.theme-reiwa .stamp-btn.selected {
   .cam-fail-body { font-size: 12px; line-height: 1.5; }
   .cam-fail-detail { display: none; }
   .cam-retry { padding: 8px 16px; font-size: 14px; }
+
 }
 
 /* 長押し保存モーダルの乗り換えボタン（2026-08-14 Android対策）。
