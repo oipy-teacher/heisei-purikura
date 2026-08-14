@@ -392,6 +392,8 @@
   const COPY_BY_MODE = {
     // --- 保存画面 ---
     '.print-caption': { heisei: 'らくがき かんせーい♪', reiwa: 'できあがり' },      // P-3
+    // P-2の主ボタン。令和は感嘆符を落とす（C-7/B-10と同じ様式の話）
+    '#btn-download': { heisei: '📥 まずは これを保存！', reiwa: '📥 まずは これを保存' },
     // --- 撮影画面 ---
     '#pose-guide': { heisei: 'かわいく決めてね💕', reiwa: 'いい感じに どうぞ' },     // C-7
     // --- 選択画面 ---

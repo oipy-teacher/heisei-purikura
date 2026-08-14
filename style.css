@@ -417,9 +417,11 @@ body[data-mode="reiwa"] .eratone-note { color: #ab9a8a; }
 .sel-hint { margin: 6px 0 0; font-size: 11px; font-weight: 700; color: #a08cb8; }
 body.theme-reiwa .sel-hint { color: var(--r-ink); font-weight: 500; opacity: .75; }
 .chroma-note { margin: 4px 0 0; font-size: 11px; color: #a08cb8; }
-/* ラベルを日本語（つかう／つかわない）にしたぶん幅を広げる（S-13・2026-08-15） */
+/* ラベルを日本語（つかう／つかわない）にしたぶん幅を広げる（S-13・2026-08-15）。
+   nowrap を必ず付ける: 幅390pxで「つかわな/い」と2行に割れていた（実機幅のスクショで発見） */
 .chroma-toggle {
   min-width: 108px;
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 900;
   padding: 10px 18px;
@@ -2359,7 +2361,8 @@ body.theme-reiwa .print-progress {
 body.theme-reiwa .print-caption { color: var(--r-brown); font-weight: 500; letter-spacing: .14em; }
 body.theme-reiwa .print-instruction { color: var(--r-ink); text-shadow: none; font-weight: 500; line-height: 1.9; }
 body.theme-reiwa .print-actions { border-top: 1px solid rgba(74,63,56,.2); padding-top: 18px; }
-body.theme-reiwa .print-actions.extra { border-top: none; padding-top: 0; }
+body.theme-reiwa .print-actions.extra,
+body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 /* 排出口の中でシールを中央へ（左に寄っていた） */
 .print-sheet-wrap { display: flex; justify-content: center; }
 
@@ -2935,6 +2938,9 @@ body.theme-reiwa .save-alt { background: var(--r-accent, #c9a227); color: #fff; 
   .print-actions { margin-top: 14px; gap: 12px; }
   .print-actions.extra { margin-top: 8px; gap: 8px; }
   .print-actions.extra .btn-sub { padding: 9px 16px; }
+  /* 狭い画面ではトグルの文字を1段落として、見出しの折り返し位置を確保する（2026-08-15） */
+  .chroma-toggle { min-width: 92px; font-size: 13px; padding: 10px 12px; }
+  .chroma-title { font-size: 14px; }
 }
 
 /* 保存画面の横持ち2段組（2026-08-15・独立した高さ条件）
