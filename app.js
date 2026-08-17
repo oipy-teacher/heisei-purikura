@@ -287,6 +287,7 @@
     shots: [],           // 撮影した生の4枚
     processedShots: [],  // 盛り加工後の4枚
     photoPick: null,     // シールに載せる写真の並び（shotsのインデックス列・2026-08-13新設）。nullなら撮影順
+    photoFit: 'face',    // セルへのおさまり方（令和のみ選択可・2026-08-17）。face | center | contain
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
     beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, eyeType: 1, namida: 0, legs: 0, filter: 'none' },
@@ -3944,6 +3945,74 @@
     ctx.drawImage(img, sx, sy, cw, ch, x, y, w, h);
   }
 
+  /* ---------- シールのセルへの「おさまり方」（2026-08-17 JKモニター指摘②） ----------
+     指摘は「4分割のときに写真が切れちゃうのが悲しい」。実測すると理屈どおりだった:
+
+       4分割 のセルは 301×349（たて長）／写真は 640×480（よこ長）
+       → 中央クロップで **横の35%（左右に113pxずつ）が捨てられる**
+       16分割 155×179 も同じ比率。まる4は正円なので更に切れる
+       （6分割だけは 313×235 ＝ ちょうど4:3 で切れない）
+
+     たて長のマスによこ長の写真を入れる以上、どこかは切れる。できることは3つで、
+     令和はそれを**客に選ばせる**（平成は実機どおり中央クロップ固定＝ここは触らない）:
+       face    … 顔の位置に合わせて切り取り位置をずらす（既定。顔が取れない回は中央）
+       center  … 従来どおり中央
+       contain … 切らずに全部入れる（上下によはくが出る）
+
+     🚨 落書きは写真の原寸(640×480)キャンバスに描かれ、シールへは同じ変換で載る。
+     写真と落書きは **必ず同じ関数・同じ引数** を通すこと（片方だけ変えるとズレる）。 */
+  const PHOTO_FITS = [
+    { id: 'face', label: '顔に あわせる', hint: 'お顔が 切れないように よせるよ' },
+    { id: 'center', label: 'まんなか', hint: 'しゃしんの まんなかを 切り取るよ' },
+    { id: 'contain', label: 'ぜんぶ 入れる', hint: '切らずに ぜんぶ 入れる（よはくが 出るよ）' },
+  ];
+  const photoFit = () => (state.mode === 'heisei' ? 'center' : (state.photoFit || 'face'));
+
+  /* その写真で「切りたくない中心」を返す（0〜1の正規化座標）。顔が取れなければ null。
+     顔の高さの2割ぶん上に寄せる: 前髪と髪の生えぎわが落ちると別人に見えるため */
+  function shotFocus(i) {
+    const faces = state.faceData && state.faceData[i];
+    if (!faces || !faces.length) return null;
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    faces.forEach((pts) => {
+      if (!pts || !pts.length) return;
+      pts.forEach((p) => {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      });
+    });
+    if (!(maxX > minX) || !(maxY > minY)) return null;
+    return { x: (minX + maxX) / 2, y: Math.max(0, (minY + maxY) / 2 - (maxY - minY) * 0.20) };
+  }
+
+  /* セルへ1枚ぶんを描く。shotIdx は「顔に あわせる」で顔の位置を引くための撮影順インデックス。
+     bg を渡すと「ぜんぶ入れる」のよはくをその色で塗る（渡さなければ透明のまま） */
+  function drawShotFit(ctx, img, x, y, w, h, shotIdx, bg) {
+    const sw = img.videoWidth || img.width, sh = img.videoHeight || img.height;
+    if (!sw || !sh) { ctx.drawImage(img, x, y, w, h); return; }
+    const fit = photoFit();
+    if (fit === 'contain') {
+      if (bg) { ctx.save(); ctx.fillStyle = bg; ctx.fillRect(x, y, w, h); ctx.restore(); }
+      const s = Math.min(w / sw, h / sh);
+      const dw = sw * s, dh = sh * s;
+      ctx.drawImage(img, 0, 0, sw, sh, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      return;
+    }
+    const scale = Math.max(w / sw, h / sh);
+    const cw = w / scale, ch = h / scale;
+    let sx = (sw - cw) / 2, sy = (sh - ch) / 2;
+    if (fit === 'face') {
+      const f = shotFocus(shotIdx);
+      if (f) {
+        sx = Math.max(0, Math.min(sw - cw, f.x * sw - cw / 2));
+        sy = Math.max(0, Math.min(sh - ch, f.y * sh - ch / 2));
+      }
+    }
+    ctx.drawImage(img, sx, sy, cw, ch, x, y, w, h);
+  }
+
   /* ---------- 選んだ「シールのカラー」「フレーム」を見える形にする道具
      （2026-08-14 実機テスト指摘「フレームと、シールのカラー機能が全く機能していない」対応） ----------
      🚨 直した理由をここに残す。以前も frame / curtain は合成に結線されていた（＝コードは動いていた）。
@@ -4102,10 +4171,12 @@
       ctx.save();
       cellPath();
       ctx.clip();
+      // 「おさまり」は写真と落書きで必ず同じ関数・同じ引数を通す（2026-08-17 指摘②）
+      const si = order[i % order.length];
       if (isCircle) {
-        drawCover(ctx, shotCanvas, cx - rad, cy - rad, rad * 2, rad * 2);
+        drawShotFit(ctx, shotCanvas, cx - rad, cy - rad, rad * 2, rad * 2, si, '#ffffff');
       } else {
-        drawCover(ctx, shotCanvas, x, y, cw, chh);
+        drawShotFit(ctx, shotCanvas, x, y, cw, chh, si, '#ffffff');
       }
       ctx.restore();
 
@@ -5679,13 +5750,29 @@
   /* ---------- シールに載せる写真えらび（2026-08-13 実機テスト指摘対応） ----------
      2枚ワイド/6分割などで「4枚のどれがシールに載るか」が選べなかった。
      らくがきスタート前のゲートにサムネイルを並べ、タップで選ぶ（選んだ順に並ぶ）。
-     デフォルトは撮影順＝従来と同じ。タイマー開始前なので持ち時間は減らない。 */
+     デフォルトは撮影順＝従来と同じ。タイマー開始前なので持ち時間は減らない。
+
+     🚨 2026-08-17 JKモニター指摘①「2分割で4枚写真撮ったのに選べない」。
+     UIは去年から出ていて、押せば動いていた。**選べなかった理由は初期状態の方**だった:
+       ・2枚ワイド（2マス）でも最初から4枚すべてが選択済みで並ぶ
+       ・のせたい3枚目をタップすると「選ぶ」ではなく「はずす」が起きる（すでに選択済みのため）
+       ・タップして写真が薄くなるので、客には「消えた／壊れた」に見える
+     → 初期選択を **そのぶんかつのマス数ぶん** にした。2マスなら1・2だけが点いた状態で始まり、
+       3枚目をタップすれば素直に「選ぶ」になる。あわせて凡例・できあがり見本・
+       落書き中の開き直しを足した（通り過ぎたら二度と戻れないのも「選べない」の一部だった）。 */
+  function defaultPhotoPick(shotCount) {
+    const cellCount = layoutCells(state.layout).length;
+    const n = Math.max(1, Math.min(shotCount, cellCount));
+    return Array.from({ length: n }, (_, i) => i);
+  }
+
   function buildPhotoPick() {
     const row = $('#photo-pick');
     if (!row) return;
     const shots = state.processedShots.length ? state.processedShots : state.shots;
-    if (!state.photoPick || !state.photoPick.length) state.photoPick = shots.map((_, i) => i);
+    if (!state.photoPick || !state.photoPick.length) state.photoPick = defaultPhotoPick(shots.length);
     state.photoPick = state.photoPick.filter(i => i < shots.length);
+    if (!state.photoPick.length) state.photoPick = defaultPhotoPick(shots.length);
     row.innerHTML = '';
     shots.forEach((shot, i) => {
       const b = document.createElement('button');
@@ -5712,7 +5799,29 @@
       });
       row.appendChild(b);
     });
+    buildPhotoFitRow();
     refreshPhotoPick();
+  }
+
+  /* 「おさまり」の選択（令和のみ・2026-08-17 指摘②「4分割で写真が切れちゃうのが悲しい」） */
+  function buildPhotoFitRow() {
+    const row = $('#photo-fit-row');
+    if (!row) return;
+    row.innerHTML = '';
+    PHOTO_FITS.forEach((f) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fit-btn' + (f.id === photoFit() ? ' active' : '');
+      b.dataset.fit = f.id;
+      b.textContent = f.label;
+      b.addEventListener('click', () => {
+        state.photoFit = f.id;
+        playSound('seTap');
+        composeSheet();
+        refreshPhotoPick();
+      });
+      row.appendChild(b);
+    });
   }
 
   function refreshPhotoPick() {
@@ -5726,19 +5835,46 @@
       b.classList.toggle('on', on);
       // 選んだ順がマス数を超えた分（このレイアウトでは載らない）は半点灯で知らせる
       b.classList.toggle('spare', on && at >= cellCount);
-      b.querySelector('.pp-num').textContent = on ? String(at + 1) : '';
+      b.querySelector('.pp-num').textContent = on ? String(at + 1) : '＋';
     });
     const hint = $('#photo-pick-hint');
-    if (!hint) return;
-    if (cellCount < state.photoPick.length) {
-      /* D-8（2026-08-15 柄本仕様書）: 「4まい のるよ」だけでは5枚目以降が捨てられることが
-         読み取れなかった（半点灯で示してはいるが、その凡例が画面のどこにも無い） */
-      hint.textContent = `このぶんかつは ${cellCount}マス。えらんだ じゅんに さいしょの${cellCount}まいが のるよ（のこりは のらないよ）`;
-    } else if (cellCount > state.photoPick.length) {
-      hint.textContent = `えらんだ ${state.photoPick.length}まいが じゅんばんに くりかえし ならぶよ`;
-    } else {
-      hint.textContent = 'えらんだ じゅんばんに ならぶよ';
+    if (hint) {
+      /* 凡例を必ず1行目に出す（2026-08-17）。「タップで えらぶ／もういちど タップで はずす」を
+         書いていなかったのが、指摘①で客が手を止めた場所 */
+      const legend = 'タップで えらぶ・もういちどで はずす。';
+      if (cellCount < state.photoPick.length) {
+        /* D-8（2026-08-15 柄本仕様書）: 「4まい のるよ」だけでは5枚目以降が捨てられることが
+           読み取れなかった（半点灯で示してはいるが、その凡例が画面のどこにも無い） */
+        hint.textContent = `${legend}このぶんかつは ${cellCount}マス。えらんだ じゅんに さいしょの${cellCount}まいが のるよ（のこりは のらないよ）`;
+      } else if (cellCount > state.photoPick.length) {
+        hint.textContent = `${legend}えらんだ ${state.photoPick.length}まいが じゅんばんに くりかえし ならぶよ`;
+      } else {
+        hint.textContent = `${legend}えらんだ ${state.photoPick.length}まいが じゅんばんに ならぶよ`;
+      }
     }
+    const fitRow = $('#photo-fit-row');
+    if (fitRow) {
+      const cur = photoFit();
+      fitRow.querySelectorAll('.fit-btn').forEach(b => b.classList.toggle('active', b.dataset.fit === cur));
+      const fh = $('#photo-fit-hint');
+      const meta = PHOTO_FITS.find(f => f.id === cur);
+      if (fh && meta) fh.textContent = meta.hint;
+    }
+    drawPhotoPickPreview();
+  }
+
+  /* できあがり見本（2026-08-17）: シールの合成結果をその場で小さく見せる。
+     指摘②の「切れちゃう」は**印刷まで見えなかった**のが本体。ここで見えれば選び直せる */
+  function drawPhotoPickPreview() {
+    const cv = $('#photo-pick-preview');
+    if (!cv || !sheetCanvas.width) return;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const s = Math.min(cv.width / SHEET_W, cv.height / SHEET_H);
+    const dw = SHEET_W * s, dh = SHEET_H * s;
+    // 落書き済みなら落書きも載せた姿を見せる（開き直したときは描いた分が入っている）
+    composeFinal();
+    ctx.drawImage(finalCanvas, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
   }
 
   function startDecoScreen() {
@@ -5773,15 +5909,20 @@
     /* シールに載せる写真えらびは令和専用（2026-08-13 オーナー裁定・era-designer乖離監査B-2）:
        1999〜2003年の実機は「撮った写真がそのまま落書きへ」＝撮影順固定。平成はUIごと出さない */
     const pickOn = state.mode !== 'heisei';
-    ['#photo-pick-note', '#photo-pick', '#photo-pick-hint'].forEach(sel => {
-      const el = $(sel);
-      if (el) el.style.display = pickOn ? '' : 'none';
-    });
+    const panel = $('#photo-pick-panel');
+    if (panel) panel.style.display = pickOn ? '' : 'none';
+    const againGroup = $('#group-photo-pick');
+    if (againGroup) againGroup.style.display = pickOn ? '' : 'none';
     if (pickOn) {
+      state.photoFit = 'face'; // 次の客に前の客のおさまりを持ち越さない
       buildPhotoPick(); // シールに載せる写真えらび（タイマー開始前に済ませる）
     } else {
       state.photoPick = null; // 平成は撮影順固定
     }
+    $('#deco-gate-title').textContent = 'らくがき、はじめる？';
+    $('#deco-gate-note').classList.remove('hidden');
+    $('#btn-deco-start').classList.remove('hidden');
+    $('#btn-photo-pick-close').classList.add('hidden');
     $('#deco-start-gate').classList.remove('hidden');
     /* ゲートの案内（2026-08-15 追加ボイスパック）。令和はこのゲートに
        「シールに載せる写真えらび」があるので、1本目に続けて2本目を繋ぐ */
@@ -5796,6 +5937,31 @@
     // 08_deco_start のあとに続けて「写真は1枚ずつ大きく描ける」を鳴らす（2026-08-15）
     chainAnnounce('decoStart', state.mode === 'heisei' ? 'decoPhotoSwitchH' : 'decoPhotoSwitchR');
     startDecoTimer();
+  });
+
+  /* 落書き中に「のせる写真・おさまり」を開き直す（令和のみ・2026-08-17 指摘①②）。
+     ⚠️ タイマーは止めない。止めると「開けば時間が止まる」抜け道になり、
+     文化祭の回転率が壊れる（延長は下の「もうちょっと描く」で1回だけと決めている）。
+     開いている間は描けなくする（ゲートの下の写真に指が当たると線が入るため）。 */
+  const btnPickAgain = $('#btn-photo-pick-again');
+  if (btnPickAgain) {
+    btnPickAgain.addEventListener('click', () => {
+      if (state.mode === 'heisei' || decoFinished) return;
+      drawCanvas.style.pointerEvents = 'none';
+      clearEditSel();
+      buildPhotoPick();
+      $('#deco-gate-title').textContent = 'のせる しゃしんを えらび直す';
+      $('#deco-gate-note').classList.add('hidden');
+      $('#btn-deco-start').classList.add('hidden');
+      $('#btn-photo-pick-close').classList.remove('hidden');
+      $('#deco-start-gate').classList.remove('hidden');
+      playAnnounce('photoPickR');
+    });
+  }
+  $('#btn-photo-pick-close').addEventListener('click', () => {
+    $('#deco-start-gate').classList.add('hidden');
+    if (state.remaining > 0 && !decoFinished) drawCanvas.style.pointerEvents = 'auto';
+    stopVoice();
   });
 
   function startDecoTimer() {
@@ -5940,10 +6106,11 @@
         roundRect(ctx, x, y, w, h, radius);
       }
       ctx.clip();
+      // 写真と同じ「おさまり」で載せる。ここがずれると落書きだけが写真から浮く
       if (isCircle) {
-        drawCover(ctx, rendered[di], cx - rad, cy - rad, rad * 2, rad * 2);
+        drawShotFit(ctx, rendered[di], cx - rad, cy - rad, rad * 2, rad * 2, di);
       } else {
-        drawCover(ctx, rendered[di], x, y, w, h);
+        drawShotFit(ctx, rendered[di], x, y, w, h, di);
       }
       ctx.restore();
     });
@@ -6350,12 +6517,14 @@
         for (let c = 0; c < cols; c++) {
           const x = margin + c * (cw + gap);
           const y = yTop + r * (chh + gap);
-          const shot = shots[(r * cols + c) % shots.length];
+          const si = (r * cols + c) % shots.length;
+          const shot = shots[si];
           ctx.save();
           ctx.beginPath();
           ctx.rect(x, y, cw, chh);
           ctx.clip();
-          drawCover(ctx, shot, x, y, cw, chh);
+          // 16分割も本体シールと同じ「おさまり」に従う（2026-08-17 指摘②）
+          drawShotFit(ctx, shot, x, y, cw, chh, si, '#ffffff');
           ctx.restore();
           // 1枚ずつにカラーの枠とフレームのモチーフを載せる（本体シールと同じ載り方）
           drawCellDecor(ctx, { x, y, w: cw, h: chh }, { emoji, isCircle: false, radius: 0 });
@@ -6412,7 +6581,8 @@
         { x: 802, y: 1040 + cardH / 2, rot: -2.5 },
       ];
       centers.forEach((pos, i) => {
-        const shot = shots[i % shots.length];
+        const si = i % shots.length;
+        const shot = shots[si];
         ctx.save();
         ctx.translate(pos.x, pos.y);
         ctx.rotate(pos.rot * Math.PI / 180);
@@ -6422,7 +6592,7 @@
         roundRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 8);
         ctx.fill();
         ctx.shadowBlur = 0;
-        drawCover(ctx, shot, -pw / 2, -cardH / 2 + padT, pw, ph);
+        drawShotFit(ctx, shot, -pw / 2, -cardH / 2 + padT, pw, ph, si, '#ffffff');
         /* フレームのモチーフをこの版にも載せる（2026-08-14 実機テスト指摘対応）。
            たて長ver.はカラーだけ結線されていて、フレームは一度も参照していなかった。
            カードは回転しているので、回転した座標系のまま写真の枠へ描く */
@@ -6866,6 +7036,14 @@
        外から play/pause を計装して数える方法は、クリップ長が取れない環境で当てにならない。
        バスが記録した「鳴り始め〜止まった/終わった」の区間どうしの重なりを返す。
        戻り値が [] であることが「声は同時に1本」の機械的な証拠になる */
+    // セルへの「おさまり」の検証用（2026-08-17 指摘②）
+    drawShotFit, shotFocus, PHOTO_FITS, layoutCells, LAYOUTS,
+    setPhotoFit: (v) => { state.photoFit = v; },
+    setLayout: (id) => { state.layout = LAYOUTS.find(l => l.id === id) || LAYOUTS[0]; },
+    photoPick: () => state.photoPick || [],
+    // 顔の位置を差し替えて「顔にあわせる」の寄せ方を測る（正規化座標の1点だけの偽ランドマーク）
+    setFakeFace: (pt) => { state.faceData = pt ? [[[{ x: pt.x - 0.08, y: pt.y - 0.1 }, { x: pt.x + 0.08, y: pt.y + 0.1 }]]] : []; },
+    setRemaining: (s) => { state.remaining = s; },
     voiceHistory: () => voiceHistory.map(v => ({ ...v })),
     voiceOverlaps: () => {
       const now = performance.now();

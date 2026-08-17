@@ -528,13 +528,37 @@ body[data-mode="reiwa"] .deco-gate-title { color: #8a7568; }
   border-radius: 999px; background: #ff4fae; color: #fff;
   font-size: 13px; font-weight: 900; line-height: 20px; text-align: center;
 }
-.pp-item:not(.on) .pp-num { display: none; }
-.photo-pick-hint { font-size: 12px; color: #777; margin: 0 0 14px; min-height: 1em; }
+/* 未選択にも「＋」を出す（2026-08-17 指摘①）。何もない灰色の板は「選べるもの」に見えない */
+.pp-item:not(.on) .pp-num { background: rgba(0,0,0,.42); }
+.photo-pick-hint { font-size: 12px; line-height: 1.5; color: #777; margin: 0 0 12px; min-height: 1em; }
 body.theme-heisei .pp-item.on { border-color: var(--h-pink); }
-body.theme-heisei .pp-num { background: var(--h-pink); }
+body.theme-heisei .pp-item.on .pp-num { background: var(--h-pink); }
 body.theme-reiwa .pp-item { border-radius: 3px; }
 body.theme-reiwa .pp-item.on { border-color: var(--r-accent); }
-body.theme-reiwa .pp-num { background: var(--r-accent); }
+body.theme-reiwa .pp-item.on .pp-num { background: var(--r-accent); }
+
+/* のせる写真・おさまり・できあがり見本（2026-08-17 JKモニター指摘①②） */
+.photo-pick-panel { margin: 0 0 12px; }
+.photo-pick-cols { display: flex; gap: 12px; align-items: flex-start; justify-content: center; }
+.photo-pick-left { flex: 1 1 auto; min-width: 0; }
+.photo-pick-right { flex: 0 0 auto; }
+.photo-pick-preview {
+  width: 102px; height: 135px; display: block;
+  background: rgba(0,0,0,.06); border: 2px solid rgba(0,0,0,.12);
+}
+body.theme-reiwa .photo-pick-preview { border-color: rgba(168,145,125,.5); }
+.photo-fit-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 0 0 6px; }
+.fit-btn {
+  padding: 7px 9px; font-size: 12px; font-weight: 800; line-height: 1.2;
+  border: 2px solid #ccc; border-radius: 9px; background: #fff; color: #666; cursor: pointer;
+  min-height: 36px;
+}
+.fit-btn.active { border-color: #ff4fae; background: #ffe8f4; color: #c02a7a; }
+body.theme-heisei .fit-btn.active { border-color: var(--h-pink); }
+body.theme-reiwa .fit-btn { border-radius: 3px; }
+body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #efe7dc; color: #6d5c4d; }
+/* 落書き中に開き直すボタン（令和のみ・道具箱の先頭） */
+.photo-pick-again { width: 100%; font-size: 12px; line-height: 1.35; }
 #flash-canvas { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .countdown-num {
   position: absolute; inset: 0;

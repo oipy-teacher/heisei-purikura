@@ -293,13 +293,32 @@
     <div class="deco-wrap">
       <div id="deco-start-gate" class="deco-gate hidden">
         <div class="deco-gate-inner">
-          <p class="deco-gate-title">らくがき、はじめる？</p>
-          <!-- シールに載せる写真えらび（2026-08-13 実機テスト指摘対応） -->
-          <p class="photo-pick-note" id="photo-pick-note">シールにのせる しゃしんを タップでえらべるよ</p>
-          <div id="photo-pick" class="photo-pick"></div>
-          <p class="photo-pick-hint" id="photo-pick-hint"></p>
-          <p class="deco-gate-note">おしたらタイマーがスタートするよ。<br>すわって、おちついてからでOK！</p>
+          <p class="deco-gate-title" id="deco-gate-title">らくがき、はじめる？</p>
+          <!-- シールに載せる写真えらび（2026-08-13 実機テスト指摘対応）
+               2026-08-17 JKモニター指摘①②で作り直し。指摘は
+               「2分割で4枚撮ったのに選べない」「4分割で写真が切れちゃうのが悲しい」。
+               ・並べるだけでは「タップではずせる」と読めない → ①②の手順と凡例を付けた
+               ・切り取られ方が印刷まで見えない → できあがりの見本をその場に出した -->
+          <div id="photo-pick-panel" class="photo-pick-panel">
+            <div class="photo-pick-cols">
+              <div class="photo-pick-left">
+                <p class="photo-pick-note" id="photo-pick-note">① のせる しゃしん</p>
+                <div id="photo-pick" class="photo-pick"></div>
+                <p class="photo-pick-hint" id="photo-pick-hint"></p>
+              </div>
+              <div class="photo-pick-right">
+                <p class="photo-pick-note">できあがり</p>
+                <canvas id="photo-pick-preview" class="photo-pick-preview" width="204" height="270"></canvas>
+              </div>
+            </div>
+            <p class="photo-pick-note" id="photo-fit-note">② しゃしんの おさまり</p>
+            <div id="photo-fit-row" class="photo-fit-row"></div>
+            <p class="photo-pick-hint" id="photo-fit-hint"></p>
+          </div>
+          <p class="deco-gate-note" id="deco-gate-note">おしたらタイマーがスタートするよ。<br>すわって、おちついてからでOK！</p>
           <button id="btn-deco-start" class="btn-main">▶ らくがきスタート</button>
+          <!-- 落書き中に開き直したときだけ出す戻り口（タイマーは走ったまま） -->
+          <button id="btn-photo-pick-close" class="btn-main hidden">◀ らくがきに もどる</button>
         </div>
       </div>
       <div class="deco-header">
@@ -345,6 +364,12 @@
         </div>
 
         <div class="deco-toolbar">
+          <!-- 令和のみ: のせる写真・おさまりを描いている途中でも開き直せる（2026-08-17 指摘①②）。
+               ゲートは一度きりで、通り過ぎたら二度と戻れないのが「選べない」の正体だった -->
+          <div class="tool-group" id="group-photo-pick">
+            <p class="tool-label"><span class="tl-emoji">🖼</span> しゃしん</p>
+            <button id="btn-photo-pick-again" class="btn-small photo-pick-again">のせる しゃしん・おさまりを えらび直す</button>
+          </div>
           <div class="tool-group">
             <p class="tool-label"><span class="tl-emoji">✏️</span><img class="tl-icon" src="assets/reiwa-icon-pen.svg" alt=""> ペン</p>
             <div class="pen-type-row" id="pen-type-row">
