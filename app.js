@@ -323,6 +323,11 @@
   let currentScreenId = 'screen-title';
 
   function showScreen(id) {
+    /* 声は「その画面のもの」（2026-08-17 JKモニター指摘⑥の構造対策）。
+       画面が変わったら、前の画面の声と予約は必ず黙る。これを結線側の気づかいに任せると、
+       画面を1つ足すたびに重なりの経路が1本増える。ここで断ち切っておけば増えようがない。
+       ⚠️ どの画面も「showScreen → その画面の案内を鳴らす」の順で書くこと（逆に書くと消える）。 */
+    if (typeof stopVoice === 'function' && id !== currentScreenId) stopVoice();
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[id].classList.add('active');
     currentScreenId = id;
@@ -615,11 +620,86 @@
     } catch (e) { return false; }
   }
 
+  /* ===================== 声のバス（voice bus・2026-08-17 JKモニター指摘⑥） =====================
+     🚨 「起動したときの音声がごちゃごちゃで聞き取りにくい」は**3回目**の同じ指摘。
+     過去2回の修正が効かなかった理由は、直した対象が「案内ボイスの経路」だけだったこと。
+     今回このセッションの再生ログを実測して、残っていたかぶりの正体が分かった:
+
+       reiwa_camera_ready(5.35秒) × intro_shot1  … 「カメラ、オッケー！」の途中で撮影が始まる
+       pose_04(2.02秒)            × 13_beauty    … ポーズ提案の途中で盛り画面へ進む
+
+     どちらも案内チャンネル（旧 playAnnounce）を**一切知らない別経路**
+     （撮影の前置き・ポーズ提案＝playSoundAwait の生の `a.play()`）が鳴らしていた。
+     案内側をいくら固めても、もう1本の経路が黙っていないのだから直るはずがない。
+
+     → **声を鳴らす窓口をこの1つに統合する。**「気をつけて呼ぶ」ではなく、
+       声のファイルは playVoice() を通らないと鳴らせない、という形にした。
+         ・新しい声が鳴る前に、いま鳴っている声を必ず止める（要素の参照で持つ）
+         ・遅延・連鎖の予約は voiceTimers に集約し、止めるときに全部取り消す
+         ・画面が変わったら前の画面の声は黙る（showScreen が stopVoice を呼ぶ）
+         ・連鎖は「1本目の ended を実際に待つ」。保険タイマーは実測長より**必ず後ろ**に置く
+           （旧 chainAnnounce の保険は4.2秒固定で、4.92秒の reiwa_deco_gate では
+            保険の方が先に来て自分で自分にかぶせていた）
+         ・効果音（SE_KEYS）とBGMはバスの外＝声と同時に鳴ってよい（かぶってよい音）
+     検証: `__puriDebug.voiceOverlaps()` がアプリ自身の記録から重なり区間を数えて返す。 */
+  const SE_KEYS = new Set(['seTap', 'seDecide', 'seShutter']);
+  const isVoiceKey = (key) => !SE_KEYS.has(key);
+  let voiceTimers = [];
+  let voiceCleanups = [];   // ended待ちなどの後始末（stopVoiceでまとめて外す）
+  let curVoice = null;      // いま鳴っている声のAudio要素
+  let curVoiceKey = null;
+  const voiceHistory = [];  // 検証用: { key, start, end }（endはstop/ended時に確定）
+
+  function queueVoice(fn, ms) {
+    const id = setTimeout(() => {
+      voiceTimers = voiceTimers.filter(t => t !== id);
+      fn();
+    }, ms);
+    voiceTimers.push(id);
+    return id;
+  }
+  function closeVoiceHistory() {
+    const last = voiceHistory[voiceHistory.length - 1];
+    if (last && last.end == null) last.end = performance.now();
+  }
+  function stopVoice() {
+    voiceTimers.forEach(clearTimeout);
+    voiceTimers = [];
+    voiceCleanups.forEach(fn => { try { fn(); } catch (e) { /* 後始末の失敗は無視 */ } });
+    voiceCleanups = [];
+    if (curVoice) {
+      try { curVoice.pause(); curVoice.currentTime = 0; } catch (e) { /* 停止失敗は無視 */ }
+    }
+    closeVoiceHistory();
+    curVoice = null;
+    curVoiceKey = null;
+  }
+  /* 声を1本鳴らす。**声はすべてここを通る**（案内も、撮影の前置きも、ポーズ提案も、カウントも）。
+     戻り値は鳴らし始めたAudio要素（鳴らせなかったときは null） */
+  function playVoice(key, onFail) {
+    stopVoice();
+    const a = sounds[key];
+    if (!a || soundMissing(key)) return null;
+    a.muted = false; // unlockAudioのミュート解錠と同時になっても本物の再生が消音されないように（2026-08-13）
+    try { a.currentTime = 0; } catch (e) { /* 未読込のときは無視 */ }
+    // 再生拒否を握りつぶさない（撮影の同期待ちは「鳴らなかった」を知る必要がある）
+    a.play().catch(() => { if (onFail) onFail(); });
+    curVoice = a;
+    curVoiceKey = key;
+    voiceHistory.push({ key, start: performance.now(), end: null });
+    if (voiceHistory.length > 200) voiceHistory.shift();
+    const onEnd = () => { if (curVoice === a) { closeVoiceHistory(); curVoice = null; curVoiceKey = null; } };
+    a.addEventListener('ended', onEnd, { once: true });
+    voiceCleanups.push(() => a.removeEventListener('ended', onEnd));
+    return a;
+  }
+
   function playSound(key) {
-    if (waPlay(key)) return; // 短尺はWebAudio優先（iOS対策）。未解錠/未デコードなら従来経路へ
+    if (isVoiceKey(key)) { playVoice(key); return; } // 声はバス経由（重なりようがない）
+    if (waPlay(key)) return; // 効果音の短尺はWebAudio優先（iOS対策）。未解錠/未デコードなら従来経路へ
     const a = sounds[key];
     if (!a || soundMissing(key)) return;
-    a.muted = false; // unlockAudioのミュート解錠と同時になっても本物の再生が消音されないように（2026-08-13）
+    a.muted = false;
     a.currentTime = 0;
     a.play().catch(() => { /* 自動再生がブロックされた場合は無視 */ });
   }
@@ -630,47 +710,53 @@
     if (fallbackKey) playSound(fallbackKey);
   }
 
-  /* ---------- 画面案内ボイスの専用チャンネル（2026-08-14 実機指摘「令和で声のダブり再発」対応） ----------
-     案内ボイス（呼び込み・コース選択・盛りチェック・らくがきスタート等）は同時に1本だけ、を
-     結線の注意ではなく仕組みで保証する。新しい案内を鳴らすときは、
-     ①前の案内の再生を止める ②予約済みの後続タイマー（旧3本チェーン等）を全て取り消す。
-     どの画面からどの画面へどんな順で移っても、案内どうしが重なる経路が存在しなくなる */
-  let announceTimers = [];
-  let curAnnounce = null;
-  function stopAnnounce() {
-    announceTimers.forEach(clearTimeout);
-    announceTimers = [];
-    if (curAnnounce) {
-      try { curAnnounce.pause(); curAnnounce.currentTime = 0; } catch (e) { /* 停止失敗は無視 */ }
-      curAnnounce = null;
-    }
-  }
-  function playAnnounce(key) {
-    stopAnnounce();
-    const a = sounds[key];
-    if (!a || soundMissing(key)) return;
-    a.muted = false;
-    a.currentTime = 0;
-    a.play().catch(() => {});
-    curAnnounce = a;
-  }
-  // 案内の後続を予約する（stopAnnounceでまとめて取り消せる）
-  function queueAnnounce(fn, ms) {
-    announceTimers.push(setTimeout(fn, ms));
-  }
+  /* 旧名の窓口はそのまま残す（呼び出し側を全部書き換えると差分が読めなくなるため）。
+     中身はすべて上のバスに委ねている＝経路は1本 */
+  const stopAnnounce = stopVoice;
+  const playAnnounce = playVoice;
+  const queueAnnounce = queueVoice;
   /* モード別ボイスの選択（2026-08-15 追加ボイスパック）。
      `decoGate` を渡すと平成なら decoGateH・令和なら decoGateR を鳴らす。
      片側しか無いもの（moriageLevelR 等）はキーを直接 playAnnounce に渡すこと */
   function announceByMode(base) {
     playAnnounce(base + (state.mode === 'heisei' ? 'H' : 'R'));
   }
-  /* 「1本目のあとに続けて2本目」を安全に繋ぐ。
-     playAnnounce を2回続けて呼ぶと1本目が即座に切れるため、
-     1本目の実測長ぶん待ってから2本目を予約する（stopAnnounceで一括取り消し可能）。
-     長さが取れない環境では既定値で繋ぐ（鳴らないより、少し重なる方がマシ、にはしない設計） */
+  /* 「1本目のあとに続けて2本目」を繋ぐ（2026-08-17 作り替え）。
+     🚨 旧実装は「実測長が取れなければ4.2秒後」の**時間任せ**だった。
+     実測すると reiwa_deco_gate は 4.92秒・reiwa_moriage_level は 5.30秒あり、
+     読み込みが間に合わずに長さが 0 で返る回は、保険の方が本編より先に来て
+     **自分で自分にかぶせていた**（470ms／854ms）。時間で当てにいくのをやめ、
+     ①1本目の ended を実際に待つ ②保険は「まだ鳴っていたら繋がず様子を見直す」
+     の2段構えにする。1本目がもうバスの上に居ない（別の声に切られた）ときは繋がない。 */
   function chainAnnounce(firstKey, secondKey, gapMs = 250, fallbackMs = 4200) {
+    const a = sounds[firstKey];
+    // 1本目が鳴らせない回は待つ意味が無いので、そのまま2本目へ
+    if (!a || soundMissing(firstKey) || curVoiceKey !== firstKey) {
+      queueVoice(() => playVoice(secondKey), gapMs);
+      return;
+    }
+    let fired = false;
+    const go = () => {
+      if (fired) return;
+      if (curVoiceKey !== firstKey) return; // 1本目が別の声に切られた＝この連鎖は用済み
+      fired = true;
+      playVoice(secondKey);
+    };
+    const onEnd = () => go();
+    a.addEventListener('ended', onEnd, { once: true });
+    voiceCleanups.push(() => a.removeEventListener('ended', onEnd));
+    /* 保険（ended が来ない環境用）: まだ鳴っている間は絶対に繋がず、
+       0.6秒ごとに見直す。上限を切って、詰まったまま無限に見張り続けないようにする */
     const d = soundDurationMs(firstKey);
-    queueAnnounce(() => playAnnounce(secondKey), (d > 0 ? d : fallbackMs) + gapMs);
+    let looks = 0;
+    const watch = () => {
+      if (fired || curVoiceKey !== firstKey) return;
+      const stillPlaying = !a.paused && !a.ended;
+      if (!stillPlaying || looks >= 12) { go(); return; }
+      looks++;
+      queueVoice(watch, 600);
+    };
+    queueVoice(watch, (d > 0 ? d : fallbackMs) + gapMs);
   }
   /* 「その回はじめて」だけ鳴らす案内の管理（音羽さんの注意3）。
      道具を持ち替えるたびに喋ると、3分の落書きタイムが説明で埋まる。
@@ -703,14 +789,18 @@
     return d > 0 ? d : 0;
   }
 
-  // 撮影カウントダウン用：セリフの再生が実際に終わるまで待つ（＝見た目とボイスを完全に同期させる）
-  // nominalMs は音声が使えない環境での「見た目の間」（無音でもテンポが速すぎ/遅すぎにならない値）
+  /* 撮影カウントダウン用：セリフの再生が実際に終わるまで待つ（＝見た目とボイスを完全に同期させる）
+     nominalMs は音声が使えない環境での「見た目の間」（無音でもテンポが速すぎ/遅すぎにならない値）
+     🚨 2026-08-17: ここは以前 `a.play()` を直接叩いていた＝**声のバスの外**だった。
+     そのため「カメラ、オッケー！」（5.35秒）の途中で撮影を始めると前置きと重なり、
+     4枚目のポーズ提案の途中で盛り画面へ進むと盛りの案内と重なっていた（実測）。
+     いまは playVoice を通すので、鳴らした瞬間に前の声が必ず止まる。 */
   function playSoundAwait(key, nominalMs = 700) {
     const a = sounds[key];
-    if (!a || soundMissing(key)) return Promise.resolve();
+    if (!a || soundMissing(key)) { stopVoice(); return Promise.resolve(); }
     if (voiceGaveUp) {
       // 鳴るかもしれないので再生自体は試すが、待ちは固定時間（96秒化の再発防止）
-      try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+      playVoice(key);
       return sleep(nominalMs);
     }
     return new Promise((resolve) => {
@@ -726,9 +816,7 @@
       };
       const onEnded = () => finish(false);
       a.addEventListener('ended', onEnded);
-      a.muted = false; // 解錠レースの消音が残っていても本物の再生が無音にならないように（2026-08-13）
-      a.currentTime = 0;
-      a.play().catch(() => finish(true));
+      if (!playVoice(key, () => finish(true))) { finish(true); return; } // バス経由（前の声を止めてから鳴らす）
       // 保険: クリップ実測長+350ms・長さ不明なら1.5秒（旧4秒は無音環境で1枚25秒に化けた）。
       // 実測長より長くは待たないので、正常時にセリフを切ることはない
       const clip = soundDurationMs(key);
@@ -848,8 +936,8 @@
     attractOverlay.classList.add('hidden');
     if (attractSlideId) { clearInterval(attractSlideId); attractSlideId = null; }
     if (attractCallId) { clearTimeout(attractCallId); attractCallId = null; }
-    const call = sounds.attractCall;
-    if (call) { call.pause(); call.currentTime = 0; }
+    // 呼び込みもバスの上の声なので、バスごと黙らせる（要素を直接止めるとバスの帳簿がずれる）
+    if (curVoiceKey === 'attractCall') stopVoice();
   }
 
   if (sounds.attractCall) {
@@ -1989,7 +2077,9 @@
        すぐ起動する端末で鳴らすと、直後の cameraReady に即座に切られて
        言いかけで途切れた音になる。1.2秒たっても起動しないときが「待たされた」 */
     if (camWaitVoiceId) clearTimeout(camWaitVoiceId);
-    camWaitVoiceId = setTimeout(() => { camWaitVoiceId = null; announceByMode('cameraWait'); }, 1200);
+    /* 予約は声のバスに載せる（2026-08-17）。生の setTimeout だと、客が「えらび直す」で
+       コース選択へ戻ったあとに「カメラ、じゅんび中ー！」だけが追いかけて鳴る */
+    camWaitVoiceId = queueVoice(() => { camWaitVoiceId = null; announceByMode('cameraWait'); }, 1200);
     try {
       state.stream = await acquireCamera(facing);
       video.srcObject = state.stream;
@@ -2225,11 +2315,8 @@
          再生は常に試みる（playSoundAwait の gaveUp 分岐と同じ扱い）。
          muted=false も明示する（unlockAudio の解錠が残っても消音で鳴らないことがないように） */
       if (!waPlay(step.key)) {
-        // WebAudioが使えない環境だけ従来のHTMLAudioで鳴らす
-        const a = sounds[step.key];
-        if (a && !soundMissing(step.key)) {
-          try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
-        }
+        // WebAudioが使えない環境だけ従来のHTMLAudioで鳴らす（こちらも声のバス経由・2026-08-17）
+        playVoice(step.key);
       }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
@@ -6775,6 +6862,23 @@
     startAttract,
     stopAttract,
     // WebAudio経路の検証用（iOS音声対策・2026-08-13）
+    /* 声のかぶりを **アプリ自身の帳簿** で数える（2026-08-17）。
+       外から play/pause を計装して数える方法は、クリップ長が取れない環境で当てにならない。
+       バスが記録した「鳴り始め〜止まった/終わった」の区間どうしの重なりを返す。
+       戻り値が [] であることが「声は同時に1本」の機械的な証拠になる */
+    voiceHistory: () => voiceHistory.map(v => ({ ...v })),
+    voiceOverlaps: () => {
+      const now = performance.now();
+      const sp = voiceHistory.map(v => ({ key: v.key, a: v.start, b: v.end == null ? now : v.end }));
+      const out = [];
+      for (let i = 0; i < sp.length; i++) {
+        for (let j = i + 1; j < sp.length; j++) {
+          const ov = Math.min(sp[i].b, sp[j].b) - Math.max(sp[i].a, sp[j].a);
+          if (ov > 60) out.push({ a: sp[i].key, b: sp[j].key, ms: Math.round(ov) });
+        }
+      }
+      return out;
+    },
     waStatus: () => ({
       state: audioCtx ? audioCtx.state : 'none',
       loaded: Object.keys(waBuffers),
