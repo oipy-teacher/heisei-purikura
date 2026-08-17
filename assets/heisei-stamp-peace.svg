@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- 平成 落書きスタンプ「ピースマーク」（柄本 手描き・2026-08-17）
+       出典/確度: プリ帳の頻出モチーフに「ピースマーク・ハートマーク・キラキラマーク」
+       （ROOMIE 2019「平成が終わるなら、プリ帳の話はしとかなきゃでしょ」／二次・確度中）。
+       様式: グラデ禁止・ハードエッジ・原色・白フチ。円は真円にせず右下をわずかに膨らませ、
+       内側の三又も左右で長さを変えている（＝手で描いた癖。左右対称にすると量産型の顔になる）。
+       商標・既存キャラの模倣なし（ピースマークは1958年考案の公有シンボル）。 -->
+  <g transform="rotate(-7 48 48)">
+    <!-- 白フチ（下に一回り大きい白を敷く＝当時のシール風） -->
+    <path d="M48 5 C71 5 91 24 91 47 C91 71 71 90 47 90 C24 90 5 71 5 47 C5 24 24 5 48 5 Z"
+          fill="#ffffff"/>
+    <!-- 本体の円（右下だけ少し太らせている） -->
+    <path d="M48 11 C68 11 85 27 85 47 C85 68 68 84 47 84 C27 84 11 68 11 47 C11 27 27 11 48 11 Z"
+          fill="none" stroke="#ff2fa0" stroke-width="9"/>
+    <!-- 縦の柱（上を少し長く） -->
+    <path d="M48 12 L48 84" fill="none" stroke="#ff2fa0" stroke-width="9" stroke-linecap="butt"/>
+    <!-- 左下の腕（右の腕より1度ぶん寝かせている） -->
+    <path d="M48 47 L18 76" fill="none" stroke="#ff2fa0" stroke-width="9" stroke-linecap="butt"/>
+    <!-- 右下の腕 -->
+    <path d="M48 47 L77 74" fill="none" stroke="#ff2fa0" stroke-width="9" stroke-linecap="butt"/>
+    <!-- 左上のツヤ（1本だけ・シールのハイライトのつもり） -->
+    <path d="M23 30 C27 22 33 17 41 15" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

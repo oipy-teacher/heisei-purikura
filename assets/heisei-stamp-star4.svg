@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- 平成 落書きスタンプ「4角星（キラ）」（柄本 手描き・2026-08-17）
+       出典/確度: 星・キラキラは平成プリの定番モチーフ（ROOMIE 2019／ギャルチャー「プリクラについて」／
+       複数の二次資料が一致・確度中〜強）。
+       既存の assets/heisei-star-a.svg は「画面の飾り（キラキラ演出）」用で線が細い。
+       これは落書きに押す用なので、写真の上に載っても負けないようにフチを太くした別物。
+       上の腕を一番長く、右の腕を一番短くしてある（手で描くと必ずこうなる）。 -->
+  <g transform="rotate(4 48 48)">
+    <path d="M47 3 Q53 36 93 46 Q54 54 49 93 Q43 55 4 45 Q44 37 47 3 Z"
+          fill="#ffef5c" stroke="#3a1030" stroke-width="6" stroke-linejoin="round"/>
+    <!-- 中心のツヤ（左上に1つだけ。左右対称にしない） -->
+    <path d="M36 38 C40 32 46 30 50 32" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+    <!-- 添えの小玉（右下・当時のキラは必ず大小2つで打たれていた） -->
+    <path d="M74 71 Q76 79 85 81 Q76 84 74 92 Q72 84 63 82 Q72 79 74 71 Z"
+          fill="#ff2fa0" stroke="#3a1030" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -381,15 +381,19 @@
               <button class="pen-type-btn" data-pentype="fuchi">白フチ</button>
               <button class="pen-type-btn" data-pentype="kira">キラキラ</button>
             </div>
+            <!-- 無名だったペンの太さスライダーに名前をつけた（D-4・2026-08-15 柄本仕様書）。
+                 隣の「スタンプ」には 小/中/大 があるのに、ペンだけ何のバーか
+                 画面のどこにも書いていなかった。
+                 2026-08-17（柄本仕様書 B-1 / 実測）: 色パレットの "下" にあったため、
+                 横持ちの道具箱（幅170〜230px）では12色が3〜4行に折り返し、
+                 ふとさが初期表示の外に沈んでいた（平成で83px・令和で132px スクロールが必要）。
+                 色パレットの "上" へ移す。太さ調整という機能自体は前からあり、ここで増えるものは無い -->
+            <p class="tool-label sub" id="pen-size-label">ふとさ</p>
+            <input type="range" id="pen-size" min="4" max="52" value="16" aria-labelledby="pen-size-label">
             <!-- 色の系統（令和のみ・2026-08-17 JKモニター指摘④「ペンの色がくすみ過ぎる」）。
                  くすみは令和様式の柱なので既定のまま残し、選べる系統を足す -->
             <div class="pal-row" id="pen-palette-row"></div>
             <div class="color-row" id="color-row"></div>
-            <!-- 無名だったペンの太さスライダーに名前をつけた（D-4・2026-08-15 柄本仕様書）。
-                 隣の「スタンプ」には 小/中/大 があるのに、ペンだけ何のバーか
-                 画面のどこにも書いていなかった -->
-            <p class="tool-label sub" id="pen-size-label">ふとさ</p>
-            <input type="range" id="pen-size" min="4" max="52" value="16" aria-labelledby="pen-size-label">
             <!-- D-1/D-2（2026-08-15 柄本仕様書）: 「消しゴム」と「なぞり消し」は名前だけでは
                  違いが分からないのに、実装はまったく別の動作（eraser=描いた線を画素として削る／
                  swipe=触れたオブジェクトを丸ごと消す）。3分の勝負のなかで試して覚える時間はない。
@@ -446,6 +450,11 @@
             <div class="sample-row" id="sample-row"></div>
             <button id="btn-sample-all" class="btn-small sample-all-btn">🖼 ぜんぶのしゃしんに はる</button>
           </div>
+          <!-- 道具箱の続きがあることを知らせる（2026-08-17・実測対応）。
+               横持ちの道具箱は見える高さが263pxしかないのに中身は1578pxあり、
+               スタンプの大きさは初期表示から412px下にあった。
+               「まだ下にある」と分からなければ、3分の勝負のなかで客はスクロールしない -->
+          <div id="toolbar-more" class="toolbar-more">▼ したにも 道具が あるよ</div>
         </div>
       </div>
     </div>

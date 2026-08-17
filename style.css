@@ -791,6 +791,23 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
 body[data-mode="reiwa"] .pen-type-btn, body[data-mode="reiwa"] .size-btn { border-color: #d8c9b8; color: #8a7568; }
 body[data-mode="reiwa"] .pen-type-btn.active, body[data-mode="reiwa"] .size-btn.active { background: #a8917d; border-color: #a8917d; }
 
+/* 道具箱に続きがあることを知らせる帯（2026-08-17・実測対応）。
+   スクロール容器の底に貼りつき、いちばん下まで送ると消える */
+.toolbar-more {
+  position: sticky;
+  bottom: -14px;
+  margin: 0 -14px -14px;
+  padding: 6px 8px 8px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #a03cae;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.96) 45%);
+  pointer-events: none;
+}
+.toolbar-more.at-end { visibility: hidden; }
+body[data-mode="reiwa"] .toolbar-more { color: #8a7568; }
+
 /* 延長モーダルの自動すすみ表示（2026-08-17 指摘⑤） */
 .extend-countdown { margin: 10px 0 0; font-size: 12px; font-weight: 800; color: #888; }
 

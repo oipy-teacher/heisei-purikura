@@ -47,7 +47,13 @@
          （4Gamer再現体験記。JAIA20年史には記載なし・2026-08-13 検見の裏付け検証で出典訂正）。
          プリ帳文化の定番文言「我等友情永久不滅成」もこの時代のもの。 */
       stamps: ['💀', '👽', '🔥', '⚡', '💩', '🐯', '👊', '💋', '🌟', '🍜', '📟', '🎤'],
-      drawnStamps: ['dateRetro', 'sparkleLine', 'heartChalk', 'bubble'], // 日付焼き込みは時代考証的にもドンピシャ
+      /* 2026-08-17 追加（柄本仕様書 C-2・JKモニター要望②「平成っぽいスタンプが欲しい」）:
+         星/キラ・ピースマーク・ドット/ボーダーは平成プリの頻出モチーフ（ROOMIE 2019ほか・確度=中）。
+         2000〜2004年は各社が落書きのアイテム数を拡大した時期（JAIA20年史・確度=強）なので、
+         数を増やす方向そのものが当時の実機の動きに合っている。
+         水玉とボーダーは "なぞる（コロコロ）" と柄の帯になる駒＝「余白を柄で埋める」当時の落書きの再現。
+         令和の drawnStamps には足さない（平成専用）。並びは既存4種→新4種で、先頭は動かさない */
+      drawnStamps: ['dateRetro', 'sparkleLine', 'heartChalk', 'bubble', 'star4', 'peaceMark', 'dotsPop', 'stripePop'], // 日付焼き込みは時代考証的にもドンピシャ
       textStamps: [
         { t: '我等友情永久不滅成', style: 'sticker', color: '#ff2fa0' },
         { t: 'ズッ友だょ…！', style: 'sticker', color: '#a06bff' },
@@ -58,6 +64,14 @@
         { t: 'ラブラブ♡', style: 'neon' },
         { t: '仲良し4EVER', style: 'sticker', color: '#3cae6a' },
         { t: '太子祭', style: 'sticker', color: '#d94a6a' },
+        /* 2026-08-17 追加（柄本仕様書 C-2-3）: プリ帳の当て字文化。
+           「仲仔」「2娘1」はROOMIE(2019)とギャルチャーの2本で一致（確度=中）、
+           「心友」はギャルチャー、「愛羅武勇」はROOMIE（各1本・確度=中）。
+           「ギザかわゆス」(2006年)・「〜なう」(2010年代)は時代がずれるので入れない */
+        { t: '2娘1', style: 'sticker', color: '#ff2fa0' },
+        { t: '一生仲仔♡', style: 'sticker', color: '#a06bff' },
+        { t: '心友', style: 'sticker', color: '#5cc8ff' },
+        { t: '愛羅武勇', style: 'sticker', color: '#ff3b30' },
       ],
       textStampStyle: { font: '900 20px sans-serif', fill: '#ff2fa0', stroke: '#ffffff', strokeWidth: 4, rotate: 8 },
       /* 盛れ感プリセット（presets/defaultPreset/makeup）は平成には定義しない（2026-08-13 掃除）:
@@ -4336,6 +4350,82 @@
   }
 
   const DRAWN_STAMPS = {
+    /* ---- 平成の柄・記号スタンプ（2026-08-17 柄本仕様書 C-2-1。原本は assets/heisei-stamp-*.svg）----
+       いずれも 96×96 のSVG座標をそのまま使えるように scale→translate している。
+       グラデ禁止・ハードエッジ・原色・左右非対称（＝手で描いた癖）が平成の様式。
+       このアプリの手描きスタンプはCanvas描画方式でSVGローダーが無いため、
+       SVGは意匠の原本として assets/ に残し、実体はこの描画コードで持つ */
+    peaceMark: { label: 'ピース', draw(ctx, s) {
+      const k = s / 80;
+      ctx.save();
+      ctx.rotate(-0.12);              // 手で押したときの傾き
+      ctx.scale(k, k);
+      ctx.translate(-48, -48);
+      ctx.beginPath(); ctx.arc(48, 47, 43, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fill();              // シールの白フチ
+      ctx.strokeStyle = '#ff2fa0'; ctx.lineWidth = 9; ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.arc(48, 47, 37, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(48, 12); ctx.lineTo(48, 84);
+      ctx.moveTo(48, 47); ctx.lineTo(18, 76);             // 左腕は右腕より少し寝ている
+      ctx.moveTo(48, 47); ctx.lineTo(77, 74);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(23, 30); ctx.bezierCurveTo(27, 22, 33, 17, 41, 15); ctx.stroke();
+      ctx.restore();
+    } },
+    star4: { label: 'キラ星', draw(ctx, s) {
+      const k = s / 80;
+      ctx.save(); ctx.rotate(0.07); ctx.scale(k, k); ctx.translate(-48, -48);
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(47, 3);
+      ctx.quadraticCurveTo(53, 36, 93, 46);
+      ctx.quadraticCurveTo(54, 54, 49, 93);
+      ctx.quadraticCurveTo(43, 55, 4, 45);
+      ctx.quadraticCurveTo(44, 37, 47, 3);
+      ctx.closePath();
+      ctx.fillStyle = '#ffef5c'; ctx.fill();
+      ctx.strokeStyle = '#3a1030'; ctx.lineWidth = 6; ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(36, 38); ctx.bezierCurveTo(40, 32, 46, 30, 50, 32); ctx.stroke();
+      ctx.beginPath();                                     // 添えの小玉（キラは大小2つで打つ）
+      ctx.moveTo(74, 71);
+      ctx.quadraticCurveTo(76, 79, 85, 81);
+      ctx.quadraticCurveTo(76, 84, 74, 92);
+      ctx.quadraticCurveTo(72, 84, 63, 82);
+      ctx.quadraticCurveTo(72, 79, 74, 71);
+      ctx.closePath();
+      ctx.fillStyle = '#ff2fa0'; ctx.fill();
+      ctx.strokeStyle = '#3a1030'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.restore();
+    } },
+    dotsPop: { label: '水玉', draw(ctx, s) {
+      const k = s / 80;
+      ctx.save(); ctx.scale(k, k); ctx.translate(-48, -48);
+      const puff = (x, y, r, c) => {
+        ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill();
+      };
+      puff(33, 34, 17, '#ff2fa0');                         // 大中小・色違い・等間隔にしない
+      puff(69, 62, 12, '#ffef5c');
+      puff(26, 72, 7.5, '#5cc8ff');
+      ctx.restore();
+    } },
+    stripePop: { label: 'ボーダー', draw(ctx, s) {
+      const k = s / 80;
+      ctx.save(); ctx.rotate(-0.38); ctx.scale(k, k); ctx.translate(-48, -48);
+      const bar = (p, c) => {
+        ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[2], p[3]);
+        ctx.lineTo(p[4], p[5]); ctx.lineTo(p[6], p[7]); ctx.closePath();
+        ctx.fillStyle = c; ctx.fill();
+      };
+      bar([14, 26, 82, 22, 82, 44, 14, 47], '#ffffff');
+      bar([17, 29, 79, 25.5, 79, 41, 17, 44], '#ff2fa0');  // 太いほう
+      bar([14, 58, 74, 55, 74, 70, 14, 73], '#ffffff');
+      bar([17, 61, 71, 58.5, 71, 67, 17, 70], '#3a1030');  // 細いほう・右端が短い
+      ctx.restore();
+    } },
     heartSticker: { label: 'ハートシール', draw(ctx, s) {
       heartPath(ctx, s);
       ctx.lineJoin = 'round';
@@ -5388,6 +5478,23 @@
     scheduleThumbUpdate();
   });
 
+  /* 道具箱の「まだ下にある」表示の面倒を見る（2026-08-17・実測対応）。
+     横持ちでは見える高さ263pxに対して中身が1578pxあり、スタンプの大きさは412px下にある。
+     底まで送ったら消す（もう続きが無いのに矢印を出し続けない） */
+  function syncToolbarMore() {
+    const bar = $('.deco-toolbar');
+    const cue = $('#toolbar-more');
+    if (!bar || !cue) return;
+    const atEnd = bar.scrollTop + bar.clientHeight >= bar.scrollHeight - 8;
+    cue.classList.toggle('at-end', atEnd);
+  }
+  (() => {
+    const bar = $('.deco-toolbar');
+    if (!bar) return;
+    bar.addEventListener('scroll', syncToolbarMore, { passive: true });
+    window.addEventListener('resize', syncToolbarMore);
+  })();
+
   function buildDecoTools() {
     const conf = modeConf();
     const isHeisei = state.mode === 'heisei';
@@ -5430,6 +5537,18 @@
     state.stampSize = 96;
     if (sizeSlider) sizeSlider.value = String(state.stampSize);
     syncStampSizeButtons();
+    /* ペンの太さは両モードで無段のバー（2026-08-17）。
+       🚨 3段ボタン化は **していない**: 柄本の考証で「1999〜2003年の実機に太さ選択があったか」は
+       要検証（無かったのではなく見つからなかった）であり、確度の弱い情報で様式を変えると
+       2026-08-13と同じ失敗になる。今回は位置と見つかりやすさだけ直した。
+       3段にするかはオーナーの裁定を待つ。 */
+    state.penSize = 16;
+    const penSizeSlider = $('#pen-size');
+    if (penSizeSlider) penSizeSlider.value = '16';
+    // 道具箱は毎回いちばん上から見せる（前の客のスクロール位置を残さない）
+    const bar = $('.deco-toolbar');
+    if (bar) bar.scrollTop = 0;
+    requestAnimationFrame(syncToolbarMore);
     // ペン種別（モードごとに使えるものだけ表示。1種類なら行ごと隠す）
     const types = conf.penTypes || ['normal'];
     document.querySelectorAll('.pen-type-btn').forEach(b => {
@@ -7226,6 +7345,11 @@
     setFakeFace: (pt) => { state.faceData = pt ? [[[{ x: pt.x - 0.08, y: pt.y - 0.1 }, { x: pt.x + 0.08, y: pt.y + 0.1 }]]] : []; },
     setRemaining: (s) => { state.remaining = s; },
     remaining: () => state.remaining,
+    DRAWN_STAMPS,
+    drawnStampIds: () => (modeConf().drawnStamps || []).slice(),
+    textStampTexts: () => (modeConf().textStamps || []).map(t => t.t),
+    objectCount: () => decoObjects.length,
+    objectTypes: () => decoObjects.map(o => o.type + (o.id ? ':' + o.id : '')),
     stampSize: () => state.stampSize,
     penColor: () => state.penColor,
     voiceHistory: () => voiceHistory.map(v => ({ ...v })),
