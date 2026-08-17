@@ -797,45 +797,44 @@ body[data-mode="reiwa"] .pen-type-btn.active, body[data-mode="reiwa"] .size-btn.
    🚨 2026-08-18（検見の検収【要修正3】）: 背景が半透明のグラデーションだったため、
    帯の下に来た道具の文字が透けて重なり、読めなくなっていた
    （横持ちの色の系統タブ・平成の色パレット最下段・360×640のペン種4ボタン）。
-   → 帯そのものは **不透明**にし、ぼかしは帯の「上」へ逃がす（::before）。
+   → 帯そのものは **不透明**にした（ぼかしの ::before は下の【軽微1】で廃止）。
      道具箱の見える高さが167pxしかない端末もあるので、帯の高さも詰める。 */
+/* 🚨 2026-08-18（検見の検収【軽微1】）: 不透明にしたのは正しかったが、
+   **横いっぱいの白い帯**は下のボタンの下半分をまるごと隠す（実測で44〜47%・幅は100%）。
+   客の目には「まだ下にある」ではなく「ボタンが半分に切れている＝壊れている」に見える。
+   → 帯をやめ、**中央に浮かぶ小さな札**にした。ボタンの左右の端が必ず残るので、
+     隠れているのではなく「上に何か乗っている」と読める。高さも25px→19pxに詰めた。
+   ※固定バーが下の物を隠すこと自体は正常な振る舞いなので、消したのは「切れて見える」方だけ。 */
 .toolbar-more {
   position: sticky;
-  bottom: -14px;
+  bottom: -6px;
   z-index: 4;
   /* 左右へは広げない（2026-08-18）: 道具箱は overflow-y:auto なので overflow-x も auto になり、
      負のマージンで左右へはみ出させると**横スクロールが生まれる**（実測で16〜26px）。
      道具は内容ボックスの中にしか無いので、そこを覆えば用は足りる */
-  margin: 0 0 -14px;
-  padding: 4px 8px 6px;
+  align-self: center;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 -6px;
+  padding: 3px 13px 4px;
   text-align: center;
   font-size: 11px;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.15;
   color: #a03cae;
   background: #fff;
-  border-top: 1px solid rgba(122,63,176,.22);
-  pointer-events: none;
-}
-/* 帯の切れ目を柔らかく見せるぼかし。帯の「上」に置くので、下の文字には重ならない */
-.toolbar-more::before {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: 100%;
-  height: 10px;
-  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.95));
+  border: 1px solid rgba(122,63,176,.3);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.16);
   pointer-events: none;
 }
 .toolbar-more.at-end { visibility: hidden; }
 body[data-mode="reiwa"] .toolbar-more {
   color: #8a7568;
   background: #fefcf9;
-  border-top-color: rgba(74,63,56,.25);
+  border-color: rgba(74,63,56,.3);
 }
-body[data-mode="reiwa"] .toolbar-more::before {
-  background: linear-gradient(180deg, rgba(254,252,249,0), rgba(254,252,249,.95));
-}
-body[data-mode="heisei"] .toolbar-more { border-top-color: rgba(255,47,160,.35); }
+body[data-mode="heisei"] .toolbar-more { border-color: rgba(255,47,160,.45); }
 
 /* 延長モーダルの自動すすみ表示（2026-08-17 指摘⑤） */
 .extend-countdown { margin: 10px 0 0; font-size: 12px; font-weight: 800; color: #888; }
@@ -921,7 +920,20 @@ body[data-mode="reiwa"] .sample-btn .sample-label { color: #8a7568; }
 }
 body[data-mode="reiwa"] .name-input { border-color: #d8c9b8; color: #8a7568; }
 
-/* 残り時間の中間通知トースト */
+/* 残り時間の中間通知トースト
+
+   🚨 2026-08-18（検見の検収【要修正】）: `white-space: nowrap` に `max-width` が無く、
+   18px太字の日本語が1行に伸びて **画面の外へ切れていた**。
+   実測（390×844）: 幅672px に対し画面390px＝左右に141pxずつはみ出し、
+   「ンプは【うごかす】で 動かす・回す・大きさ が」しか読めない。
+   切れていたのは5文言で、そのうち2つは
+   **JK指摘⑦（うごかすの発見性）の答えそのもの**と **⑤の延長の合図**。
+   案内が読めなければ、機能を直したことにならない。
+   → 折り返し可（`normal`）＋ 画面幅からの上限を必ず対で書く。
+     **`white-space: nowrap` を書くときは、同じブロックに `max-width` を必ず書くこと。**
+     nowrap は「折り返さない」ではなく「画面から出てもよい」という宣言である。
+   ※ふちの丸み（999px）は残してよい。3行に伸びても、角丸の食い込み(最大18.8px)より
+     左右パディング(26px+3px)の方が大きいので、文字には当たらない（実測で確認） */
 .deco-toast {
   position: absolute; top: 64px; left: 50%;
   transform: translateX(-50%);
@@ -934,7 +946,11 @@ body[data-mode="reiwa"] .name-input { border-color: #d8c9b8; color: #8a7568; }
   border-radius: 999px;
   border: 3px solid #ff8fc7;
   box-shadow: 0 6px 18px rgba(0,0,0,.25);
-  white-space: nowrap;
+  white-space: normal;
+  max-width: calc(100% - 28px);
+  width: max-content;
+  text-align: center;
+  line-height: 1.4;
   pointer-events: none;
 }
 body[data-mode="reiwa"] .deco-toast { color: #8a7568; border-color: #cbb9a8; }
@@ -1449,8 +1465,8 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .deco-thumb canvas { width: 54px; height: 41px; }
   /* 道具箱は省スペース化して、空いた分を写真に回す */
   .deco-toolbar { flex: 0 1 200px; min-width: 170px; max-width: 230px; gap: 9px; padding: 9px; }
-  /* 帯の下方向の食い込みは道具箱の padding と揃える（14px決め打ちだと5px余る・2026-08-18） */
-  .deco-toolbar .toolbar-more { bottom: -9px; margin: 0 0 -9px; }
+  /* 浮かぶ札の下方向の食い込みは道具箱の padding（9px）に合わせて浅くする（2026-08-18） */
+  .deco-toolbar .toolbar-more { bottom: -4px; margin: 0 0 -4px; }
   .deco-toolbar .tool-btn { font-size: 11px; padding: 6px 4px; }
   .deco-toolbar .tool-btn small { font-size: 9px; }
   .deco-toolbar .tool-group { gap: 6px; }
@@ -1549,7 +1565,11 @@ body.theme-heisei #sparkle-layer { display: block; }
 #sparkle-layer .spark:nth-child(4) { left: 12%; top: 66%; animation-delay: 1.9s; }
 #sparkle-layer .spark:nth-child(5) { left: 46%; top: 6%;  animation-delay: 2.4s; }
 #sparkle-layer .spark:nth-child(6) { left: 30%; top: 86%; animation-delay: 2.9s; }
-#sparkle-layer .spark:nth-child(7) { left: 94%; top: 46%; animation-delay: 3.2s; width: 44px; height: 44px; }
+/* 7番だけ44pxと大きいので、left:94% だと狭い画面で右端をはみ出す
+   （2026-08-18 検見の検収【軽微3】。390pxで実測3〜9px。#sparkle-layer は position:fixed なので
+   画面の横スクロールは生まれないが、飾りが画面の外に立つのは正しくない）。
+   右端からの距離で置けば、幅がいくつでも必ず中に収まる（広い画面での見え方は94%とほぼ同じ） */
+#sparkle-layer .spark:nth-child(7) { left: auto; right: 2%; top: 46%; animation-delay: 3.2s; width: 44px; height: 44px; }
 #sparkle-layer .spark:nth-child(8) { left: 3%;  top: 40%; animation-delay: 1.6s; }
 @keyframes sparkPop {
   0%, 55% { opacity: 0; transform: scale(.2) rotate(0deg); }
@@ -2779,6 +2799,10 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 @media (max-width: 430px) {
   .door-desc-r { bottom: 30px; }
   .title-note { bottom: 6px; right: 10px; }
+  /* トーストの左右パディングを詰める（2026-08-18）。文字は18pxのまま（読ませる一言なので
+     小さくしない）。26pxのままだと390pxで3行になり、最終行が「よ」1文字だけ残る。
+     18pxにすると中身の幅が304→320pxになり2行で収まる（実測） */
+  .deco-toast { padding: 12px 18px; }
 }
 
 /* スマホ縦: 平成の排出演出「機械の顔」の暗い窓が縦長すぎて空洞が大きく見えるため、
@@ -2801,7 +2825,11 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 .angle-row { display: flex; gap: 6px; margin: 8px 0 0; flex-wrap: wrap; }
 .angle-btn {
   flex: 1;
-  min-width: 62px;
+  /* 2026-08-18（検見の検収【軽微2】）: 62pxでは「🎲 おまかせ」の中身68pxが入らず、
+     1024×768の令和で4px切れていた。中身が入る幅を下限にし、4つ並ばない幅では
+     2×2に折り返させる（文字は12pxのまま小さくしない）。
+     `white-space: nowrap` を残すなら、入る幅を保証するのは min-width の仕事 */
+  min-width: 76px;
   white-space: nowrap;
   padding: 7px 2px;
   border-radius: 10px;
