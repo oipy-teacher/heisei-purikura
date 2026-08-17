@@ -112,6 +112,15 @@
         { id: 'cloud',       label: 'くも',   emoji: '☁️' },
       ],
       penColors: ['#b98a8a', '#8a9b8a', '#c0b283', '#8a9bb0', '#7d6b7d', '#e6ccb3', '#ffffff', '#3d3733'],
+      /* ペンの色の系統（2026-08-17 JKモニター指摘④「落書きのペンの色がくすみ過ぎる」）。
+         くすみカラーは令和様式の柱（柄本仕様書）なので**既定のまま残す**。
+         そのうえで、実際に描く客が発色を選べるように系統を足す。
+         様式は「最初に目に入るもの」で保たれる＝開いた時はくすみ、が守れていればよい。 */
+      penPalettes: [
+        { id: 'kusumi', label: 'くすみ', colors: ['#b98a8a', '#8a9b8a', '#c0b283', '#8a9bb0', '#7d6b7d', '#e6ccb3', '#ffffff', '#3d3733'] },
+        { id: 'vivid', label: 'ビビッド', colors: ['#ff2e88', '#ff3b30', '#ff8a00', '#ffe100', '#22c55e', '#00c2c7', '#2563eb', '#8b2fd6', '#ffffff', '#111111'] },
+        { id: 'pastel', label: 'パステル', colors: ['#ffb3d1', '#ffc9a8', '#ffe9a8', '#bdf0c4', '#a8e6ef', '#bcc8ff', '#e0b8ff', '#ffffff'] },
+      ],
       penTypes: ['normal', 'neon', 'fuchi', 'kira'],
       stamps: ['🤍', '🫶', '✨', '🌷', '🧸', '☁️', '🍓', '🥐', '📷', '🎧', '🪞', '🎀'],
       // 手描き風スタンプ（Canvas描画。参考画像のハート各種・キラ・吹き出しを再現）
@@ -3722,6 +3731,21 @@
     setTimeout(hideFaceNote, 1800);
   });
 
+  /* さいしょに もどす（2026-08-17 指摘⑧）: いま見ている1枚を、盛り画面に入った時点へ戻す。
+     この画面の他の操作はすべて「いま見ている1枚」に効くので、戻す単位もそれに合わせる
+     （4枚まとめて戻すと、気に入っている残り3枚まで巻き添えになる）。 */
+  let beautyInitial = null;
+  $('#btn-beauty-reset').addEventListener('click', () => {
+    if (!state.beautyShots || !beautyInitial) return;
+    const i = state.beautySelected || 0;
+    state.beautyShots[i] = { ...(beautyInitial[i] || beautyInitial[0]) };
+    playSoundOr('moriageSelect', 'seDecide');
+    syncBeautyUIFromCur();
+    queueBeautyRender();
+    setFaceNote(`🔄 ${i + 1}まいめを さいしょに もどしたよ`);
+    setTimeout(hideFaceNote, 1800);
+  });
+
   /* 一括反映（FLASH式・2026-08-12）: いま見ている1枚の盛り設定を4枚全部へコピーする */
   $('#btn-beauty-apply-all').addEventListener('click', () => {
     if (!state.beautyShots) return;
@@ -3867,6 +3891,11 @@
       _preset: matched ? matched.id : '',
       _level: matched ? 'l100' : '',
     }));
+    /* 「さいしょに もどす」用の控え（2026-08-17 JKモニター指摘⑧
+       「加工した後に最初に戻すボタンが欲しい」）。落書き側には「ぜんぶ消す」があるのに、
+       盛り側には戻り道が1つも無かった——バーを10本動かしたあと元の顔に戻す手段が
+       無いというのは、触るのが怖くなるということ。ここで撮影直後の状態を控えておく。 */
+    beautyInitial = JSON.parse(JSON.stringify(state.beautyShots));
     setFaceNote('👀 お顔を さがしてるよ…'); // B-6: 「検出」を客に見せない
     setFaceSlidersEnabled(true); // 前の客の回で無効化されたままにならないよう毎回戻す
     stopFaceRetry();
@@ -5020,11 +5049,46 @@
   $('#btn-edit-done').addEventListener('click', clearEditSel);
 
   /* ---------- ツールUI ---------- */
-  function buildColorRow() {
+  /* いま使えるペンの色（2026-08-17 指摘④）。令和は系統を切り替えられる。
+     平成は当時の12色そのままなので penPalettes を持たず、従来どおり penColors を返す */
+  function penColorList() {
     const conf = modeConf();
+    const pals = conf.penPalettes;
+    if (!pals || !pals.length) return conf.penColors;
+    const p = pals.find(x => x.id === state.penPalette) || pals[0];
+    return p.colors;
+  }
+
+  // 色の系統タブ（令和のみ。1つしか無いモードでは行ごと隠す）
+  function buildPalTabs() {
+    const row = $('#pen-palette-row');
+    if (!row) return;
+    const pals = modeConf().penPalettes;
+    row.innerHTML = '';
+    if (!pals || pals.length < 2) { row.style.display = 'none'; return; }
+    row.style.display = '';
+    pals.forEach((p) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pal-btn' + (p.id === state.penPalette ? ' active' : '');
+      b.dataset.pal = p.id;
+      b.textContent = p.label;
+      b.addEventListener('click', () => {
+        state.penPalette = p.id;
+        row.querySelectorAll('.pal-btn').forEach(x => x.classList.toggle('active', x === b));
+        state.penColor = penColorList()[0];
+        buildColorRow();
+        buildTextColorRow();
+        playSound('seTap');
+      });
+      row.appendChild(b);
+    });
+  }
+
+  function buildColorRow() {
     const row = $('#color-row');
     row.innerHTML = '';
-    conf.penColors.forEach((c, i) => {
+    penColorList().forEach((c, i) => {
       const sw = document.createElement('div');
       sw.className = 'color-swatch' + (i === 0 ? ' selected' : '');
       sw.style.background = c;
@@ -5106,7 +5170,6 @@
      角度: 押す前に ひだり/まっすぐ/みぎ を選べる。おまかせ＝従来の手の癖ランダム角度。
      プレビュー: いま選んでいるスタンプが「どの色・どの角度で押されるか」を置く前に見せる。 */
   function buildTextColorRow() {
-    const conf = modeConf();
     const row = $('#text-color-row');
     if (!row) return;
     row.innerHTML = '';
@@ -5121,7 +5184,7 @@
       renderTextStampPreview();
     });
     row.appendChild(auto);
-    conf.penColors.forEach((c) => {
+    penColorList().forEach((c) => { // ペンと同じ系統を使う（2026-08-17 指摘④）
       const sw = document.createElement('div');
       sw.className = 'color-swatch';
       sw.style.background = c;
@@ -5328,6 +5391,9 @@
   function buildDecoTools() {
     const conf = modeConf();
     const isHeisei = state.mode === 'heisei';
+    // ペンの色の系統は毎回「くすみ」（令和の既定様式）から始める（2026-08-17 指摘④）
+    state.penPalette = ((conf.penPalettes || [])[0] || {}).id || null;
+    buildPalTabs();
     buildColorRow();
     buildStampRow();
     buildTextStampRow();
@@ -5353,7 +5419,17 @@
     state.textStampAngle = 'auto';
     document.querySelectorAll('#text-angle-row .angle-btn').forEach(b => b.classList.toggle('active', b.dataset.angle === 'auto'));
     renderTextStampPreview();
-    state.penColor = conf.penColors[0];
+    state.penColor = penColorList()[0];
+    /* スタンプの大きさ（2026-08-17 指摘③「スタンプの大きさを変えたかった」）。
+       小/中/大の3段は前からあったが名前が無かった。令和はさらに無段のバーを足す。
+       平成は当時の機種どおり3段のまま（機能追加なし）。 */
+    const sizeSlider = $('#stamp-size');
+    const sizeLabel = $('#stamp-size-label');
+    const sizeNote = $('#stamp-size-note');
+    [sizeSlider, sizeLabel, sizeNote].forEach(el => { if (el) el.style.display = isHeisei ? 'none' : ''; });
+    state.stampSize = 96;
+    if (sizeSlider) sizeSlider.value = String(state.stampSize);
+    syncStampSizeButtons();
     // ペン種別（モードごとに使えるものだけ表示。1種類なら行ごと隠す）
     const types = conf.penTypes || ['normal'];
     document.querySelectorAll('.pen-type-btn').forEach(b => {
@@ -5377,6 +5453,7 @@
     const isStamp = (t) => t === 'stamp' || t === 'dstamp';
     if (isStamp(tool) && !isStamp(state.tool)) announceOnceByMode('korokoro', 'korokoro');
     if (tool === 'edit' && state.tool !== 'edit' && state.mode !== 'heisei') announceOnce('toolUgokasu', 'toolUgokasuR');
+    if (tool === 'edit') stopUgokasuHint(); // 気づいてもらえた＝点滅の役目は終わり（2026-08-17）
     state.tool = tool;
     state.stampChar = tool === 'stamp' ? extra : null;
     state.dstampId = tool === 'dstamp' ? extra : null;
@@ -5533,6 +5610,7 @@
       rolling = true;
       rollCount = 0;
       placeRollStamp(x, y);
+      hintUgokasu(); // 置いた直後に「うごかす」の存在を知らせる（2026-08-17 指摘⑦）
       return;
     }
     if (state.tool === 'textstamp' && state.textStampSel) {
@@ -5547,6 +5625,7 @@
       decoObjects.push(o);
       drawObject(drawCtx, o);
       pushUndo({ op: 'add' });
+      hintUgokasu(); // 文字スタンプも「うごかす」で動かせる（2026-08-17 指摘⑦）
       return;
     }
 
@@ -5682,12 +5761,26 @@
       setTool('pen');
     });
   });
-  document.querySelectorAll('.size-btn').forEach(btn => {
+  /* スタンプの大きさ（2026-08-17 指摘③）。3段ボタンと無段バーは同じ state を見る。
+     どちらを触っても、もう一方の見た目がついてくる（別々に見えると「効いてない」になる） */
+  function syncStampSizeButtons() {
+    document.querySelectorAll('#stamp-size-row .size-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.stampsize) === state.stampSize));
+  }
+  document.querySelectorAll('#stamp-size-row .size-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       state.stampSize = Number(btn.dataset.stampsize);
-      document.querySelectorAll('.size-btn').forEach(b => b.classList.toggle('active', b === btn));
+      const sl = $('#stamp-size');
+      if (sl) sl.value = String(state.stampSize);
+      syncStampSizeButtons();
     });
   });
+  const stampSizeSlider = $('#stamp-size');
+  if (stampSizeSlider) {
+    stampSizeSlider.addEventListener('input', (e) => {
+      state.stampSize = Number(e.target.value);
+      syncStampSizeButtons(); // ぴったり一致したときだけ3段のどれかが点く
+    });
+  }
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-clear').addEventListener('click', () => {
     // 「ぜんぶ消す」の対象は表示中の写真1枚ぶん（写真拡大表示方式）
@@ -5739,6 +5832,30 @@
   const decoToastEl = $('#deco-toast');
   const decoCountdownEl = $('#deco-countdown');
   let decoToastId = null;
+
+  /* ---------- 「うごかす」に気づいてもらう（2026-08-17 JKモニター指摘⑦） ----------
+     指摘は「スタンプを押した後に移動や回転させられるようにしたい」。
+     この機能は v17 で入っていて、移動・回転・拡大縮小・複製まで全部できる。
+     つまり**足りないのは機能ではなく気づき**だった。ボイス（reiwa_tool_ugokasu）は
+     道具を選んだ後にしか鳴らない＝選ばない客には永久に届かない設計になっていた。
+     → 初めてスタンプを置いた瞬間に、ボタンを光らせて一言出す。1セッション1回だけ。
+     使ってくれたら光るのをやめる（役目が終わったものを光らせ続けない）。 */
+  let ugokasuHinted = false;
+  function hintUgokasu() {
+    if (ugokasuHinted || state.mode === 'heisei') return;
+    ugokasuHinted = true;
+    const btn = $('#btn-tool-edit');
+    if (btn) btn.classList.add('hint-pulse');
+    showDecoToast('👆 おいたスタンプは【うごかす】で 動かす・回す・大きさ が変えられるよ');
+  }
+  function stopUgokasuHint() {
+    const btn = $('#btn-tool-edit');
+    if (btn) btn.classList.remove('hint-pulse');
+  }
+  function resetUgokasuHint() {
+    ugokasuHinted = false;
+    stopUgokasuHint();
+  }
 
   function showDecoToast(text) {
     decoToastEl.textContent = text;
@@ -5885,6 +6002,9 @@
     armHistorySentinel();
     // 写真拡大表示方式: 落書きは写真ごとに持つ。1枚目を拡大表示して開始
     shotDeco = decoShots().map(() => ({ objects: [], undo: [] }));
+    resetUgokasuHint(); // 次の客には「うごかす」の案内をもう一度出す（2026-08-17）
+    extendUsed = 0;     // 延長の回数は客ごとにリセット（2026-08-17 指摘⑤）
+    closeExtendModal();
     buildDecoThumbs();
     selectShot(0);
     buildDecoTools();
@@ -5964,12 +6084,13 @@
     stopVoice();
   });
 
-  function startDecoTimer() {
+  function startDecoTimer(withHalftime = true) {
     if (state.timerId) clearInterval(state.timerId);
     /* 中間通知（2026-08-12 新設）: 現行実機は約200秒の途中で区切りの通知が入る。
-       残り時間が半分になったところで一声＋トースト表示 */
-    const halfPoint = Math.floor(decoSeconds() / 2);
-    const total = decoSeconds();
+       残り時間が半分になったところで一声＋トースト表示。
+       延長ぶんの走り直しでは中間通知を出さない（60秒の真ん中で「のこり はんぶん」は不要） */
+    const halfPoint = withHalftime ? Math.floor(decoSeconds() / 2) : -1;
+    const total = state.remaining || decoSeconds();
     state.timerId = setInterval(() => {
       state.remaining--;
       timerDisplay.textContent = formatTime(Math.max(0, state.remaining));
@@ -5997,9 +6118,69 @@
       if (state.remaining <= 0) {
         decoCountdownEl.classList.add('hidden');
         clearInterval(state.timerId);
+        // 令和だけ「もうちょっと描く」を出す（平成は3分きっかりが実機の型・2026-08-17 指摘⑤）
+        if (state.mode !== 'heisei' && extendUsed < DECO_EXTEND_MAX && !decoFinished) { offerExtend(); return; }
         finishDeco('timeup');
       }
     }, 1000);
+  }
+
+  /* ---------- 延長「もうちょっと描く」（令和のみ・2026-08-17 JKモニター指摘⑤） ----------
+     指摘は「3分の時間制限はいらないのでは？（過ぎてもボーナスで無制限になるのがあるらしい）」。
+     実機にも延長のボーナスはある。ただし **文化祭は1台を何十組も回す**ので、
+     無制限にすると後ろの列がそのまま止まる。回転率を殺さない形に落とした:
+       ・出るのはタイムアップの瞬間だけ（最初から見えていると「3分＋1分」が既定になる）
+       ・1セッション1回・＋60秒まで（最大でも1組あたり1分しか伸びない）
+       ・EXTEND_DECIDE_SEC 秒で自動的に「かんせい」へ進む（無人運用なので、
+         客が席を立って放置しても列は止まらない）
+     🚨 「開いている間はタイマーを止める」形にはしない。止められる仕掛けを1つでも作ると
+     そこが抜け道になる（写真えらびを開き直す導線でも同じ判断をしている）。 */
+  const DECO_EXTEND_SECONDS = 60;   // 1回の延長で足す秒数
+  const DECO_EXTEND_MAX = 1;        // 1セッションに使える回数
+  const EXTEND_DECIDE_SEC = 12;     // 迷っている間に自動で完成へ進む秒数
+  let extendUsed = 0;
+  let extendDecideId = null;
+  const extendModal = $('#extend-modal');
+
+  function closeExtendModal() {
+    if (extendDecideId) { clearInterval(extendDecideId); extendDecideId = null; }
+    if (extendModal) extendModal.classList.add('hidden');
+  }
+
+  function offerExtend() {
+    if (!extendModal) { finishDeco('timeup'); return; }
+    drawCanvas.style.pointerEvents = 'none';
+    playSound('timeup');
+    extendModal.classList.remove('hidden');
+    let left = EXTEND_DECIDE_SEC;
+    const cd = $('#extend-countdown');
+    const paint = () => { if (cd) cd.textContent = `${left}びょう で かんせいに すすむよ`; };
+    paint();
+    extendDecideId = setInterval(() => {
+      left--;
+      paint();
+      if (left <= 0) { closeExtendModal(); finishDeco('timeup'); }
+    }, 1000);
+  }
+
+  if (extendModal) {
+    $('#btn-extend-yes').addEventListener('click', () => {
+      extendUsed++;
+      closeExtendModal();
+      state.remaining = DECO_EXTEND_SECONDS;
+      state.warningPlayed = false;
+      timerDisplay.textContent = formatTime(state.remaining);
+      timerDisplay.classList.remove('warn');
+      timerDisplay.parentElement.classList.remove('alarm', 'warn-box');
+      decoCountdownEl.classList.add('hidden');
+      drawCanvas.style.pointerEvents = 'auto';
+      showDecoToast(`⏰ ＋${DECO_EXTEND_SECONDS}びょう！ 延長は この1かいだけだよ`);
+      startDecoTimer(false);
+    });
+    $('#btn-extend-no').addEventListener('click', () => {
+      closeExtendModal();
+      finishDeco('manual');
+    });
   }
 
   /* 二重実行ガード（2026-08-12 qa-tester指摘）:
@@ -7044,6 +7225,9 @@
     // 顔の位置を差し替えて「顔にあわせる」の寄せ方を測る（正規化座標の1点だけの偽ランドマーク）
     setFakeFace: (pt) => { state.faceData = pt ? [[[{ x: pt.x - 0.08, y: pt.y - 0.1 }, { x: pt.x + 0.08, y: pt.y + 0.1 }]]] : []; },
     setRemaining: (s) => { state.remaining = s; },
+    remaining: () => state.remaining,
+    stampSize: () => state.stampSize,
+    penColor: () => state.penColor,
     voiceHistory: () => voiceHistory.map(v => ({ ...v })),
     voiceOverlaps: () => {
       const now = performance.now();

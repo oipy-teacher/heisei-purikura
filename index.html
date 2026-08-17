@@ -281,6 +281,9 @@
           <!-- 一括反映（現行実機FLASHの「1枚の設定を全枚数にワンタッチ反映」の型）。
                「一括反映」は業務システムの語で、これは客がB-1の事故から自力で戻れる
                唯一のボタン。数を書いて一読で通す（B-3・2026-08-15 柄本仕様書） -->
+          <!-- さいしょに もどす（2026-08-17 JKモニター指摘⑧「加工した後に最初に戻すボタンが欲しい」）。
+               落書き側には「ぜんぶ消す」があるのに、盛り側には戻り道が1つも無かった -->
+          <button id="btn-beauty-reset" class="btn-sub apply-all">🔄 この1まいを さいしょに もどす</button>
           <button id="btn-beauty-apply-all" class="btn-sub apply-all">💫 4まい ぜんぶ おなじにする</button>
           <button id="btn-beauty-done" class="btn-main">これでOK ▶ らくがきへ</button>
         </div>
@@ -378,6 +381,9 @@
               <button class="pen-type-btn" data-pentype="fuchi">白フチ</button>
               <button class="pen-type-btn" data-pentype="kira">キラキラ</button>
             </div>
+            <!-- 色の系統（令和のみ・2026-08-17 JKモニター指摘④「ペンの色がくすみ過ぎる」）。
+                 くすみは令和様式の柱なので既定のまま残し、選べる系統を足す -->
+            <div class="pal-row" id="pen-palette-row"></div>
             <div class="color-row" id="color-row"></div>
             <!-- 無名だったペンの太さスライダーに名前をつけた（D-4・2026-08-15 柄本仕様書）。
                  隣の「スタンプ」には 小/中/大 があるのに、ペンだけ何のバーか
@@ -394,7 +400,11 @@
               <button class="tool-btn" data-mode="eraser"><b>消しゴム</b><small>なぞって けずる</small></button>
               <button class="tool-btn" data-mode="swipe"><b>まるごと消し</b><small>さわったのが 消える</small></button>
               <!-- 落書き編集ツール（√me2型・令和のみ表示・2026-08-14） -->
-              <button class="tool-btn" data-mode="edit" id="btn-tool-edit"><b>うごかす</b><small>スタンプの ばしょ</small></button>
+              <!-- 2026-08-17 JKモニター指摘⑦「スタンプを押した後に移動や回転させたい」＝
+                   v17から実装済みなのに存在に気づかれていなかった。名前だけでは何ができるか
+                   分からない（「スタンプの ばしょ」では大きさが変わるとは読めない）ので、
+                   できること3つをそのまま書く。初回のスタンプ設置で点滅もさせる（app.js） -->
+              <button class="tool-btn" data-mode="edit" id="btn-tool-edit"><b>うごかす</b><small>スタンプを 動かす・回す・大きさ</small></button>
             </div>
           </div>
 
@@ -407,6 +417,10 @@
               <button class="size-btn active" data-stampsize="96">中</button>
               <button class="size-btn" data-stampsize="144">大</button>
             </div>
+            <!-- 大きさの無段バー（令和のみ・2026-08-17 指摘③）。ペンの「ふとさ」と同じ形にする -->
+            <p class="tool-label sub" id="stamp-size-label">おおきさ</p>
+            <input type="range" id="stamp-size" min="28" max="220" value="96" aria-labelledby="stamp-size-label">
+            <p class="stamp-hint" id="stamp-size-note">おいたあとも【うごかす】で 大きさ・かたむきを 変えられるよ</p>
             <div class="stamp-row" id="stamp-row"></div>
           </div>
 
@@ -463,6 +477,20 @@
         <p class="deco-gate-title">もうひとつだけ！ ぶんかつを えらんでね</p>
         <p class="deco-gate-note">らくがきの できあがりを見て、<br>なんぶんかつで もってかえるか きめよう！</p>
         <div id="layout-gate-list" class="layout-grid layout-gate-list"></div>
+      </div>
+    </div>
+
+    <!-- 令和のみ: タイムアップの延長（2026-08-17 JKモニター指摘⑤）。
+         1セッション1回・＋60秒まで・迷っている間に自動で完成へ進む
+         （文化祭は1台を何十組も回すので、無制限にすると列がそのまま止まる） -->
+    <div id="extend-modal" class="confirm-modal hidden">
+      <div class="confirm-box">
+        <p class="confirm-text">⏰ タイムアップ！<br>もうちょっと 描く？</p>
+        <div class="confirm-buttons">
+          <button id="btn-extend-yes" class="btn-main small">＋1ぷん 描く（1かいだけ）</button>
+          <button id="btn-extend-no" class="btn-sub">これで かんせい</button>
+        </div>
+        <p id="extend-countdown" class="extend-countdown"></p>
       </div>
     </div>
 
