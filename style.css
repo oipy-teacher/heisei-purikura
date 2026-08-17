@@ -558,7 +558,7 @@ body.theme-heisei .fit-btn.active { border-color: var(--h-pink); }
 body.theme-reiwa .fit-btn { border-radius: 3px; }
 body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #efe7dc; color: #6d5c4d; }
 /* 落書き中に開き直すボタン（令和のみ・道具箱の先頭） */
-.photo-pick-again { width: 100%; font-size: 12px; line-height: 1.35; }
+.photo-pick-again { width: 100%; font-size: 12px; line-height: 1.3; padding: 6px 8px; }
 #flash-canvas { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .countdown-num {
   position: absolute; inset: 0;
@@ -792,21 +792,50 @@ body[data-mode="reiwa"] .pen-type-btn, body[data-mode="reiwa"] .size-btn { borde
 body[data-mode="reiwa"] .pen-type-btn.active, body[data-mode="reiwa"] .size-btn.active { background: #a8917d; border-color: #a8917d; }
 
 /* 道具箱に続きがあることを知らせる帯（2026-08-17・実測対応）。
-   スクロール容器の底に貼りつき、いちばん下まで送ると消える */
+   スクロール容器の底に貼りつき、いちばん下まで送ると消える。
+
+   🚨 2026-08-18（検見の検収【要修正3】）: 背景が半透明のグラデーションだったため、
+   帯の下に来た道具の文字が透けて重なり、読めなくなっていた
+   （横持ちの色の系統タブ・平成の色パレット最下段・360×640のペン種4ボタン）。
+   → 帯そのものは **不透明**にし、ぼかしは帯の「上」へ逃がす（::before）。
+     道具箱の見える高さが167pxしかない端末もあるので、帯の高さも詰める。 */
 .toolbar-more {
   position: sticky;
   bottom: -14px;
-  margin: 0 -14px -14px;
-  padding: 6px 8px 8px;
+  z-index: 4;
+  /* 左右へは広げない（2026-08-18）: 道具箱は overflow-y:auto なので overflow-x も auto になり、
+     負のマージンで左右へはみ出させると**横スクロールが生まれる**（実測で16〜26px）。
+     道具は内容ボックスの中にしか無いので、そこを覆えば用は足りる */
+  margin: 0 0 -14px;
+  padding: 4px 8px 6px;
   text-align: center;
   font-size: 11px;
   font-weight: 800;
+  line-height: 1.25;
   color: #a03cae;
-  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.96) 45%);
+  background: #fff;
+  border-top: 1px solid rgba(122,63,176,.22);
+  pointer-events: none;
+}
+/* 帯の切れ目を柔らかく見せるぼかし。帯の「上」に置くので、下の文字には重ならない */
+.toolbar-more::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 100%;
+  height: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.95));
   pointer-events: none;
 }
 .toolbar-more.at-end { visibility: hidden; }
-body[data-mode="reiwa"] .toolbar-more { color: #8a7568; }
+body[data-mode="reiwa"] .toolbar-more {
+  color: #8a7568;
+  background: #fefcf9;
+  border-top-color: rgba(74,63,56,.25);
+}
+body[data-mode="reiwa"] .toolbar-more::before {
+  background: linear-gradient(180deg, rgba(254,252,249,0), rgba(254,252,249,.95));
+}
+body[data-mode="heisei"] .toolbar-more { border-top-color: rgba(255,47,160,.35); }
 
 /* 延長モーダルの自動すすみ表示（2026-08-17 指摘⑤） */
 .extend-countdown { margin: 10px 0 0; font-size: 12px; font-weight: 800; color: #888; }
@@ -1420,6 +1449,8 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .deco-thumb canvas { width: 54px; height: 41px; }
   /* 道具箱は省スペース化して、空いた分を写真に回す */
   .deco-toolbar { flex: 0 1 200px; min-width: 170px; max-width: 230px; gap: 9px; padding: 9px; }
+  /* 帯の下方向の食い込みは道具箱の padding と揃える（14px決め打ちだと5px余る・2026-08-18） */
+  .deco-toolbar .toolbar-more { bottom: -9px; margin: 0 0 -9px; }
   .deco-toolbar .tool-btn { font-size: 11px; padding: 6px 4px; }
   .deco-toolbar .tool-btn small { font-size: 9px; }
   .deco-toolbar .tool-group { gap: 6px; }
@@ -2703,6 +2734,13 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 
 /* ボタン内の文字は折り返さない（縮んだとき縦書きのように崩れるのを防ぐ） */
 .btn-main, .btn-sub, .btn-small, .btn-back { white-space: nowrap; }
+/* 🚨 ただし道具箱の中の「幅いっぱいボタン」は例外（2026-08-18 検見【軽微4】）。
+   道具箱は横持ちで幅170〜230pxしかなく、そこに入る長い文言を nowrap にすると
+   右端で切れて読めなくなる（実測: 横持ちで道具箱が横に61pxはみ出していた）。
+     「のせる しゃしん・おさまりを えらび直す」 …「…を え」で切れる
+     「✍️ おなまえスタンプをつくる」 ／ 「🖼 ぜんぶのしゃしんに はる」 …同様
+   縦に伸びるが、切れて読めないよりよい。この規則より後ろに置くこと（順序で負ける） */
+.deco-toolbar .btn-small { white-space: normal; }
 .timer-label { white-space: nowrap; }
 
 /* プリント画面: 縦が足りない端末では縮めず縦スクロールで全部に届くようにする */
@@ -2937,9 +2975,11 @@ body.theme-heisei #btn-download-story { display: none; }
 body.theme-reiwa .makeup-history { border: 1px solid var(--r-accent); color: var(--r-ink); background: #f7f0e8; }
 
 /* コロコロは標準挙動（2026-08-14 統一: タップ=1個・なぞる=連なる）。使い方の一言だけ添える */
-.stamp-hint { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #a03cae; opacity: .85; }
-body.theme-heisei .stamp-hint { color: var(--h-ink); }
-body.theme-reiwa .stamp-hint { color: var(--r-brown); font-weight: 500; }
+/* .tool-note は「文言を一括書き換えされない説明文」。.stamp-hint は COPY_BY_MODE の
+   一括書き換え対象なので、モードで変えない説明文にこのクラスを付けないこと（2026-08-18） */
+.stamp-hint, .tool-note { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #a03cae; opacity: .85; }
+body.theme-heisei .stamp-hint, body.theme-heisei .tool-note { color: var(--h-ink); }
+body.theme-reiwa .stamp-hint, body.theme-reiwa .tool-note { color: var(--r-brown); font-weight: 500; }
 
 /* スタンプの選択中表示（2026-08-13 実機テスト指摘「どれ選んでるかわからねぇ」対応）:
    ペン色や文字スタンプには選択ハイライトがあったのに、スタンプボタンだけ無かった。

@@ -369,9 +369,12 @@
         <div class="deco-toolbar">
           <!-- 令和のみ: のせる写真・おさまりを描いている途中でも開き直せる（2026-08-17 指摘①②）。
                ゲートは一度きりで、通り過ぎたら二度と戻れないのが「選べない」の正体だった -->
+          <!-- 2026-08-18: 見出し「🖼 しゃしん」を外し、絵文字はボタンへ寄せた。
+               ボタン1個だけの欄に見出しを付けると、道具箱の見える高さが167pxしかない
+               小型端末（360×640・320×568）で、その25pxぶん「ふとさ」「色」が
+               画面の外へ押し出される。ボタンの文言だけで用は足りる -->
           <div class="tool-group" id="group-photo-pick">
-            <p class="tool-label"><span class="tl-emoji">🖼</span> しゃしん</p>
-            <button id="btn-photo-pick-again" class="btn-small photo-pick-again">のせる しゃしん・おさまりを えらび直す</button>
+            <button id="btn-photo-pick-again" class="btn-small photo-pick-again">🖼 のせる しゃしん・おさまりを えらび直す</button>
           </div>
           <div class="tool-group">
             <p class="tool-label"><span class="tl-emoji">✏️</span><img class="tl-icon" src="assets/reiwa-icon-pen.svg" alt=""> ペン</p>
@@ -424,7 +427,13 @@
             <!-- 大きさの無段バー（令和のみ・2026-08-17 指摘③）。ペンの「ふとさ」と同じ形にする -->
             <p class="tool-label sub" id="stamp-size-label">おおきさ</p>
             <input type="range" id="stamp-size" min="28" max="220" value="96" aria-labelledby="stamp-size-label">
-            <p class="stamp-hint" id="stamp-size-note">おいたあとも【うごかす】で 大きさ・かたむきを 変えられるよ</p>
+            <!-- 🚨 2026-08-18: ここに .stamp-hint を付けてはいけない。
+                 app.js の COPY_BY_MODE['.stamp-hint'] が querySelectorAll で
+                 **同じクラスを全部** 書き換えるため、v26ではこの一文が
+                 モード選択の瞬間に「タップで1こ…」へ上書きされ、
+                 ③⑦のために足した案内が一度も表示されなかった（検見の検収で発覚）。
+                 見た目は .tool-note で同じにする（クラス＝一括操作の対象指定でもある） -->
+            <p class="tool-note" id="stamp-size-note">おいたあとも【うごかす】で 大きさ・かたむきを 変えられるよ</p>
             <div class="stamp-row" id="stamp-row"></div>
           </div>
 

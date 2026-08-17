@@ -441,18 +441,34 @@
     // --- 落書き画面 ---
     // D-5: 挙動の統一はオーナー裁定済みなので触らず、文言だけ動作が分かる形にする。
     //      「コロコロ」は当時のローラースタンプの名前なので平成側にだけ残す
+    /* 🚨 クラスのセレクタは querySelectorAll で **その クラスの要素を全部** 書き換える。
+       モードで変えない説明文には .stamp-hint を付けないこと（付けるなら .tool-note）。
+       2026-08-18: v26で足した #stamp-size-note がこれに巻き込まれ、
+       ③⑦のための一文が一度も表示されていなかった（検見の検収で発覚） */
     '.stamp-hint': {
       heisei: 'タップで1こ・なぞると コロコロ！（つながって おされるよ）',
       reiwa: 'タップで1こ。なぞると つながって おされるよ',
     },
   };
 
+  /* 一括書き換えの巻き添えを機械的に見つける（2026-08-18 新設）。
+     同じ罠を2度踏んでいる（v26の `.size-btn` と `.stamp-hint`）。
+     クラス指定が2つ以上の要素に当たったら、意図しない要素を巻き込んでいる疑いがある。
+     ※本番の動作は変えない（コンソールに警告を出すだけ）。__puriDebug から件数も取れる */
+  let copyCollisions = [];
   function applyCopyByMode(mode) {
     const key = mode === 'heisei' ? 'heisei' : 'reiwa';
+    copyCollisions = [];
     Object.keys(COPY_BY_MODE).forEach(sel => {
       const t = COPY_BY_MODE[sel][key];
       if (t == null) return;
-      document.querySelectorAll(sel).forEach(el => { el.textContent = t; });
+      const hit = document.querySelectorAll(sel);
+      if (!sel.startsWith('#') && hit.length > 1) {
+        copyCollisions.push({ sel, count: hit.length });
+        console.warn('[copy] このセレクタが', hit.length, '個の要素に当たっています:', sel,
+          '— モードで変えない説明文まで上書きしていないか確かめること');
+      }
+      hit.forEach(el => { el.textContent = t; });
     });
   }
 
@@ -672,6 +688,9 @@
   let voiceCleanups = [];   // ended待ちなどの後始末（stopVoiceでまとめて外す）
   let curVoice = null;      // いま鳴っている声のAudio要素
   let curVoiceKey = null;
+  /* いまの声のあとに続けて鳴らす予約（連鎖）: [{ key, gap }]。
+     2026-08-18: 連鎖の順番はここ1箇所で持つ。詳しくは chainAnnounce のコメント */
+  let voiceQueue = [];
   const voiceHistory = [];  // 検証用: { key, start, end }（endはstop/ended時に確定）
 
   function queueVoice(fn, ms) {
@@ -691,6 +710,7 @@
     voiceTimers = [];
     voiceCleanups.forEach(fn => { try { fn(); } catch (e) { /* 後始末の失敗は無視 */ } });
     voiceCleanups = [];
+    voiceQueue = [];  // 連鎖の予約も捨てる（画面が変わったら前の画面の続きは鳴らさない）
     if (curVoice) {
       try { curVoice.pause(); curVoice.currentTime = 0; } catch (e) { /* 停止失敗は無視 */ }
     }
@@ -699,11 +719,24 @@
     curVoiceKey = null;
   }
   /* 声を1本鳴らす。**声はすべてここを通る**（案内も、撮影の前置きも、ポーズ提案も、カウントも）。
-     戻り値は鳴らし始めたAudio要素（鳴らせなかったときは null） */
-  function playVoice(key, onFail) {
+     戻り値は鳴らし始めたAudio要素（鳴らせなかったときは null）。
+
+     🚨 2026-08-18 v26の回帰修正（検見の実測・ボイス4本が完全に無音）:
+     v26は「鳴り終わり」の検知を **要素の ended リスナ2本** で分担していた。
+     playVoice が登録したリスナ（curVoice/curVoiceKey を null にする）が先に走り、
+     chainAnnounce があとから登録したリスナは `curVoiceKey !== firstKey` で必ず弾かれる。
+     つまり**正常に鳴り終わったときほど連鎖が切れる**——リスナの登録順という、
+     読んでも見えないものに結果が依存していた。
+     → 鳴り終わりの検知と「次へ進む」判断を **このバスの1箇所** に集約する。
+       連鎖側は voiceQueue に積むだけで、ended を自分で待たない。 */
+  function startVoice(key, onFail, keepQueue) {
+    // keepQueue: 連鎖の予約を保ったまま「次の1本」へ進むとき専用（advanceVoiceQueue から）
+    const rest = keepQueue ? voiceQueue.slice() : [];
     stopVoice();
+    voiceQueue = rest;
     const a = sounds[key];
-    if (!a || soundMissing(key)) return null;
+    // 鳴らせない1本で連鎖を止めない（ファイルが無いクリップは飛ばして次へ進む）
+    if (!a || soundMissing(key)) { advanceVoiceQueue(); return null; }
     a.muted = false; // unlockAudioのミュート解錠と同時になっても本物の再生が消音されないように（2026-08-13）
     try { a.currentTime = 0; } catch (e) { /* 未読込のときは無視 */ }
     // 再生拒否を握りつぶさない（撮影の同期待ちは「鳴らなかった」を知る必要がある）
@@ -712,10 +745,36 @@
     curVoiceKey = key;
     voiceHistory.push({ key, start: performance.now(), end: null });
     if (voiceHistory.length > 200) voiceHistory.shift();
-    const onEnd = () => { if (curVoice === a) { closeVoiceHistory(); curVoice = null; curVoiceKey = null; } };
-    a.addEventListener('ended', onEnd, { once: true });
-    voiceCleanups.push(() => a.removeEventListener('ended', onEnd));
+    /* この1本が「自然に鳴り終わった」ときの後始末＋連鎖の前進。
+       別の声に切り替わったあと（curVoice !== a）は何もしない＝割り込んだ側が正 */
+    const finishNatural = () => {
+      if (curVoice !== a) return;
+      closeVoiceHistory();
+      curVoice = null;
+      curVoiceKey = null;
+      advanceVoiceQueue();
+    };
+    a.addEventListener('ended', finishNatural, { once: true });
+    voiceCleanups.push(() => a.removeEventListener('ended', finishNatural));
+    /* 保険（ended が来ない環境用・iOSで実例あり）: 実測長を過ぎてから見に行き、
+       まだ鳴っていれば0.6秒ごとに見直す。鳴り終わっていれば連鎖を進める。
+       ⚠️ 実測長より前には絶対に見ない（v25以前は4.2秒固定で、4.92秒のクリップに
+          保険の方が先に来て自分で自分にかぶせていた） */
+    let looks = 0;
+    const watch = () => {
+      if (curVoice !== a) return; // すでに別の声へ移った＝この見張りは用済み
+      if (!a.paused && !a.ended && looks < 12) { looks++; queueVoice(watch, 600); return; }
+      finishNatural();
+    };
+    queueVoice(watch, (soundDurationMs(key) || 4200) + 250);
     return a;
+  }
+  function playVoice(key, onFail) { return startVoice(key, onFail, false); }
+  /* 予約された連鎖を1本進める。前の声が自然に鳴り終わったときだけ呼ばれる */
+  function advanceVoiceQueue() {
+    if (!voiceQueue.length) return;
+    const next = voiceQueue.shift();
+    queueVoice(() => startVoice(next.key, null, true), next.gap);
   }
 
   function playSound(key) {
@@ -745,42 +804,23 @@
   function announceByMode(base) {
     playAnnounce(base + (state.mode === 'heisei' ? 'H' : 'R'));
   }
-  /* 「1本目のあとに続けて2本目」を繋ぐ（2026-08-17 作り替え）。
-     🚨 旧実装は「実測長が取れなければ4.2秒後」の**時間任せ**だった。
-     実測すると reiwa_deco_gate は 4.92秒・reiwa_moriage_level は 5.30秒あり、
-     読み込みが間に合わずに長さが 0 で返る回は、保険の方が本編より先に来て
-     **自分で自分にかぶせていた**（470ms／854ms）。時間で当てにいくのをやめ、
-     ①1本目の ended を実際に待つ ②保険は「まだ鳴っていたら繋がず様子を見直す」
-     の2段構えにする。1本目がもうバスの上に居ない（別の声に切られた）ときは繋がない。 */
-  function chainAnnounce(firstKey, secondKey, gapMs = 250, fallbackMs = 4200) {
-    const a = sounds[firstKey];
-    // 1本目が鳴らせない回は待つ意味が無いので、そのまま2本目へ
-    if (!a || soundMissing(firstKey) || curVoiceKey !== firstKey) {
-      queueVoice(() => playVoice(secondKey), gapMs);
+  /* 「1本目のあとに続けて2本目」を繋ぐ（2026-08-18 作り替え・v26の回帰修正）。
+
+     やることは **予約列に積むだけ** にした。鳴り終わりの検知はバス（startVoice）が
+     1箇所で持ち、ended リスナの登録順に結果が左右されない。
+     v26は「同じ要素に ended をあとから足して自分で待つ」形で、先に登録された
+     バス側のリスナが状態を消すため一度も繋がらなかった（ボイス4本が無音）。
+
+     1本目がまだ予約の途中（voiceQueue の中）でも積める。これで
+     beauty → moriageLevel → makeupHistory のような3連もそのまま並ぶ
+     （v26は2本目を予約中に3本目を頼むと、判定が外れて**1本目を切って**鳴らしていた）。 */
+  function chainAnnounce(firstKey, secondKey, gapMs = 250) {
+    if (curVoiceKey === firstKey || voiceQueue.some(q => q.key === firstKey)) {
+      voiceQueue.push({ key: secondKey, gap: gapMs });
       return;
     }
-    let fired = false;
-    const go = () => {
-      if (fired) return;
-      if (curVoiceKey !== firstKey) return; // 1本目が別の声に切られた＝この連鎖は用済み
-      fired = true;
-      playVoice(secondKey);
-    };
-    const onEnd = () => go();
-    a.addEventListener('ended', onEnd, { once: true });
-    voiceCleanups.push(() => a.removeEventListener('ended', onEnd));
-    /* 保険（ended が来ない環境用）: まだ鳴っている間は絶対に繋がず、
-       0.6秒ごとに見直す。上限を切って、詰まったまま無限に見張り続けないようにする */
-    const d = soundDurationMs(firstKey);
-    let looks = 0;
-    const watch = () => {
-      if (fired || curVoiceKey !== firstKey) return;
-      const stillPlaying = !a.paused && !a.ended;
-      if (!stillPlaying || looks >= 12) { go(); return; }
-      looks++;
-      queueVoice(watch, 600);
-    };
-    queueVoice(watch, (d > 0 ? d : fallbackMs) + gapMs);
+    // 1本目がバスに居ない（鳴らせなかった・別の声に切られた）回は待つ意味が無いので、そのまま2本目へ
+    queueVoice(() => playVoice(secondKey), gapMs);
   }
   /* 「その回はじめて」だけ鳴らす案内の管理（音羽さんの注意3）。
      道具を持ち替えるたびに喋ると、3分の落書きタイムが説明で埋まる。
@@ -5485,6 +5525,11 @@
     const bar = $('.deco-toolbar');
     const cue = $('#toolbar-more');
     if (!bar || !cue) return;
+    /* 落書き画面に入る前は道具箱の高さが0（表示されていない）ため、
+       0 + 0 >= 0 - 8 が成立して「もう底だ」と判定されてしまう。
+       画面に出ていないときは判定しない（2026-08-18: この取りこぼしで、
+       画面を出す前にリサイズが起きた端末では帯が最初から消えていた） */
+    if (!bar.clientHeight) return;
     const atEnd = bar.scrollTop + bar.clientHeight >= bar.scrollHeight - 8;
     cue.classList.toggle('at-end', atEnd);
   }
@@ -6115,6 +6160,8 @@
 
   function startDecoScreen() {
     showScreen('screen-deco');
+    // 道具箱の「▼ したにも道具がある」帯の状態を、画面に出た時点で必ず取り直す（2026-08-18）
+    requestAnimationFrame(() => syncToolbarMore());
     /* 誤操作での離脱対策をこの画面の間だけ入れる（2026-08-14 実機テスト指摘①）:
        履歴にダミーを積み、端スワイプの吸収と落書きの自動保存を有効にする */
     decoActive = true;
@@ -7353,6 +7400,11 @@
     stampSize: () => state.stampSize,
     penColor: () => state.penColor,
     voiceHistory: () => voiceHistory.map(v => ({ ...v })),
+    // 連鎖の予約列（2026-08-18 回帰修正の検証用。積まれているのに鳴らない、を見分ける）
+    voiceQueue: () => voiceQueue.map(q => q.key),
+    voiceNow: () => curVoiceKey,
+    // 文言の一括書き換えが複数要素に当たっていないか（2026-08-18・巻き添えの検出）
+    copyCollisions: () => copyCollisions.slice(),
     voiceOverlaps: () => {
       const now = performance.now();
       const sp = voiceHistory.map(v => ({ key: v.key, a: v.start, b: v.end == null ? now : v.end }));
