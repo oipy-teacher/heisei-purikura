@@ -1279,8 +1279,9 @@
   function buildSelectGrids() {
     const conf = modeConf();
     buildLayoutList();
-    buildChoiceGrid($('#curtain-list'), conf.curtains, 'curtain', (item) => { state.curtain = item; });
-    buildChoiceGrid($('#frame-list'), conf.frames, 'frame', (item) => { state.frame = item; });
+    // えらんだ瞬間に撮影画面の飾りも作り直しておく（選び直して撮影へ入っても必ず最新になる）
+    buildChoiceGrid($('#curtain-list'), conf.curtains, 'curtain', (item) => { state.curtain = item; renderCamFramePreview(); });
+    buildChoiceGrid($('#frame-list'), conf.frames, 'frame', (item) => { state.frame = item; renderCamFramePreview(); });
     buildSelectFilterRow();
     buildBgmRow();
     buildEraToneRow();
@@ -1430,6 +1431,24 @@
   const segmenterStatus = $('#segmenter-status');
   previewCanvas.width = SHOT_W;
   previewCanvas.height = SHOT_H;
+
+  /* 撮影中のフレーム重ね（2026-08-18 実機テスト指摘①「フレームを選んでも撮影時に変わらない」）。
+     実機のプリクラは撮影中の画面に選んだ飾りが乗っていて、客はそれを見てポーズを決める。
+     🚨 落書き画面の renderDecoFramePreview() と **同じ関数・同じ引数** を通すこと。
+     ここを別実装にすると「ライブで見た位置」と「出来上がりの位置」がズレて客を裏切る。
+     毎フレームは描かない（選び直したときだけ描き直す）ので、ライブ盛れの負荷には足さない。
+     撮影データは liveClean 側から取るので、この層は写真には焼き込まれない。 */
+  const camFrameCanvas = $('#cam-frame-canvas');
+  const camFrameCtx = camFrameCanvas ? camFrameCanvas.getContext('2d') : null;
+  if (camFrameCanvas) { camFrameCanvas.width = SHOT_W; camFrameCanvas.height = SHOT_H; }
+  function renderCamFramePreview() {
+    if (!camFrameCtx) return;
+    camFrameCtx.clearRect(0, 0, SHOT_W, SHOT_H);
+    if (!state.frame || !state.curtain) return;
+    drawCellDecor(camFrameCtx, { x: 0, y: 0, w: SHOT_W, h: SHOT_H }, {
+      emoji: state.frame.emoji, isCircle: false, radius: 10,
+    });
+  }
 
   let imageSegmenter = null;
   let segmenterLoading = false;
@@ -1901,6 +1920,7 @@
     if (liveBeauty) renderLiveBeauty(previewCtx);
 
     previewCanvas.classList.add('ready');
+    if (camFrameCanvas) camFrameCanvas.classList.add('ready'); // 飾りは映像と同時に出す（先に出ると枠だけ浮く）
     video.classList.add('masked');
     if (liveBeauty) liveAutoDegrade(performance.now() - t0);
   }
@@ -2096,6 +2116,8 @@
     $('#darkroom').classList.add('hidden'); // 前セッションの現像中表示を消す
     document.querySelector('.camera-stage').classList.remove('developing'); // 右パネルの非表示も解除（保険）
     previewCanvas.classList.remove('ready');
+    if (camFrameCanvas) camFrameCanvas.classList.remove('ready');
+    renderCamFramePreview(); // えらび直した内容をここで描き直す（映像が出た瞬間から飾りが乗っている）
     video.classList.remove('masked');
 
     // 盛り機能用のモデルを裏で読み込み開始（盛り画面までに間に合わせる）

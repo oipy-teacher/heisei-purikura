@@ -137,6 +137,11 @@
       <div class="camera-viewport" id="camera-curtain">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="preview-canvas"></canvas>
+        <!-- 撮影中も「えらんだフレーム／シールのカラー」を見せる層（2026-08-18 実機テスト指摘①）。
+             実機のプリクラは撮影中の画面に飾りが乗っていて、客はそれを見てポーズを決める。
+             落書き画面の #deco-frame-canvas と同じ関数・同じ引数で描くので、
+             ライブで見た位置と出来上がりの位置がズレない。撮影データには焼き込まない。 -->
+        <canvas id="cam-frame-canvas" class="cam-frame-canvas"></canvas>
         <canvas id="flash-canvas"></canvas>
         <div id="countdown-num" class="countdown-num"></div>
         <div id="shot-indicator" class="shot-indicator"></div>

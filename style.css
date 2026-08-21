@@ -467,6 +467,22 @@ body.theme-reiwa .sel-hint { color: var(--r-ink); font-weight: 500; opacity: .75
 }
 #preview-canvas.ready { opacity: 1; }
 #video.masked { opacity: 0; }
+/* 撮影中のフレーム重ね（2026-08-18 実機テスト指摘①）。
+   🚨 鏡像にしない: 枠と四隅の位置は左右対称なので反転しても同じ位置に来るが、
+   絵文字そのものを裏返すと「シールに載る飾り」と字面が変わってしまう。
+   🚨 object-fit は #preview-canvas と**同じ cover** にする（2026-08-21）。
+   平成のファインダーは 10px の額縁を持つので中身は正確な 4:3 ではなく、
+   映像側だけ cover（少し切る）で飾り側が fill（伸ばす）だと、
+   ライブで見た飾りの位置が出来上がりと1%ずれる。同じ写像にすれば必ず一致する。 */
+.cam-frame-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+.cam-frame-canvas.ready { opacity: 1; }
 
 /* 全身モード（背面カメラ）では鏡像にしない。
    前面カメラは鏡合わせが自然だが、背面カメラで反転すると
