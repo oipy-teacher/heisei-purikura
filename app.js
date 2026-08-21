@@ -593,15 +593,54 @@
   /* 各音声ファイルの読み込み可否。undefined=不明 / true=使える / false=404等で使えない。
      新音声は並行制作中でファイルが未着のことがあるため、false のものは再生も待機もしない。 */
   const soundAvailable = {};
+  /* 🚨 起動時に60本ぜんぶを preload='auto' で一斉に読ませない（2026-08-18 実機テスト指摘②）。
+     要素は今までどおり全部その場で作る（sounds.xxx を同期で参照するコードがあるため）が、
+     読み込みだけは画面が出てから小分けに始める。一斉に始めると
+     ①メディア要素の準備でメインスレッドが刻まれる ②67本のmp3がSWのプリキャッシュと
+     同じ回線を取り合う、の2つが同時に起きて、最初の画面が固まったように見える。
+     順番は「先に鳴るもの」から。全部を暖め終わるのは起動から約1.5〜2秒後。 */
+  /* 「手が空いた一瞬」に1仕事だけ置く（2026-08-21）。
+     🚨 まとめて1回の idle に積まない。積むと idle 自身が長い固まりになる
+     （実測: 起動の音まわりを1回のidleに全部入れたとき、そのidleだけで78ms居座った）。
+     requestIdleCallback が無い環境（iOS Safari 16以前）は時間で刻む。 */
+  function idleStep(fn) {
+    if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 1500 });
+    else setTimeout(fn, 120);
+  }
+  const SOUND_WARM_FIRST = ['seTap', 'seDecide', 'start', 'courseSelectV2', 'attractCall',
+    'count3', 'count2', 'count1', 'countHai', 'seShutter',
+    'introShot1', 'introShot2', 'introShot3', 'introShot4'];
   Object.entries(SOUND_FILES).forEach(([key, src]) => {
     const a = new Audio(src);
-    a.preload = 'auto';
+    a.preload = 'none'; // 暖機のときに 'auto' へ上げる
     a.addEventListener('error', () => { soundAvailable[key] = false; }, { once: true });
     a.addEventListener('canplaythrough', () => {
       if (soundAvailable[key] === undefined) soundAvailable[key] = true;
     }, { once: true });
     sounds[key] = a;
   });
+  let soundWarmStarted = false;
+  function warmSounds() {
+    if (soundWarmStarted) return;
+    soundWarmStarted = true;
+    const keys = Object.keys(SOUND_FILES)
+      .sort((a, b) => {
+        const ia = SOUND_WARM_FIRST.indexOf(a), ib = SOUND_WARM_FIRST.indexOf(b);
+        return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+      });
+    const BATCH = 4;
+    let i = 0;
+    function next() {
+      for (let n = 0; n < BATCH && i < keys.length; n++, i++) {
+        const a = sounds[keys[i]];
+        if (!a) continue;
+        a.preload = 'auto';
+        try { a.load(); } catch (e) { /* 読めない環境では soundAvailable が false になるだけ */ }
+      }
+      if (i < keys.length) idleStep(next);
+    }
+    idleStep(next); // 最初の1組も遅らせる（この関数はタップの中からも呼ばれるため・2026-08-21）
+  }
 
   function soundMissing(key) { return soundAvailable[key] === false; }
 
@@ -625,9 +664,11 @@
     try { audioCtx = new AC(); } catch (e) { return null; }
     return audioCtx;
   }
-  (function preloadWaBuffers() {
-    const ctx = ensureAudioCtx();
-    if (!ctx) return;
+  let waPreloadStarted = false;
+  function preloadWaBuffers() {
+    const ctx = audioCtx;
+    if (!ctx || waPreloadStarted) return;
+    waPreloadStarted = true;
     WA_KEYS.forEach((key) => {
       fetch(SOUND_FILES[key])
         .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('http ' + r.status))))
@@ -639,10 +680,30 @@
         .then(b => { waBuffers[key] = b; })
         .catch(() => { /* 取得/デコード失敗時は HTMLAudio へフォールバックするだけ */ });
     });
+  }
+
+  /* 🚨 AudioContext を起動時に作らない（2026-08-18 実機テスト指摘②「最初の画面でしばらく固まる」）。
+     `new AudioContext()` は音声デバイスを起こす**同期処理**で、起動時の重さの単独最大だった。
+     画面が出て手が空いたとき（idle）に作り、それより先に客が触ったらそのタップの中で作る。
+     iOSは解錠をユーザー操作の中で行う必要があるので、後者はもともと正しい形。
+     ここを起動時に戻すと、最初の画面がまた固まる。
+     🚨 3つを1回のidleに積まない（2026-08-21）。積むと「起動時の固まり」を
+     「起動1秒後の固まり」に引っ越しただけになる。1つ置くごとに手を離す。 */
+  function bootAudioEngine() {
+    ensureAudioCtx();
+    idleStep(preloadWaBuffers);
+    idleStep(warmSounds);
+  }
+  (function scheduleAudioBoot() {
+    const go = () => idleStep(bootAudioEngine);
+    if (document.readyState === 'complete') go();
+    else window.addEventListener('load', go, { once: true });
   })();
   // タップのたびに running でなければ resume（iOSはバックグラウンド復帰・電話着信等でも suspend する）
   document.addEventListener('pointerdown', () => {
     const ctx = ensureAudioCtx();
+    preloadWaBuffers(); // idle待ちより先に触られたら、そのタップの中で用意する（iOSはこちらが本来正しい）
+    warmSounds();
     if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
   }, true);
   document.addEventListener('visibilitychange', () => {
@@ -5630,7 +5691,13 @@
     if (penTypeRow) penTypeRow.style.display = types.length > 1 ? '' : 'none';
     state.penType = 'normal';
   }
-  buildDecoTools();
+  /* 🚨 落書き道具（スタンプ・色・文字）の組み立ては起動時にやらない（2026-08-21 実機テスト指摘②）。
+     ここは客がまだタイトル画面にいる時点で、落書き画面の道具を全部作っていた。
+     スタンプの絵を1つずつcanvasに描くので6倍CPUで43ms（app.js実行116msの約4割）。
+     道具はモード決定（buildDecoTools は showSelect でも startDecoScreen でも呼ばれる）で
+     必ず作り直されるので、起動時のこの1回は先回りにすぎない。手が空いてから作る。
+     ここを同期に戻すと、最初の画面が固まる時間がそのぶん伸びる。 */
+  idleStep(buildDecoTools);
 
   $('#pen-size').addEventListener('input', (e) => { state.penSize = Number(e.target.value); });
 
