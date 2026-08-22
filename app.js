@@ -1,6 +1,24 @@
 (() => {
   'use strict';
 
+  /* ===================== 商品名（2026-08-23 オーナー裁定「一旦それで行こう」） =====================
+     🚨 **「プリント倶楽部 / Print Club」も「プリクラ」も、どちらも株式会社セガの登録商標。**
+     （「プリクラ」＝ 登録第5737125号・2015年登録・権利者セガ。フリューも自社サイトで
+       「『プリクラ』はセガの商標」と明記している。柄本の事実確認 2026-08-23）
+     ＝**片方をもう片方に置き換えても回避にならない。** 自前の名前に統一する。
+     柄本推奨・オーナー裁定で「★ 太子プリ ★」。
+
+     **正式なアプリ名が決まったら、ここの3つを書き換えるだけで全部変わる**ようにしてある:
+       画面のタイトル（<title>／扉のロゴ／待機デモ／帯）・シール台紙の見出し・
+       台紙のフッター・16分割の見出し・保存ファイル名・令和のロゴタイプ（CSS変数）。
+     ※ localStorage / sessionStorage のキー（purikura.session.v1 など）は**変えない**。
+        画面に出ない内部の名前で、変えると前の客の復帰データが読めなくなるだけだから。
+     ※ manifest.json（ホーム画面に追加したときの名前）だけは静的ファイルなので手で揃える。 */
+  const BRAND_H = '★ 太子プリ ★';   // 平成の様式（★で挟む・16分割の見出しと同じ）
+  const BRAND_R = 'taishi puri';     // 令和の様式（小文字・字間広め）
+  const BRAND_PLAIN = '太子プリ';     // 飾りなし（タイトル・扉・帯）
+  const BRAND_SLUG = 'taishi-puri';  // 保存ファイル名
+
   /* ===================== モード定義 =====================
      平成モード: 1999〜2003年頃（ユーロビート/パラパラ世代）のプリ機を再現。
                  盛り調整UIは無い時代（デカ目は2007年「美人-プレミアム-」以降）なので
@@ -114,12 +132,12 @@
         { id: 'showa',  label: '写ルンです', fx: { desat: 0.2, warm: { color: '#c9d4a0', amt: 0.18 }, contrast: 0.2 } },
       ],
       sheet: {
-        title: '平成 Print Club',
+        title: BRAND_H,   // 2026-08-23 オーナー裁定: 「平成 Print Club」から統一（Print Clubはセガの登録商標）
         titleFont: '900 34px -apple-system, sans-serif',
         titleColor: '#ffffff',
         titleGlow: 'rgba(255,47,160,.8)',
         footerColor: '#a03cae',
-        footerName: 'Heisei Purikura-ki',
+        footerName: BRAND_R, // 2026-08-23: 「Heisei Purikura-ki」は当時のロゴに無いローマ字の綴り（柄本P-8）＋Purikuraの綴りを残さない
         bgTop: '#ffffff', bgMid: null /* curtain色 */, bgBottom: '#ffffff',
         cellRadius: 10,
         cornerDeco: 'frameEmoji',
@@ -232,7 +250,7 @@
         titleColor: '#a8917d',
         titleGlow: null,
         footerColor: '#b3a495',
-        footerName: 'purikura',
+        footerName: BRAND_R, // 2026-08-23: 「purikura」はセガの登録商標の綴りなので使わない
         bgTop: '#faf6f0', bgMid: null, bgBottom: '#f4ede4',
         cellRadius: 4,
         cornerDeco: 'none',
@@ -389,6 +407,29 @@
 
   /* ===================== ユーティリティ ===================== */
   const $ = (sel) => document.querySelector(sel);
+
+  /* 商品名を画面へ配る（2026-08-23）。HTMLに直書きすると直す場所が増えるので、
+     上の BRAND_* を唯一の出どころにする。扉のロゴは ::before/::after が
+     attr(data-text) を読んで白フチを描いているので、data-text も一緒に書き換える。
+     令和のロゴタイプはCSSの content なので、CSS変数（--brand-r）で渡す。
+     コストは textContent 数回＝1ms未満。起動が固まる話（2026-08-21）には触れない */
+  function applyBrandName() {
+    document.title = `${BRAND_PLAIN} 〜平成 & 令和〜`;
+    const setLogo = (sel, text) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        el.textContent = text;
+        if (el.dataset.text !== undefined) el.dataset.text = text;
+      });
+    };
+    setLogo('.door-logo-h', `平成 ${BRAND_PLAIN}`);
+    setLogo('.door-logo-r', `令和 ${BRAND_PLAIN}`);
+    setLogo('.title-band-name', `文化祭スペシャル ${BRAND_PLAIN}`);
+    // 待機デモの1枚目のロゴ（.as-h-logo.big は別の文言なので、印のある1枚目だけ差し替える）
+    setLogo('#as-logo-brand', `平成 ${BRAND_PLAIN}`);
+    document.documentElement.style.setProperty('--brand-r', `'${BRAND_R}  \\2014  photo sticker'`);
+  }
+  applyBrandName();
+
   const screens = {};
   document.querySelectorAll('.screen').forEach(s => screens[s.id] = s);
 
@@ -5381,6 +5422,14 @@
     } else if (op.op === 'addMany') {
       // 落書き見本の一括反映を1操作として巻き戻す
       decoObjects.splice(Math.max(0, decoObjects.length - op.count), op.count);
+    } else if (op.op === 'rakuraku') {
+      /* らくらくお絵かき（2026-08-23）は「前の型を外して新しい型を載せる」の2手が1操作。
+         巻き戻しも2手ぶん: ①今回足した分を末尾から外す ②外していた前の型を元の位置へ戻す。
+         客が自分で描いたものはそもそも触っていないので、ここにも出てこない */
+      decoObjects.splice(Math.max(0, decoObjects.length - op.count), op.count);
+      (op.removed || []).slice().sort((a, b) => a.index - b.index).forEach(({ index, obj }) => {
+        decoObjects.splice(Math.min(index, decoObjects.length), 0, obj);
+      });
     } else if (op.op === 'remove') {
       op.items.slice().sort((a, b) => a.index - b.index).forEach(({ index, obj }) => {
         decoObjects.splice(Math.min(index, decoObjects.length), 0, obj);
@@ -5930,6 +5979,18 @@
           w: it.t.length * fontSize + fontSize * 0.4,
         };
       }
+      /* 線（2026-08-23 らくらくお絵かき用に追加）。金・銀のフチ取りや下線を型に含めるため。
+         太さはセル短辺に比例させる＝どのレイアウトでも同じ太さ比で出る。
+         penType/color は型がそのまま持つ（客の選んでいるペン色に引きずられない） */
+      if (it.type === 'stroke') {
+        return {
+          type: 'stroke',
+          penType: it.penType || 'normal',
+          color: it.color || '#ffffff',
+          size: Math.max(2, it.size * s),
+          pts: it.pts.map(p => ({ x: cell.x + p.nx * cell.w, y: cell.y + p.ny * cell.h })),
+        };
+      }
       if (it.type === 'kira') {
         return {
           type: 'kira',
@@ -6034,6 +6095,237 @@
     scheduleThumbUpdate();
   });
 
+  /* ---------- らくらくお絵かき（平成専用・2026-08-23 新設） ----------
+     2002年の実機の機能。メイクソフトウェア パールフラッシュ（2002年11月20日発売）の
+     当時の商品ページに「落書きが苦手な人も、のこり時間があとわずかな時でも
+     『**らくらくお絵かき**』で選んだ絵柄が、一瞬で落書きできます。季節に応じて全36種類あります。」、
+     フラワーズ（2003年3月）に「簡単でキレイに仕上がるオート落書き『らくらくお絵かき』機能搭載！」
+     （柄本の考証 data/work/heisei-flash-pen-spec-20260822.md E節・確度=強）。
+
+     🚨 令和の「らくがき見本」（DOODLE_SAMPLES）とは**別の機能**として作る。
+       ・令和 = 一覧から選ぶ（現行実機Meidy 2025型）。2026-08-13のオーナー裁定で平成には出さない
+       ・平成 = **一覧を出さない1ボタン**。押した瞬間に完成形が載る
+     この機能の主旨は「手が止まった客・時間が無い客の逃げ道」なので、
+     選択肢を並べた時点で主旨が消える（迷う時間が無いから押すボタン）。
+     実機は36種類から選ばせたが、**選ばせ方だけは変えた**（3分・無人運用のため）。
+     代わりに **もう一度押すと次の型に差し替わる**ので、当時の「絵柄を選ぶ」体験は残っている。
+
+     座標は令和の見本と同じ正規化形式（nx/ny=写真内0〜1・大きさ=写真短辺比）で持ち、
+     変換は sampleCellObjects を共用する（座標系を2つ作らない）。
+     顔を隠さないよう、中央（nx .28〜.72 × ny .22〜.78）には何も置いていない。 */
+
+  // 手描きの金枠（少しずつ揺らす＝定規で引いた線に見せない。平成の様式はハードエッジだが手の癖は残す）
+  const RK_FRAME_PTS = [
+    { nx: 0.035, ny: 0.055 }, { nx: 0.20, ny: 0.042 }, { nx: 0.42, ny: 0.052 },
+    { nx: 0.63, ny: 0.040 }, { nx: 0.82, ny: 0.050 }, { nx: 0.965, ny: 0.045 },
+    { nx: 0.958, ny: 0.24 }, { nx: 0.968, ny: 0.48 }, { nx: 0.955, ny: 0.72 },
+    { nx: 0.965, ny: 0.955 }, { nx: 0.78, ny: 0.947 }, { nx: 0.55, ny: 0.958 },
+    { nx: 0.32, ny: 0.945 }, { nx: 0.05, ny: 0.955 }, { nx: 0.042, ny: 0.72 },
+    { nx: 0.032, ny: 0.47 }, { nx: 0.045, ny: 0.23 }, { nx: 0.035, ny: 0.055 },
+  ];
+  const rkFrame = (kind) => ({ type: 'stroke', penType: kind, size: 0.019, pts: RK_FRAME_PTS });
+
+  /* 型は5つ。「季節に応じて全36種類」の実機と数は違うが、
+     文化祭の1台・3分の持ち時間で客が押す回数は多くて数回なので、押すたびに違うものが出れば足りる。
+     どの型も「上に見出しの文字・四隅と左右の余白に飾り・下に日付」で完成形に見える組み立てにしてある
+     （当時の落書きは"余白を埋める"もの。5個だけ置いて終わりだと手抜きに見える） */
+  const RAKURAKU_HEISEI = [
+    { label: 'ズッ友', items: [
+      { type: 'text', t: 'ズッ友だょ…！', style: 'sticker', color: '#a06bff', nx: 0.50, ny: 0.09, fs: 0.078, rotDeg: -3 },
+      { type: 'stroke', penType: 'kin', size: 0.013, pts: [{ nx: 0.24, ny: 0.158 }, { nx: 0.45, ny: 0.148 }, { nx: 0.76, ny: 0.156 }] },
+      { type: 'dstamp', id: 'heartChalk', nx: 0.10, ny: 0.26, fsize: 0.13 },
+      { type: 'dstamp', id: 'heartChalk', nx: 0.905, ny: 0.21, fsize: 0.10 },
+      { type: 'stamp', char: '💋', nx: 0.115, ny: 0.58, fsize: 0.12 },
+      { type: 'stamp', char: '🌟', nx: 0.885, ny: 0.47, fsize: 0.11 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.80, ny: 0.68, fsize: 0.10 },
+      { type: 'dstamp', id: 'dotsPop', nx: 0.155, ny: 0.855, fsize: 0.14 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.76, ny: 0.925, fsize: 0.17 },
+    ] },
+    { label: '最強', items: [
+      rkFrame('kin'),
+      { type: 'text', t: '最強', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.115, fs: 0.135, rotDeg: -5 },
+      { type: 'stamp', char: '🔥', nx: 0.115, ny: 0.145, fsize: 0.13 },
+      { type: 'stamp', char: '🔥', nx: 0.885, ny: 0.145, fsize: 0.13 },
+      { type: 'stamp', char: '👊', nx: 0.115, ny: 0.60, fsize: 0.13 },
+      { type: 'stamp', char: '⚡', nx: 0.885, ny: 0.54, fsize: 0.12 },
+      { type: 'dstamp', id: 'star4', nx: 0.83, ny: 0.80, fsize: 0.13 },
+      { type: 'text', t: 'アゲアゲ⤴', style: 'sticker', color: '#ff8a2a', nx: 0.31, ny: 0.882, fs: 0.075, rotDeg: 4 },
+    ] },
+    { label: 'ラブラブ', items: [
+      rkFrame('gin'),
+      { type: 'dstamp', id: 'heartChalk', nx: 0.095, ny: 0.315, fsize: 0.12 },
+      { type: 'dstamp', id: 'heartChalk', nx: 0.90, ny: 0.155, fsize: 0.12 },
+      { type: 'stamp', char: '💋', nx: 0.875, ny: 0.36, fsize: 0.12 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.125, ny: 0.42, fsize: 0.10 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.885, ny: 0.66, fsize: 0.09 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.225, ny: 0.145, fsize: 0.15 },
+      { type: 'stamp', char: '🌟', nx: 0.115, ny: 0.72, fsize: 0.11 },
+      { type: 'text', t: 'ラブラブ♡', style: 'neon', nx: 0.50, ny: 0.895, fs: 0.095, rotDeg: 0 },
+    ] },
+    { label: 'チョベリグ', items: [
+      { type: 'text', t: 'チョベリグ', style: 'sticker', color: '#5cc8ff', nx: 0.50, ny: 0.10, fs: 0.095, rotDeg: -2 },
+      { type: 'stroke', penType: 'gin', size: 0.013, pts: [{ nx: 0.26, ny: 0.17 }, { nx: 0.52, ny: 0.162 }, { nx: 0.745, ny: 0.172 }] },
+      { type: 'dstamp', id: 'peaceMark', nx: 0.115, ny: 0.32, fsize: 0.16 },
+      { type: 'dstamp', id: 'stripePop', nx: 0.885, ny: 0.24, fsize: 0.16 },
+      { type: 'stamp', char: '📟', nx: 0.125, ny: 0.72, fsize: 0.12 },
+      { type: 'dstamp', id: 'dotsPop', nx: 0.875, ny: 0.72, fsize: 0.15 },
+      { type: 'stamp', char: '🎤', nx: 0.885, ny: 0.905, fsize: 0.10 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.42, ny: 0.935, fsize: 0.16 },
+    ] },
+    { label: '永久不滅', items: [
+      rkFrame('kin'),
+      { type: 'dstamp', id: 'star4', nx: 0.105, ny: 0.16, fsize: 0.13 },
+      { type: 'dstamp', id: 'star4', nx: 0.895, ny: 0.16, fsize: 0.13 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.175, ny: 0.90, fsize: 0.13 },
+      { type: 'text', t: '心友', style: 'sticker', color: '#5cc8ff', nx: 0.135, ny: 0.52, fs: 0.10, rotDeg: -8 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.875, ny: 0.45, fsize: 0.11 },
+      { type: 'stamp', char: '🌟', nx: 0.115, ny: 0.78, fsize: 0.11 },
+      { type: 'stamp', char: '💫', nx: 0.885, ny: 0.76, fsize: 0.10 },
+      { type: 'text', t: '我等友情永久不滅成', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.895, fs: 0.058, rotDeg: -1 },
+    ] },
+  ];
+
+  let rakurakuIdx = 0;      // 次に載せる型（押すたびに1つ進む＝押すたび違う絵になる）
+  const RK_MARK = 'rk';     // この印が付いたオブジェクトが「らくらくお絵かきが置いたもの」
+
+  function rakurakuNext() { return RAKURAKU_HEISEI[rakurakuIdx % RAKURAKU_HEISEI.length]; }
+
+  /* 🚨 シールに焼くとき、写真はセルの形に合わせて **切り取られる**（drawShotFit の cover）。
+     実測（2026-08-23）: 4分割・16分割・まる4 では横 **64.7%** しか残らない（左右が落ちる）。
+     2枚ワイドは縦 74.1% しか残らない（上下が落ちる）。6分割だけ全部残る。
+     写真の端に置いた飾りは、**画面では見えていたのにシールには入らない**。
+     らくらくお絵かきは「押したら完成」の機能なので、ここがズレると約束を破ることになる。
+     → 型は「切り取られても残る範囲」の中に収める。範囲はいま選ばれているレイアウトから計算する
+       （客がレイアウトを選ぶのは落書きより前なので、途中で変わることはない）。
+     ※ まる型（まる4・まるMIX）は円で抜くので四隅はさらに欠ける。そこまでは追わない
+       （丸を選んだ客は丸くなることを承知しているため）。 */
+  function rakurakuSafeCell() {
+    const full = { x: 0, y: 0, w: SHOT_W, h: SHOT_H };
+    let cells = [];
+    try { cells = layoutCells(state.layout || LAYOUTS[0]) || []; } catch (e) { return full; }
+    if (!cells.length) return full;
+    let vx = 1, vy = 1;
+    cells.forEach((c) => {
+      const scale = Math.max(c.w / SHOT_W, c.h / SHOT_H);
+      vx = Math.min(vx, (c.w / scale) / SHOT_W);
+      vy = Math.min(vy, (c.h / scale) / SHOT_H);
+    });
+    vx = Math.max(0.6, Math.min(1, vx));   // 縮めすぎない床（型が小さくなりすぎると別の手抜きに見える）
+    vy = Math.max(0.6, Math.min(1, vy));
+    return { x: SHOT_W * (1 - vx) / 2, y: SHOT_H * (1 - vy) / 2, w: SHOT_W * vx, h: SHOT_H * vy };
+  }
+
+  function rakurakuObjects(design) {
+    const objs = sampleCellObjects(design.items, rakurakuSafeCell());
+    objs.forEach(o => { o[RK_MARK] = 1; });
+    return objs;
+  }
+
+  /* 写真1枚に型をかける。**前に載せた らくらく の分は取り除いてから載せる**（積み上げない）。
+     客が自分で描いた線・押したスタンプ（印が無いもの）は触らない。
+     取り除いた分と足した数を1つの操作として積むので、「もどす」1回で押す前の姿に戻る */
+  function applyRakurakuTo(i, design) {
+    if (!shotDeco[i]) shotDeco[i] = { objects: [], undo: [] };
+    const arr = shotDeco[i].objects;
+    const removed = [];
+    for (let k = arr.length - 1; k >= 0; k--) {
+      if (arr[k] && arr[k][RK_MARK]) { removed.unshift({ index: k, obj: arr[k] }); arr.splice(k, 1); }
+    }
+    const objs = rakurakuObjects(design);
+    arr.push(...objs);
+    shotDeco[i].undo.push({ op: 'rakuraku', removed, count: objs.length });
+    if (shotDeco[i].undo.length > 60) shotDeco[i].undo.shift();
+  }
+
+  function renderRakurakuPreview() {
+    const cv = $('#rakuraku-preview');
+    if (!cv) return;
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, cv.width, cv.height);
+    c.fillStyle = '#ffe6f3';
+    c.fillRect(0, 0, cv.width, cv.height);
+    c.save();
+    c.scale(cv.width / SHOT_W, cv.height / SHOT_H);
+    rakurakuObjects(rakurakuNext()).forEach(o => drawObject(c, o));
+    c.restore();
+  }
+
+  const rakurakuBtn = $('#btn-rakuraku');
+  if (rakurakuBtn) {
+    rakurakuBtn.addEventListener('click', () => {
+      if (state.remaining <= 0) return;
+      const design = rakurakuNext();
+      applyRakurakuTo(curShot, design);
+      rakurakuIdx++;
+      renderRakurakuPreview();
+      renderDeco();
+      scheduleThumbUpdate();
+      scheduleSessionSave();
+      playSound('seDecide');
+      showDecoToast(`⚡ 「${design.label}」で かんせい！ もう一回おすと ちがう かざりに なるよ`);
+    });
+  }
+  const rakurakuAllBtn = $('#btn-rakuraku-all');
+  if (rakurakuAllBtn) {
+    rakurakuAllBtn.addEventListener('click', () => {
+      if (state.remaining <= 0) return;
+      const design = rakurakuNext();
+      decoShots().forEach((_, i) => applyRakurakuTo(i, design));
+      rakurakuIdx++;
+      renderRakurakuPreview();
+      renderDeco();
+      scheduleThumbUpdate();
+      scheduleSessionSave();
+      playSound('seDecide');
+      showDecoToast(`⚡ 4まい ぜんぶに 「${design.label}」を かけたよ！`);
+    });
+  }
+
+  /* 🚨 道具箱の見える高さは端末で桁が違う（2026-08-23 実測。落書き画面での clientHeight）:
+       iPad横1280×800 = 661px ／ iPhone12縦 390×844 = 315px ／ 横持ち812×375 = 248px
+       ／ iPhone8縦 375×667 = **149px** ／ 360×640 = 133px ／ iPhone SE1縦 320×568 = **91px**
+     見た目の良い形（見本の絵つき・2行）は191pxあるので、小さい端末に**そのまま貼り付けると
+     道具箱がこの1つで埋まり、ペンも色も見えなくなる**。
+     CSSのメディアクエリでは当てられない（道具箱の高さは画面サイズだけでは決まらない）ので、
+     **実測して切り替える**。resize と落書き画面に入るたびに測り直す。
+       ・compact … 見本の絵と補足を落として1行に畳む（道具箱が短い端末）
+       ・stuck   … 上に貼り付けてスクロールしても残す（貼っても全体の45%を超えない端末だけ） */
+  function syncRakurakuFit() {
+    const g = $('#group-rakuraku');
+    const bar = $('.deco-toolbar');
+    if (!g || !bar || g.style.display === 'none' || !bar.clientHeight) return;
+    /* 貼り付けた要素がスクロール窓より高いと、そもそも貼り付いてくれない（下端で止まる）ので、
+       「入るかどうか」を実際に測って決める。上から順に、入る形を採る:
+         ①そのままの形で貼れるか → ②畳めば貼れるか → ③畳んでも貼れない（貼らない）
+       **貼れることを見た目より優先する**（この機能は探させたら意味が無い）。
+       境目の45%は「道具箱の半分より下」＝ペンと色が最初の画面に残る線 */
+    g.classList.remove('compact', 'mini', 'stuck');
+    const limit = bar.clientHeight * 0.45;
+    if (g.getBoundingClientRect().height > limit) g.classList.add('compact');
+    /* iPhone SE1（320×568）は道具箱の見える高さが91pxしかなく、畳んでも8割を占める。
+       ここまで来たら「4まい ぜんぶに」を落として本体だけ残す（本体が見えることが最優先） */
+    if (g.getBoundingClientRect().height > limit) g.classList.add('mini');
+    if (g.getBoundingClientRect().height <= limit) g.classList.add('stuck');
+  }
+  window.addEventListener('resize', syncRakurakuFit);
+
+  /* 残りが少ないほど効く機能なので、終盤は見た目を変えて呼びかける（2026-08-23）。
+     貼り付けられていない端末（道具箱が短い端末）では見えていない可能性があるので、
+     そのときだけ道具箱を先頭まで戻す。**貼り付いている端末では動かさない**
+     （客がスタンプを押している最中に道具箱が飛ぶのは邪魔なだけ） */
+  const RAKURAKU_URGENT_SEC = 60;
+  function setRakurakuUrgent(on) {
+    const g = $('#group-rakuraku');
+    if (g) g.classList.toggle('urgent', !!on);
+    const sub = $('#rakuraku-sub');
+    if (sub) sub.textContent = on ? 'のこりわずか！ おすだけで しあがるよ' : 'おすだけで いっしゅんで かんせい！';
+    if (!on || !g) return;
+    const bar = $('.deco-toolbar');
+    if (bar && !g.classList.contains('stuck') && bar.scrollTop > 8) {
+      bar.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   /* 道具箱の「まだ下にある」表示の面倒を見る（2026-08-17・実測対応）。
      横持ちでは見える高さ263pxに対して中身が1578pxあり、スタンプの大きさは412px下にある。
      底まで送ったら消す（もう続きが無いのに矢印を出し続けない） */
@@ -6067,6 +6359,16 @@
     buildTextStampRow();
     buildTextColorRow();
     buildSampleRow();
+    /* らくらくお絵かきは平成専用（2026-08-23）。令和には「らくがき見本」が既にあるので出さない。
+       型の順番は客ごとに先頭へ戻す（前の客が3回押していたら次の客は4番目から始まる、を避ける） */
+    const rkGroup = $('#group-rakuraku');
+    if (rkGroup) rkGroup.style.display = isHeisei ? '' : 'none';
+    rakurakuIdx = 0;
+    setRakurakuUrgent(false);
+    if (isHeisei) {
+      renderRakurakuPreview();
+      requestAnimationFrame(syncRakurakuFit); // 道具箱の高さは描画後でないと取れない
+    }
     /* 平成の考証回帰（2026-08-13 オーナー裁定・era-designer乖離監査A-2/A-3/B-1）:
        色パレット・角度えらび・押す前プレビューは令和専用。当時のスタンプは
        「用意された色のまま・押したらそのまま（手の癖ランダム角度）」なので、平成では丸ごと隠す */
@@ -6786,6 +7088,13 @@
       document.documentElement.style.setProperty('--deco-p', ((Math.max(0, state.remaining) / total) * 100).toFixed(1) + '%');
       // 平成: 残り30秒から目覚まし時計のベルが震える（柄本仕様書3-7）
       if (state.remaining === 30) timerDisplay.parentElement.classList.add('alarm');
+      /* 平成: 残り1分で「らくらくお絵かき」の導線を目立たせる（2026-08-23）。
+         当時の売り文句が「のこり時間があとわずかな時でも一瞬で落書きできます」なので、
+         いちばん効く時刻に、いちばん見える形にする。声は足さない（3分を説明で埋めない） */
+      if (state.mode === 'heisei' && state.remaining === RAKURAKU_URGENT_SEC) {
+        setRakurakuUrgent(true);
+        showDecoToast('⏰ のこり1分！ ⚡らくらくお絵かき を おせば 一発で しあがるよ');
+      }
       if (state.remaining === halfPoint) {
         playSound('decoHalftime');
         showDecoToast(`⏰ のこり はんぶん！（${formatTime(halfPoint)}）`);
@@ -7078,7 +7387,7 @@
   }
   let saveModalObjectUrl = null;
   let lastSavedBlob = null; // 「うまく保存できないとき」用に直近の画像を持っておく
-  let lastSavedName = 'purikura.png';
+  let lastSavedName = `${BRAND_SLUG}.png`;
   function showSaveFallback(blob, cv) {
     // 最後の砦: 長押し保存。BlobURLで表示（巨大dataURL文字列をDOMに埋めない）
     const img = $('#save-modal-img');
@@ -7369,11 +7678,11 @@
        モードで様式を分ける（P-9・2026-08-15 柄本仕様書）。
        令和の客の16分割シールに平成の★装飾が焼かれていた。 */
     if (state.mode === 'heisei') {
-      ctx.fillText('★ 太子プリ ★', SHEET_W / 2, 52);
+      ctx.fillText(BRAND_H, SHEET_W / 2, 52);
     } else {
       ctx.font = '500 24px -apple-system, sans-serif';
       ctx.letterSpacing = '0.22em'; // 非対応ブラウザでは無視されるだけ（見た目が少し詰まる）
-      ctx.fillText('taishi puri', SHEET_W / 2, 50);
+      ctx.fillText(BRAND_R, SHEET_W / 2, 50);
       ctx.letterSpacing = '0px';
     }
 
@@ -7626,7 +7935,7 @@
       cap.textContent = (i + 1) + 'まいめ';
       b.appendChild(cap);
       b.addEventListener('click', () => {
-        deliverImage(() => composeSinglePhoto(i), `purikura_photo${i + 1}_${state.mode}_${fileStamp()}.png`);
+        deliverImage(() => composeSinglePhoto(i), `${BRAND_SLUG}_photo${i + 1}_${state.mode}_${fileStamp()}.png`);
       });
       row.appendChild(b);
     });
@@ -7636,20 +7945,20 @@
      押された瞬間に生成する（生成済みの持ち越しはしない） */
   $('#btn-download').addEventListener('click', (e) => {
     e.preventDefault();
-    deliverImage(finalCanvas, `purikura_${state.mode}_${fileStamp()}.png`);
+    deliverImage(finalCanvas, `${BRAND_SLUG}_${state.mode}_${fileStamp()}.png`);
   });
   $('#btn-download-16').addEventListener('click', (e) => {
     e.preventDefault();
-    deliverImage(composeSixteenRetro, `purikura16_${state.mode}_${fileStamp()}.png`);
+    deliverImage(composeSixteenRetro, `${BRAND_SLUG}16_${state.mode}_${fileStamp()}.png`);
   });
   $('#btn-download-story').addEventListener('click', (e) => {
     e.preventDefault();
-    deliverImage(composeStoryCollage, `purikura_story_${state.mode}_${fileStamp()}.png`);
+    deliverImage(composeStoryCollage, `${BRAND_SLUG}_story_${state.mode}_${fileStamp()}.png`);
   });
   $('#btn-download-id').addEventListener('click', (e) => {
     e.preventDefault();
     playAnnounce('idPhotoR'); // 「あそび用だから、ほんものの証明写真には使えないよ」（2026-08-15）
-    deliverImage(composeIdPhoto, `purikura_id_${state.mode}_${fileStamp()}.png`);
+    deliverImage(composeIdPhoto, `${BRAND_SLUG}_id_${state.mode}_${fileStamp()}.png`);
   });
 
   $('#btn-restart').addEventListener('click', () => {
@@ -8034,6 +8343,11 @@
     setMakeupColor: (kind, id) => { if (kind === 'lip') state.lipColorId = id; else state.cheekColorId = id; },
     makeupColorList: (kind) => ((modeConf()[kind === 'lip' ? 'lipColors' : 'cheekColors']) || []).map(c => ({ ...c })),
     drawMakeup,
+    /* らくらくお絵かき（2026-08-23）。型は画素ハッシュでは見分けられない
+       （heartChalk の質感が Math.random 由来で毎回変わるため）ので、名前で検証できるようにする */
+    rakurakuLabels: () => RAKURAKU_HEISEI.map(d => d.label),
+    rakurakuNextLabel: () => rakurakuNext().label,
+    rakurakuCount: () => decoObjects.filter(o => o && o.rk).length,
     // ペン種（2026-08-22）
     penTypes: () => (modeConf().penTypes || []).slice(),
     strokePolyline,

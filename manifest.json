@@ -1,7 +1,7 @@
 {
-  "name": "プリクラ機 〜平成 & 令和〜",
-  "short_name": "プリクラ機",
-  "description": "撮って・盛って・落書きして。文化祭スペシャルプリクラ機",
+  "name": "太子プリ 〜平成 & 令和〜",
+  "short_name": "太子プリ",
+  "description": "撮って・盛って・落書きして。文化祭スペシャルの写真シール機",
   "start_url": ".",
   "scope": ".",
   "display": "fullscreen",

@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>プリクラ機 〜平成 & 令和〜</title>
+<!-- 商品名は app.js の BRAND_* が唯一の出どころ（2026-08-23 オーナー裁定）。
+     ここは読み込み前の一瞬だけ見えるぶんなので、同じ文言を静的にも書いておく -->
+<title>太子プリ 〜平成 & 令和〜</title>
 <meta name="theme-color" content="#ff8fc7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -43,18 +45,18 @@
     <div class="title-split">
       <button id="btn-mode-heisei" class="door door-heisei">
         <span class="door-leopard"></span>
-        <span class="door-logo-h" data-text="平成プリクラ">平成プリクラ</span>
+        <span class="door-logo-h" data-text="平成 太子プリ">平成 太子プリ</span>
         <span class="door-era-h">1999-2003 STYLE</span>
         <span class="door-desc-h">白肌もガングロも♡ 懐かしのギャルプリ</span>
       </button>
       <button id="btn-mode-reiwa" class="door door-reiwa">
         <span class="door-en-r">- now -</span>
-        <span class="door-logo-r">令和プリクラ</span>
+        <span class="door-logo-r">令和 太子プリ</span>
         <span class="door-sub-r">- photo sticker -</span>
         <span class="door-desc-r">いまのプリクラの写り × くすみカラー</span>
       </button>
       <div class="title-band">
-        <p class="title-band-name">文化祭スペシャル プリクラ機</p>
+        <p class="title-band-name">文化祭スペシャル 太子プリ</p>
         <p class="title-band-touch">▼ どっちの時代であそぶ？ ▼</p>
       </div>
       <p class="title-note">※ 上か下をタッチしてね。カメラを使います</p>
@@ -402,6 +404,32 @@
                ボタン1個だけの欄に見出しを付けると、道具箱の見える高さが167pxしかない
                小型端末（360×640・320×568）で、その25pxぶん「ふとさ」「色」が
                画面の外へ押し出される。ボタンの文言だけで用は足りる -->
+          <!-- らくらくお絵かき（平成専用・2026-08-23）。
+               2002年の実機の機能。パールフラッシュ(2002年11月)の商品ページに
+               「落書きが苦手な人も、のこり時間があとわずかな時でも『らくらくお絵かき』で
+                選んだ絵柄が、一瞬で落書きできます。季節に応じて全36種類あります。」
+               フラワーズ(2003年3月)にも「簡単でキレイに仕上がるオート落書き」として搭載。
+               （柄本の考証 heisei-flash-pen-spec-20260822.md E節・確度=強）
+               🚨 令和の「らくがき見本」とは別物。あちらは一覧から選ぶMeidy(2025)型で、
+                  こちらは**一覧を出さない1ボタン**。手が止まった客の逃げ道が主旨なので、
+                  選択肢を増やすほど主旨に反する。
+               道具箱のいちばん上に置く。**探させたら意味がない**機能なので、
+               道具箱に高さの余裕がある端末では sticky で貼り付けて、スクロールしても残す。
+               🚨 高さの余裕は端末によって全く違う（実測: 道具箱の見える高さは
+                  iPad横 661px／iPhone12縦 315px／iPhone8縦 149px／iPhone SE1縦 91px）。
+                  貼り付けたまま小さい端末に出すと、道具箱がこの1つで埋まって
+                  ペンも色も見えなくなる。**貼り付けと大きさは app.js の syncRakurakuFit が
+                  実測して切り替える**（compact クラス＝1行に畳む／stuck クラス＝貼り付け） -->
+          <div class="tool-group rakuraku-group" id="group-rakuraku">
+            <button id="btn-rakuraku" class="rakuraku-btn">
+              <canvas id="rakuraku-preview" width="72" height="54"></canvas>
+              <span class="rk-text">
+                <b id="rakuraku-title">⚡ らくらくお絵かき</b>
+                <small id="rakuraku-sub">おすだけで いっしゅんで かんせい！</small>
+              </span>
+            </button>
+            <button id="btn-rakuraku-all" class="btn-small rakuraku-all-btn">⚡ 4まい ぜんぶに</button>
+          </div>
           <div class="tool-group" id="group-photo-pick">
             <button id="btn-photo-pick-again" class="btn-small photo-pick-again">🖼 のせる しゃしん・おさまりを えらび直す</button>
           </div>
@@ -639,7 +667,7 @@
   <div id="attract-overlay" class="attract-overlay hidden">
     <div class="attract-slides">
       <div class="attract-slide as-split active">
-        <p class="as-h-logo" data-text="平成プリクラ">平成プリクラ</p>
+        <p class="as-h-logo" id="as-logo-brand" data-text="平成 太子プリ">平成 太子プリ</p>
         <p class="as-r-logo">令和 <span class="as-r-cap">- photo sticker -</span></p>
         <p class="as-band-copy">撮って・盛って・落書きして</p>
       </div>

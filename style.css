@@ -942,6 +942,68 @@ body[data-mode="reiwa"] .tool-btn.hint-pulse { animation-name: hintPulseR; }
   cursor: pointer;
 }
 
+/* ===== らくらくお絵かき（平成専用・2026-08-23） =====
+   2002年の実機の機能（パールフラッシュ／フラワーズ）。
+   「のこり時間があとわずかな時でも一瞬で落書きできます」が売り文句なので、
+   **探させたら負け**。道具箱のいちばん上に置き、スクロールしても sticky で残す。
+   平成の道具箱は市松模様なので、下の中身が透けないよう背景は不透明にする */
+.rakuraku-group {
+  padding: 8px !important;
+  background: #fff !important;
+  border: 3px solid #ff2fa0;
+  z-index: 4;
+}
+/* 道具箱に高さの余裕がある端末だけ貼り付ける（判定は app.js の syncRakurakuFit・実測） */
+.rakuraku-group.stuck {
+  position: sticky;
+  top: -14px;              /* 道具箱の padding ぶん食い込ませて、上に隙間を残さない */
+  margin: -14px -14px 0;   /* 左右も padding ぶん広げて、端に中身が覗く隙間を作らない */
+  padding: 14px 14px 10px !important;
+  border-width: 0 0 3px;
+  border-radius: 0 0 12px 12px !important;
+}
+.rakuraku-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border: 3px solid #ff2fa0;
+  background: linear-gradient(#fff, #ffe6f3);
+  cursor: pointer;
+  text-align: left;
+  border-radius: 12px;
+}
+.rakuraku-btn canvas { display: block; border: 2px solid #ff2fa0; flex: 0 0 auto; width: 56px; height: 42px; }
+.rakuraku-btn .rk-text { display: flex; flex-direction: column; min-width: 0; }
+.rakuraku-btn b { font-size: 14px; font-weight: 900; color: #d81b7a; line-height: 1.2; }
+.rakuraku-btn small { font-size: 10px; font-weight: 700; color: #7a3fb0; line-height: 1.25; }
+.rakuraku-btn:active { transform: translateY(1px); }
+.rakuraku-all-btn { width: 100%; margin-top: 5px; padding: 3px 6px; font-size: 11px; }
+/* 道具箱の見える高さが足りない端末（iPhone8縦=149px など）は1行に畳む。
+   見本の絵と補足は落とし、押せることだけ残す（無くなるより、小さくても在るほうがよい） */
+.rakuraku-group.compact { padding: 6px !important; }
+.rakuraku-group.compact canvas,
+.rakuraku-group.compact .rakuraku-btn small { display: none; }
+.rakuraku-group.compact .rakuraku-btn { padding: 5px 8px; border-width: 2px; }
+.rakuraku-group.compact .rakuraku-btn b { font-size: 13px; }
+.rakuraku-group.compact .rakuraku-all-btn { margin-top: 4px; font-size: 10px; padding: 2px 6px; }
+/* 道具箱が91pxしかない端末（iPhone SE1・320×568）。本体1つだけにする */
+.rakuraku-group.mini .rakuraku-all-btn { display: none; }
+/* 残り1分から。押せば間に合う、が一目で分かる強さにする（点滅は帯ではなくボタンだけ） */
+.rakuraku-group.urgent { border-bottom-color: #ff2f2f; }
+.rakuraku-group.urgent .rakuraku-btn {
+  animation: rk-urgent .7s steps(1, end) infinite;
+  border-color: #ff2f2f;
+}
+@keyframes rk-urgent {
+  0%, 100% { background: linear-gradient(#fff, #ffe6f3); }
+  50%      { background: linear-gradient(#fff3b0, #ffd54a); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rakuraku-group.urgent .rakuraku-btn { animation: none; background: linear-gradient(#fff3b0, #ffd54a); }
+}
+
 /* 落書き見本（Meidy式・2026-08-12） */
 .sample-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .sample-btn {
@@ -1581,6 +1643,14 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .deco-toolbar { flex: 0 1 200px; min-width: 170px; max-width: 230px; gap: 9px; padding: 9px; }
   /* 浮かぶ札の下方向の食い込みは道具箱の padding（9px）に合わせて浅くする（2026-08-18） */
   .deco-toolbar .toolbar-more { bottom: -4px; margin: 0 0 -4px; }
+  /* らくらくお絵かきの食い込みも道具箱の padding（14px→9px）に合わせる（2026-08-23）。
+     合わせないと、横持ちのときだけ上に5pxの隙間が空いて中身が透ける。
+     横持ちは道具箱の見える高さが263pxしかないので、高さも詰める（写真を圧迫しない） */
+  .deco-toolbar .rakuraku-group.stuck { top: -9px; margin: -9px -9px 0; padding: 9px 9px 7px !important; }
+  .deco-toolbar .rakuraku-btn { padding: 4px 6px; gap: 7px; }
+  .deco-toolbar .rakuraku-btn canvas { width: 48px; height: 36px; }
+  .deco-toolbar .rakuraku-btn b { font-size: 12px; }
+  .deco-toolbar .rakuraku-btn small { font-size: 9px; }
   .deco-toolbar .tool-btn { font-size: 11px; padding: 6px 4px; }
   .deco-toolbar .tool-btn small { font-size: 9px; }
   .deco-toolbar .tool-group { gap: 6px; }
@@ -1647,7 +1717,9 @@ body.theme-reiwa #theme-frame {
   inset: 0;
 }
 body.theme-reiwa #theme-frame::before {
-  content: 'purikura  \2014  photo sticker';
+  /* 商品名は app.js の BRAND_R から --brand-r で降りてくる（2026-08-23 オーナー裁定）。
+     変数が無い環境でも文字が消えないよう、同じ文言を既定値に置く */
+  content: var(--brand-r, 'taishi puri  \2014  photo sticker');
   position: absolute;
   top: 8px; left: 22px;
   font-family: Georgia, serif;
