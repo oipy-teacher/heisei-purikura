@@ -7014,6 +7014,8 @@
     }
     printStage.classList.remove('ready');
     printStage.classList.add('printing');
+    // 写真1まいずつの保存の並びを組み立てる（2026-08-22。令和のみ・平成では非表示）
+    buildSingleSaveRow();
     playSound('printOut');
     if (printReadyId) clearTimeout(printReadyId);
     printReadyId = setTimeout(() => {
@@ -7258,6 +7260,61 @@
     ctx.fillStyle = '#8a7568';
     ctx.fillText(d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + '　※あそび用のプリだよ（ほんものの証明写真には使えません）', SHEET_W / 2, SHEET_H - 22);
     return cv;
+  }
+
+  /* ---------- 写真1まいだけの保存（2026-08-22 モニター要望③） ----------
+     「1枚ずつ写真が保存できたら嬉しかった（もしあったらすみません）」。
+     いままでは台紙（シール）単位でしか保存できなかった。
+
+     中身は落書き画面で見ているものと同じ:
+       盛り加工後の写真 → その写真に描いた落書き → えらんだフレーム／カラーの飾り
+     の順で重ねる。飾りを落書きの **あと** に載せるのは composeFinal と同じ理由
+     （写真いっぱいに落書きされると枠が隠れて「フレームが効いていない」に戻るため）。 */
+  function composeSinglePhoto(i) {
+    const shots = decoShots();
+    const cv = document.createElement('canvas');
+    cv.width = SHOT_W; cv.height = SHOT_H;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
+    if (shots[i]) ctx.drawImage(shots[i], 0, 0, SHOT_W, SHOT_H);
+    if (shotDeco[i] && shotDeco[i].objects.length) ctx.drawImage(renderShotDoodle(i), 0, 0);
+    // 台紙のセルと同じ関数・同じ引数で飾る（別実装にするとシールと1枚保存で見た目がズレる）
+    drawCellDecor(ctx, { x: 0, y: 0, w: SHOT_W, h: SHOT_H },
+      { emoji: state.frame.emoji, isCircle: false, radius: 0 });
+    return cv;
+  }
+
+  /* 1まい保存の並び。押した瞬間に deliverImage へ入る（＝タップと同じタスクの中で
+     navigator.share に届く）。ここで await を挟むとiOSで共有シートが開かない。
+     ※ 平成モードには出さない（era-designer が考証確認中のため今回は令和だけ・2026-08-22） */
+  function buildSingleSaveRow() {
+    const box = $('#single-save');
+    const row = $('#single-save-row');
+    if (!box || !row) return;
+    const shots = decoShots();
+    if (state.mode !== 'reiwa' || !shots.length) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    row.innerHTML = '';
+    shots.forEach((shot, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'single-save-btn';
+      const cv = document.createElement('canvas');
+      cv.width = 88; cv.height = 66;
+      const cctx = cv.getContext('2d');
+      cctx.drawImage(shot, 0, 0, cv.width, cv.height);
+      if (shotDeco[i] && shotDeco[i].objects.length) cctx.drawImage(renderShotDoodle(i), 0, 0, cv.width, cv.height);
+      b.appendChild(cv);
+      const cap = document.createElement('span');
+      cap.className = 'ss-num';
+      cap.textContent = (i + 1) + 'まいめ';
+      b.appendChild(cap);
+      b.addEventListener('click', () => {
+        deliverImage(() => composeSinglePhoto(i), `purikura_photo${i + 1}_${state.mode}_${fileStamp()}.png`);
+      });
+      row.appendChild(b);
+    });
   }
 
   /* 保存は全ボタン共通で deliverImage（share→download→長押しの3段構え）を通す。

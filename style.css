@@ -1159,6 +1159,36 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
 .print-actions.escape-row { margin-top: 10px; }
 /* ほかの形での保存は畳んでおく（P-2・2026-08-15）。
    「保存」と書かれたボタンが5つ横並びだと、初見の客はどれを押せばよいか判断できず止まる */
+/* 写真1まいずつの保存（2026-08-22 モニター要望③） */
+.single-save { margin-top: 18px; }
+.single-save-title {
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  line-height: 1.4;
+  color: #7a3fb0;
+}
+.single-save-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.single-save-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 5px 4px;
+  border: 2px solid #ff9ed2;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  /* 「1まいめ」が折り返さずに入る幅を宣言しておく（2026-08-18の学び） */
+  min-width: 98px;
+}
+.single-save-btn canvas { display: block; width: 88px; height: 66px; border-radius: 4px; }
+.single-save-btn .ss-num { font-size: 12px; font-weight: 800; color: #7a3fb0; white-space: nowrap; }
+body.theme-reiwa .single-save-title { color: var(--r-brown); font-weight: 600; }
+body.theme-reiwa .single-save-btn { border-color: rgba(74,63,56,.25); border-radius: 2px; background: #fefcf9; }
+body.theme-reiwa .single-save-btn canvas { border-radius: 2px; }
+body.theme-reiwa .single-save-btn .ss-num { color: var(--r-ink); font-weight: 600; }
+
 .print-extra { margin-top: 12px; }
 .print-extra > summary {
   display: inline-block;

@@ -577,6 +577,15 @@
              初見の客は「どれを押せば持ち帰れるか」を判断できずその場で止まる。
              主ボタンだけを出し、追加の形は畳んでおく。
              ※ 平成では「たて長ver.（ストーリー用）」と「証明プリ」はCSSで非表示（P-6/考証） -->
+        <!-- 写真1まいだけの保存（2026-08-22 モニター要望③
+             「1枚ずつ写真が保存できたら嬉しかった」）。
+             畳んだ中に入れると見つけてもらえないので常設にするが、主ボタンとは分けて
+             「押せば1まい落ちる」ことがサムネイルで見て分かる形にする。
+             ※ 令和モードのときだけ表示（平成は考証確認中・JSで出し分け） -->
+        <div id="single-save" class="single-save" style="display:none">
+          <p class="single-save-title">🖼 写真を 1まいずつ 保存する（おしたら その1まいが落ちるよ）</p>
+          <div id="single-save-row" class="single-save-row"></div>
+        </div>
         <details id="print-extra" class="print-extra">
           <summary>⚙️ ほかの形でも保存する（ひらく）</summary>
           <div class="print-actions extra">
