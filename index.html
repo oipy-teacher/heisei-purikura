@@ -270,13 +270,28 @@
               <label>👃 小鼻 <span id="val-nose" class="slider-val">0</span></label>
               <input type="range" id="slider-nose" min="0" max="100" value="0">
             </div>
+            <!-- チーク／リップの色（2026-08-22 モニター要望②
+                 「パーソナルカラーが人によって違うので1色だけは勿体ない」）。
+                 別のモニターから「選択項目が多くてパニック」の声も来ているので、
+                 増やし方で吸収する: ①いちばん左が既定で最初から選ばれている
+                 ②スライダーが0なら色を選んでも何も起きない＝いじらなくても今までどおり
+                 ③色の丸だけで文字を増やさない（名前は下に小さく1つだけ出す）
+                 JSで組み立てる（選択肢を持たない平成モードでは行ごと出ない） -->
             <div class="slider-group">
               <label>🍑 チーク <span id="val-cheek" class="slider-val">0</span></label>
               <input type="range" id="slider-cheek" min="0" max="100" value="0">
+              <div class="makeup-color-row" id="cheek-color-row" style="display:none">
+                <div class="makeup-swatches" id="cheek-swatches"></div>
+                <span class="makeup-color-name" id="cheek-color-name"></span>
+              </div>
             </div>
             <div class="slider-group">
               <label>💋 リップ <span id="val-lip" class="slider-val">0</span></label>
               <input type="range" id="slider-lip" min="0" max="100" value="0">
+              <div class="makeup-color-row" id="lip-color-row" style="display:none">
+                <div class="makeup-swatches" id="lip-swatches"></div>
+                <span class="makeup-color-name" id="lip-color-name"></span>
+              </div>
             </div>
             <!-- 涙袋（FLASH 87種の型）・脚長（piemo型・全身コースのみ表示）2026-08-14 -->
             <div class="slider-group">

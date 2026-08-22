@@ -1338,6 +1338,36 @@ body.theme-reiwa .print-extra > summary { color: var(--r-ink); font-weight: 500;
 .slider-val { color: #ff2fa0; }
 .slider-group input[type="range"] { width: 100%; }
 
+/* チーク／リップの色えらび（2026-08-22 モニター要望②）。
+   丸の色見本だけを並べ、文字は「選んでいる色の名前」1つに絞る（増やしても迷わせないため）。
+   当たり判定は指で押せる 34px を確保する（2026-08-14 の「バーが小さすぎる」と同じ轍を踏まない） */
+.makeup-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 6px;
+  flex-wrap: wrap;
+}
+.makeup-swatches { display: flex; gap: 7px; flex-wrap: wrap; }
+.makeup-swatch {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border: 2px solid rgba(255,255,255,.85);
+  border-radius: 50%;
+  cursor: pointer;
+  outline: 1px solid rgba(0,0,0,.18);
+  outline-offset: -3px;
+}
+.makeup-swatch.active {
+  border-color: #ff2fa0;
+  box-shadow: 0 0 0 2px #ff2fa0;
+}
+.makeup-color-name { font-size: 12px; font-weight: 800; color: #7a3fb0; }
+body.theme-reiwa .makeup-swatch.active { border-color: var(--r-accent); box-shadow: 0 0 0 2px var(--r-accent); }
+body.theme-reiwa .makeup-color-name { color: var(--r-brown); }
+
 /* ===== 調節バーを指で扱える大きさにする（2026-08-14 モニター指摘
    「感度が悪い、バーが小さすぎるのかも」）=====
    既定の range はつまみが12〜16px程度しかなく、スマホでは狙って掴めない。

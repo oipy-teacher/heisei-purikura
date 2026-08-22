@@ -170,7 +170,27 @@
         { id: 'puri',    label: 'プリ盛れ',   skin: 70, white: 25, clear: 60, eye: 45, face: 30, nose: 22, cheek: 55, lip: 45 },
       ],
       defaultPreset: 'natural',
+      /* リップ／チークの色（2026-08-22 モニター要望②
+         「パーソナルカラーが人によって違うので1色だけは勿体ない」）。
+         **先頭が既定＝今までと同じ色**。開いた瞬間の見え方は1色も変わらない。
+         イエベ/ブルベのどちらでも1つは合うように系統をばらけさせ、
+         「多くてパニック」の声に配慮して リップ5・チーク4 で止めた */
       makeup: { cheek: '#e2917d', lip: '#c96a5f' },
+      lipColors: [
+        { id: 'natural', label: 'ナチュラル', color: '#c96a5f' }, // 既定（従来色）
+        { id: 'coral',   label: 'コーラル',   color: '#e8806a' }, // イエベ春・オレンジ寄り
+        { id: 'rose',    label: 'ローズ',     color: '#c9566f' }, // ブルベ夏・青み
+        { id: 'red',     label: 'レッド',     color: '#bd3a34' }, // はっきり・ブルベ冬
+        { id: 'beige',   label: 'ベージュ',   color: '#c08a70' }, // ヌーディ・イエベ秋
+      ],
+      cheekColors: [
+        { id: 'natural',  label: 'ナチュラル', color: '#e2917d' }, // 既定（従来色）
+        { id: 'coral',    label: 'コーラル',   color: '#f0977e' },
+        { id: 'pink',     label: 'ピンク',     color: '#ee8fa5' },
+        { id: 'lavender', label: 'ラベンダー', color: '#c19ad4' },
+      ],
+      // フラッシュ（2026-08-22 モニター要望①）。令和のみ true
+      flash: true,
       // 令和は血色感を残すナチュラル美肌（さらパフ肌）
       skinTone: { brightPerUnit: 0.10, desatPerUnit: 0 },
       /* 透明感（clear）で「色ムラの平滑化」を行うか。
@@ -3589,8 +3609,26 @@
     ctx.drawImage(tmp, 0, pivot, w, h - pivot, 0, pivot - lift, w, h - pivot + lift);
   }
 
+  /* 選ばれているリップ／チークの色を返す（2026-08-22 モニター要望②）。
+     選択肢を持たないモード（平成）と、まだ何も選んでいない客には
+     **これまでと同じ既定色**をそのまま返す＝見え方は1ドットも変わらない。 */
+  /* 🚨 `conf.makeup` は **平成モードには存在しない**（平成に盛り調整は無いため）。
+     2026-08-22、この関数を drawMakeup の先頭（顔の有無を見る前）で呼ぶようにしたところ、
+     平成の撮影中に毎フレーム `conf.makeup.cheek` で例外を投げていた。回帰テストで捕まえた。
+     モードごとの設定が「ある前提」で書かない——無い側から必ず確かめる。 */
+  function makeupColor(conf, kind) {
+    const base = (conf.makeup || {})[kind] || null;
+    const list = conf[kind === 'lip' ? 'lipColors' : 'cheekColors'];
+    const sel = kind === 'lip' ? state.lipColorId : state.cheekColorId;
+    if (!list || !sel) return base;
+    const hit = list.find(c => c.id === sel);
+    return hit ? hit.color : base;
+  }
+
   // チーク＆リップの描画（本加工とライブ盛れプレビューの共通処理・2026-07-31切り出し）
   function drawMakeup(outCtx, faces, w, h, cheekS, lipS, conf) {
+    const cheekCol = makeupColor(conf, 'cheek');
+    const lipCol = makeupColor(conf, 'lip');
     if (faces && faces.length && (cheekS > 0 || lipS > 0)) {
       faces.forEach((lm) => {
         if (!lm || lm.length < 468) return;
@@ -3605,7 +3643,7 @@
             const c = lmToPx(pt, w, h);
             [{ r: fw * 0.17, a: cheekS * 0.38 }, { r: fw * 0.24, a: cheekS * 0.24 }].forEach(({ r, a }) => {
               const grad = outCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-              grad.addColorStop(0, conf.makeup.cheek);
+              grad.addColorStop(0, cheekCol);
               grad.addColorStop(1, 'rgba(255,255,255,0)');
               outCtx.save();
               outCtx.globalAlpha = Math.min(1, a);
@@ -3622,14 +3660,14 @@
           outCtx.save();
           outCtx.globalCompositeOperation = 'color';
           outCtx.globalAlpha = Math.min(1, lipS * 0.7);
-          outCtx.fillStyle = conf.makeup.lip;
+          outCtx.fillStyle = lipCol;
           drawLandmarkPolygon(outCtx, lm, LIPS_OUTER, w, h);
           outCtx.restore();
           // わずかに彩度と血色を足す（ソフトライト）
           outCtx.save();
           outCtx.globalCompositeOperation = 'soft-light';
           outCtx.globalAlpha = Math.min(1, lipS * 0.5);
-          outCtx.fillStyle = conf.makeup.lip;
+          outCtx.fillStyle = lipCol;
           drawLandmarkPolygon(outCtx, lm, LIPS_OUTER, w, h);
           outCtx.restore();
           outCtx.globalCompositeOperation = 'source-over';
@@ -3755,6 +3793,50 @@
     $('#val-lip').textContent = p.lip || 0;
     $('#val-namida').textContent = p.namida || 0;
     $('#val-legs').textContent = p.legs || 0;
+  }
+
+  /* ---------- チーク／リップの色えらび（2026-08-22 モニター要望②） ----------
+     「パーソナルカラーが人によって違うので1色だけは勿体ない」。
+
+     増やす作業だが、別のモニターからは「各加工の選択項目が多くてパニック」の声も来ている。
+     そこで **増えても迷わない形** に寄せた:
+       - 既定色（今までと同じ色）がいちばん左で、最初から選ばれている
+       - 濃さのスライダーが0なら、色を選んでも何も起きない＝触らなければ今までどおり
+       - 文字は増やさない（丸の色見本だけ。選んでいる色の名前を1つだけ右に出す）
+       - 選択肢を持たないモード（平成）では行ごと出さない＝平成の画面は1ドットも変わらない */
+  function buildMakeupSwatches() {
+    const conf = modeConf();
+    [['lip', 'lipColors'], ['cheek', 'cheekColors']].forEach(([kind, key]) => {
+      const row = $('#' + kind + '-color-row');
+      const box = $('#' + kind + '-swatches');
+      const nameEl = $('#' + kind + '-color-name');
+      if (!row || !box) return;
+      const list = conf[key];
+      if (!list || list.length < 2) { row.style.display = 'none'; return; }
+      row.style.display = '';
+      box.innerHTML = '';
+      const cur = (kind === 'lip' ? state.lipColorId : state.cheekColorId) || list[0].id;
+      list.forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'makeup-swatch' + (c.id === cur ? ' active' : '');
+        b.dataset.colorid = c.id;
+        b.style.background = c.color;
+        b.title = c.label;
+        b.setAttribute('aria-label', (kind === 'lip' ? 'リップ ' : 'チーク ') + c.label);
+        b.addEventListener('click', () => {
+          if (kind === 'lip') state.lipColorId = c.id; else state.cheekColorId = c.id;
+          playSound('seTap');
+          buildMakeupSwatches();
+          queueBeautyRender(); // 選んだ瞬間にプレビューへ反映（濃さ0なら見た目は変わらない）
+        });
+        box.appendChild(b);
+      });
+      if (nameEl) {
+        const hit = list.find(c => c.id === cur) || list[0];
+        nameEl.textContent = hit.label;
+      }
+    });
   }
 
   function markPresetActive(presetId) {
@@ -4040,6 +4122,7 @@
     // 脚長バーは全身コースのときだけ出す（アップコースでは意味が無い・piemo型）
     const legsRow = $('#row-legs');
     if (legsRow) legsRow.style.display = state.shotMode === 'full' ? '' : 'none';
+    buildMakeupSwatches(); // チーク／リップの色えらび（2026-08-22。平成では行ごと出ない）
     // メイクりれき: 前回の保存があるときだけボタンを出す
     const histBtn = $('#btn-makeup-history');
     if (histBtn) {
