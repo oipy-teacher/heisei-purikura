@@ -636,6 +636,44 @@ body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #e
   color: #7d6b7d;
 }
 .live-note { font-size: 11px; opacity: .7; margin: 6px 0 0; }
+
+/* フラッシュ（2026-08-22 モニター要望①） */
+.flash-panel { margin: 0 0 14px; }
+.flash-toggle {
+  display: inline-block;
+  padding: 8px 18px;
+  border: 2px solid rgba(255,255,255,.55);
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  /* 「⚡ フラッシュ OFF」が入り切る幅を宣言しておく（2026-08-18の学び:
+     新しく文字を出す要素は、いちばん狭い端末で切れないことを幅で保証する） */
+  min-width: 156px;
+  white-space: nowrap;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.flash-toggle.on {
+  background: rgba(255,255,255,.9);
+  color: #7d6b7d;
+  box-shadow: 0 0 14px rgba(255,255,255,.5);
+}
+.flash-note { font-size: 11px; opacity: .7; margin: 6px 0 0; line-height: 1.4; }
+
+/* 発光面。**照明器具**なので画面いっぱい・純白・最前面（詳細は index.html のコメント）。
+   ふだんは display:none で合成レイヤーごと外しておく（常駐させると描画コストを払い続ける） */
+.flash-fill {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+  display: none;
+  z-index: 99999;
+}
+.flash-fill.on { display: block; }
 .cam-error { color: #ffd; margin-top: 14px; font-size: 13px; max-width: 260px; }
 .segmenter-status { color: #ffe27a; font-size: 12px; margin-top: 12px; opacity: .9; }
 .segmenter-status.hidden { display: none; }

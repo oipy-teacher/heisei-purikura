@@ -173,6 +173,15 @@
           <div id="live-preset-row" class="live-preset-row"></div>
           <p class="live-note">くわしい調整と小顔は撮影のあとで！</p>
         </div>
+        <!-- フラッシュ（2026-08-22 モニター要望①「フラッシュがたけるのすごくエモくなると思った」）。
+             シャッターの瞬間に画面いっぱいを白く光らせて被写体を照らす（Retina Flash と同じ原理）。
+             対応端末（Android Chromeの背面カメラ）ではLEDライトを使う。
+             まぶしい会場・明るい部屋のために客が自分で切れるようにしてある。
+             ※ 令和モードのときだけ表示（平成は考証確認中・JSで出し分け） -->
+        <div id="flash-panel" class="flash-panel" style="display:none">
+          <button id="btn-flash-toggle" class="flash-toggle on" data-on="true">⚡ フラッシュ ON</button>
+          <p class="flash-note">暗いところでも 顔が明るく写るよ（まぶしいときは OFF に）</p>
+        </div>
         <button id="btn-start-shooting" class="btn-main">撮影スタート！</button>
         <button id="btn-back-select" class="btn-back camera-back">◀ えらび直す</button>
         <p id="segmenter-status" class="segmenter-status hidden"></p>
@@ -650,6 +659,12 @@
   <div id="mode-wipe" aria-hidden="true"><i class="w1"></i><i class="w2"></i></div>
 
 </div>
+
+<!-- 撮影フラッシュの発光面（2026-08-22 モニター要望①）。
+     ここは「演出」ではなく **照明器具** なので、画面いっぱい・純白・最前面でなければ意味がない。
+     #app の中に入れると装飾レイヤーや safe-area の下に潜って光量が落ちるため、body直下に置く。
+     ふだんは display:none（合成レイヤーを常駐させない）。 -->
+<div id="flash-fill" class="flash-fill" aria-hidden="true"></div>
 
 <script src="app.js"></script>
 </body>

@@ -314,13 +314,18 @@
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
     skinConf: [],        // 各ショットのML肌信頼度マスク（selfie_multiclass。無ければ null）
     beauty: { skin: 60, white: 40, clear: 40, eye: 50, face: 30, nose: 0, cheek: 45, lip: 40, eyeType: 1, namida: 0, legs: 0, filter: 'none' },
+    /* リップ／チークの色（2026-08-22）。null = そのモードの既定色（＝従来と同じ見え方）。
+       濃さのスライダーとは独立。色を選んでも 0 のままなら何も乗らない（従来どおり） */
+    lipColorId: null,
+    cheekColorId: null,
+    flashOn: true,       // フラッシュ（令和のみ。既定ON。暗い会場でのエモさが要望の主旨・2026-08-22）
     beautySelected: 0,
     beautyTimerId: null,
     beautyRemaining: BEAUTY_SECONDS,
     beautyWarned: false,
     penColor: MODES.heisei.penColors[0],
     penSize: 16, // 写真拡大表示方式: 写真の原寸座標に描くため従来比2倍が既定
-    penType: 'normal', // normal | neon | fuchi | kira
+    penType: 'normal', // normal | neon | fuchi | kira | marker | crayon | nijimi
     stampSize: 96, // 写真拡大表示方式ではキャンバスが写真の原寸(640×480)なので従来比2倍が「中」
     tool: 'pen',
     stampChar: null,
@@ -2204,6 +2209,7 @@
     livePerf.ema = 0; // 前セッションの負荷計測はリセット（degrade段階は端末特性なので維持）
     liveReadyNoted = false;
     syncLiveBeautyUI();
+    syncFlashUI(); // フラッシュのON/OFFもモードに合わせて出し分ける（2026-08-22）
     if (state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled) {
       initFaceLandmarkerLive();
       if (!imageSegmenter && !mpGaveUp(segmenterFailedAt) && !segmenterLoading) initSegmenter();
@@ -2245,6 +2251,8 @@
     try {
       state.stream = await acquireCamera(facing);
       video.srcObject = state.stream;
+      detectTorch(state.stream); // LEDが使える端末か（Android Chromeの背面のみ。iOSは常に非対応）
+      syncFlashUI();
       /* 端末がスリープした・他アプリに奪われた等でトラックが終わったら、黙って黒画面にせず案内を出す */
       state.stream.getTracks().forEach((t) => {
         t.addEventListener('ended', () => {
@@ -2379,6 +2387,10 @@
     previewRunning = false;
     showCamLoading(false);
     if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
+    /* フラッシュの後始末（2026-08-22）。撮影を途中でやめても白い覆いとLEDを必ず消す。
+       消し忘れると次の画面が真っ白のまま／LEDが点きっぱなしになる */
+    if (typeof flashReset === 'function') flashReset();
+    torchTrack = null;
     if (state.stream) {
       state.stream.getTracks().forEach(t => t.stop());
       state.stream = null;
@@ -2593,9 +2605,17 @@
          そのまま号令になる（毎枚2秒前後の前置きはテンポを殺す・実機は矢継ぎ早） */
       /* 最終ショットは必ず pose_06（ラスト！決めポーズ！）。途中の枚では絶対に出さない（2026-08-13 実機指摘） */
       await runCountdown(i, { skipIntro: i > 0, poseKey: i === NUM_SHOTS - 1 ? POSE_LAST_KEY : nextPoseKey() });
+      /* フラッシュ（2026-08-22）: 「はい！」の直後に光らせ、**光が映像に乗ってから**撮る。
+         ここの順番がフラッシュの本体。captureFrame を先に呼ぶと光る前の暗いフレームが写る */
+      const flashRoute = await flashLightOn();
       const shot = captureFrame();
+      if (flashRoute !== 'none') flashMark('shot');
       playSound('seShutter');
-      await flash();
+      if (flashRoute === 'none') {
+        await flash(); // 従来のシャッター明滅（フラッシュOFF・平成はこちら）
+      } else {
+        flashLightOff(flashRoute); // 白が引いていく中からチラ見せが浮かび上がる
+      }
 
       // 撮った1枚をその場でしっかり見せる（実機の「今の撮れた！」感・2026-08-13 演出強化）
       showSnapPreview(shot);
@@ -7194,6 +7214,13 @@
     state.processedShots = [];
     state.faceData = [];
     state.photoPick = null; // シール写真えらびも次の客のためにリセット（2026-08-13）
+    /* 無人運用では前の客の設定が残ると事故になる（2026-08-12 qa-tester指摘と同じ理由）。
+       リップ／チークの色とフラッシュも既定へ戻す（2026-08-22） */
+    state.lipColorId = null;
+    state.cheekColorId = null;
+    state.flashOn = true;
+    const ssRow = $('#single-save-row');
+    if (ssRow) ssRow.innerHTML = ''; // 前の客の写真をサムネイルに残さない
     // 次の客のために選択系もまっさらへ（2026-08-12 qa-tester指摘。無人運用では前の客の設定が残ると事故）
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
