@@ -412,6 +412,18 @@
               <button class="pen-type-btn" data-pentype="neon">ネオン</button>
               <button class="pen-type-btn" data-pentype="fuchi">白フチ</button>
               <button class="pen-type-btn" data-pentype="kira">キラキラ</button>
+              <!-- 2026-08-22 モニター要望④「筆の種類も増やした方がラクガキ感が楽しめる」。
+                   既存4つの位置は動かさず後ろへ足す（覚えた場所が変わらないように） -->
+              <button class="pen-type-btn" data-pentype="marker">マーカー</button>
+              <button class="pen-type-btn" data-pentype="crayon">クレヨン</button>
+              <button class="pen-type-btn" data-pentype="nijimi">にじみ</button>
+              <!-- 2026-08-22 柄本仕様書 C-2。
+                   キララ（メイクソフトウェア・1999年11月）「業界初の金色銀色落書き」、
+                   キララ2（2000年7月）「メタリックカラーが二色」の再現＝**平成専用**。
+                   令和の penTypes には入れないので、この2つは令和では自動的に隠れる
+                   （出し分けは buildDecoTools の types.includes に任せる＝分岐を増やさない） -->
+              <button class="pen-type-btn" data-pentype="kin">金</button>
+              <button class="pen-type-btn" data-pentype="gin">銀</button>
             </div>
             <!-- 無名だったペンの太さスライダーに名前をつけた（D-4・2026-08-15 柄本仕様書）。
                  隣の「スタンプ」には 小/中/大 があるのに、ペンだけ何のバーか

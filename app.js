@@ -40,7 +40,26 @@
          当時「色を選ぶ」道具はペンで、ペン色切替は実機に確実にあった（花鳥風月2003はツール2000種以上）。
          文字スタンプの色パレット撤去の代わりに、当時のポスカ/カラーペン文化に寄せたビビッド系で8→12色 */
       penColors: ['#ff2fa0', '#ff8fc7', '#ff3b30', '#ff8a2a', '#ffef5c', '#5cff8f', '#00b389', '#5cc8ff', '#2a5bff', '#a06bff', '#ffffff', '#000000'],
-      penTypes: ['normal'],
+      /* 2026-08-22 追加（柄本仕様書 C-2・モニター要望「筆の種類も増やした方が楽しい」への回答）:
+         「筆の種類」（マーカー/クレヨン/にじみ）は1999〜2003年の裏が取れなかったので**足さない**
+         （そちらは令和側で満たす＝平成と令和の対比を守る）。
+         代わりに、裏の取れた金・銀だけを足す:
+           キララ（メイクソフトウェア・1999年11月）「業界初の金色銀色落書き」
+           キララ2（2000年7月）「"キララ"にメタリックカラーが二色、豊富なスタンプも追加された」
+         当時は「色」として売られたが、金銀はベタ塗りでは出ない（箔の質感が要る）ので、
+         実装上は penType 側に置く。これで pen-type-row が平成でも初めて立ち上がる。
+         ネオン／白フチ／キラキラは引き続き平成には入れない（8/17の判断を維持）。 */
+      penTypes: ['normal', 'kin', 'gin'],
+      /* フラッシュ（2026-08-22 モニター要望①）。
+         **柄本の考証で true に確定**（仕様書 heisei-flash-pen-spec-20260822.md A節）。
+         1999〜2003年の実機はプロ用ストロボを積んでいた。メイクソフトウェアの当時サイトに
+         「プロ用ストロボと補助光合わせて24発の光源搭載」（キメ肌宣言/キレイめ気分・2002年7月）、
+         「プロ仕様ストロボBOX」（パールフラッシュ・2002年11月）、
+         「光りをコントロールする、13発の調光フラッシュ」（美神宣言・2003年11月）と明記がある。
+         ＝これは「当時なかったものを足す」ではなく「欠けていたものを埋める」変更。
+         ⚠️「13発」「24発」は**光源の個数**であって発光回数ではない。1シャッター＝1回光る。
+            プレ発光は資料ゼロなので入れない。 */
+      flash: true,
       /* 落書きの考証（2026-08-12 改訂・era-designerリサーチ準拠）:
          本機の平成モードはユーロビートBGM＝1999〜2003年ごろの再現。この時代は落書き全盛期で、
          スタンプには「意味不明なキャラ・笑えるスタンプ」のふざけ・ネタ枠が必ずあった
@@ -463,6 +482,14 @@
     '#btn-download': { heisei: '📥 まずは これを保存！', reiwa: '📥 まずは これを保存' },
     // --- 撮影画面 ---
     '#pose-guide': { heisei: 'かわいく決めてね💕', reiwa: 'いい感じに どうぞ' },     // C-7
+    /* フラッシュの補足（2026-08-22 柄本仕様 C-1 変更3）。
+       ボタンの語「フラッシュ」は当時のメーカーが使っていた語そのもの
+       （パールフラッシュ／ピーチフラッシュ／調光フラッシュ）なので両モード共通でよい。
+       補足だけ平成の言い方に寄せる。「白くとぶ」は当時の売り文句（白飛びするほどのハイキー）。 */
+    '.flash-note': {
+      heisei: 'ピカッと光って 白くとぶよ！（まぶしいときは OFF に）',
+      reiwa: '暗いところでも 顔が明るく写るよ（まぶしいときは OFF に）',
+    },
     // --- 選択画面 ---
     '#btn-to-camera': { heisei: 'この組み合わせでOK！ ▶', reiwa: 'これで撮る ▶' },  // S-13
     // --- 完成の確認（2026-08-15 検見の総合検収【軽微⑥】。3つ名指しした中でここだけ入れ漏れていた） ---
@@ -2585,6 +2612,143 @@
     await sleep(60);
     flashCanvas.style.transition = 'opacity .35s ease';
     flashCanvas.style.opacity = '0';
+  }
+
+  /* ===================== フラッシュ（2026-08-22 モニター要望①） =====================
+     「フラッシュがたけるのすごくエモくなると思った」。
+
+     Webからカメラのフラッシュは基本的に焚けない。使える光源は2つだけ:
+
+       ① LEDライト（torch）… MediaStreamTrack の torch 制約。
+          🚨 2026-08-22 に調べ直した結果、依頼書にあった「iOS Safari は torch 非対応」は
+             **古い情報だった**。WebKit は 2023年10月に torch を実装しており
+             （WebKit Bug 243075 は RESOLVED。実装者本人が「足したのに更新を忘れていた」と記載）、
+             iOS 17.5.1 で動いたという報告がある。Android Chrome でも以前から使える。
+          ただし **LEDは背面にしか無い**。前面カメラのトラックは torch を capability に
+          持たないので、自撮り（bust）では OS を問わず使えない。
+          つまり torch が効くのは実質「全身モード（背面カメラ）」だけ。
+          どちらにせよ **getCapabilities() での機能検出に任せる**ので、
+          OSのバージョンを見て分岐する必要はない（この設計なら情報が古くても壊れない）。
+       ② 画面フラッシュ    … 画面全体を最大輝度の白で塗り、その光で被写体を照らす。
+                              iPhone の自撮りフラッシュ（Retina Flash）と同じ原理。
+                              **どの端末でも必ず使える**ので、こちらが本命。
+                              文化祭の主役は自撮り（前面カメラ）なので、実際に使われるのは
+                              ほぼこちらになる。
+
+     この2つを二段構えにする（torch が使えるなら torch、駄目なら画面フラッシュ）。
+
+     🚨 いちばん大事なのは「光らせること」ではなく **露光のタイミング** である。
+        光ってから撮るまでが短すぎると、カメラのパイプラインにまだ暗いフレームが載っていて
+        「光ったのに暗い写真」になる。逆に長すぎると自動露出(AE)が明るさを打ち消してしまう。
+        - 映像パイプラインの遅れ … 実測しづらいが 30fps なら 2〜4フレーム＝66〜130ms 程度
+        - AE が効き始めるまで    … おおむね 300〜600ms
+        → その隙間を狙って FLASH_EXPOSURE_MS = 240ms 後に撮る。定数で調整できるようにしておく。
+
+     撮影データ（captureFrame）は画面ではなく liveClean（video 由来）から取るので、
+     白い覆いが写真に焼き込まれることはない（回帰テストで同値確認している）。 */
+  /* 🚨 FLASH_EXPOSURE_MS は **両モード共通**。これは端末（映像パイプラインとAE）の都合で
+     決まる値であって、時代の都合ではない。ここに時代の分岐を入れると調整箇所が2倍になる
+     （2026-08-22 柄本仕様 C-1）。 */
+  const FLASH_EXPOSURE_MS = 240;  // 点灯してから撮るまで（映像の遅れ > これ > AEの反応 になるよう狙う）
+  /* 撮ったあと白が引いていく時間（＝シャッターの余韻）。ここだけモードで分ける:
+     令和=380ms（やわらかく引く）／平成=210ms（パッと消える）。
+     平成の様式はハードエッジで、余韻が長いと令和のやわらかさになってしまう。
+     光の強さ（純白 opacity 1.0）は両モード共通＝当時の「白飛びするほど」に合う */
+  const FLASH_FADE_MS = 380;
+  const FLASH_FADE_MS_H = 210;
+  function flashFadeMs() { return state.mode === 'heisei' ? FLASH_FADE_MS_H : FLASH_FADE_MS; }
+  const flashFill = $('#flash-fill');
+  let torchTrack = null;          // torch が使えるトラック（使えなければ null）
+  let lastFlashRoute = 'none';    // 検証用: 直近に使った経路（'torch' | 'screen' | 'none'）
+  const flashTimings = [];        // 検証用: {on, shot, off} の時刻（露光の窓に撮影が入っているか）
+  const torchCalls = [];          // 検証用: torch へ投げた true/false の並び
+  function flashMark(ev) { flashTimings.push({ ev, t: Math.round(performance.now()) }); }
+
+  // カメラを取得したあとに1回だけ調べる。getCapabilities が無い端末（iOS Safari）は素通り
+  function detectTorch(stream) {
+    torchTrack = null;
+    try {
+      const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+      if (!track || typeof track.getCapabilities !== 'function') return;
+      const caps = track.getCapabilities();
+      if (caps && 'torch' in caps && caps.torch) torchTrack = track;
+    } catch (e) { torchTrack = null; }
+  }
+
+  function flashAvailable() { return !!modeConf().flash; }
+  function flashEnabled() { return flashAvailable() && state.flashOn; }
+
+  async function setTorch(on) {
+    if (!torchTrack) return false;
+    try {
+      await torchTrack.applyConstraints({ advanced: [{ torch: on }] });
+      torchCalls.push(on);
+      return true;
+    } catch (e) {
+      torchTrack = null; // 一度でも断られたら以後は画面フラッシュに任せる
+      return false;
+    }
+  }
+
+  /* 点灯 → 露光が乗るまで待つ。呼び手はこの await が返ってから captureFrame する。
+     戻り値はどの経路で光ったか（そのまま flashLightOff に渡す） */
+  async function flashLightOn() {
+    if (!flashEnabled()) { lastFlashRoute = 'none'; return 'none'; }
+    if (torchTrack && await setTorch(true)) {
+      lastFlashRoute = 'torch';
+      flashMark('on:torch');
+      await sleep(FLASH_EXPOSURE_MS);
+      return 'torch';
+    }
+    // 画面フラッシュ: 画面いっぱいを純白で塗る（カメラ映像もUIも覆う＝出せる光を最大にする）
+    flashFill.style.transition = 'none';
+    flashFill.classList.add('on');
+    flashFill.style.opacity = '1';
+    void flashFill.offsetWidth; // 待つ前に必ず1度描かせる（ここを飛ばすと暗いまま撮る）
+    lastFlashRoute = 'screen';
+    flashMark('on:screen');
+    await sleep(FLASH_EXPOSURE_MS);
+    return 'screen';
+  }
+
+  // 消灯。撮った直後のチラ見せが白の中から浮かび上がる余韻になる（演出も要望のうち）
+  function flashLightOff(route) {
+    if (route !== 'none') flashMark('off');
+    if (route === 'torch') { setTorch(false); return; }
+    if (route !== 'screen') return;
+    const fade = flashFadeMs();
+    flashFill.style.transition = `opacity ${fade}ms ease`;
+    flashFill.style.opacity = '0';
+    setTimeout(() => {
+      if (flashFill.style.opacity === '0') flashFill.classList.remove('on');
+    }, fade + 40);
+  }
+
+  // 撮影を中断して画面を離れるときの後始末（白が出しっぱなしにならないように）
+  function flashReset() {
+    if (torchTrack) setTorch(false);
+    flashFill.style.transition = 'none';
+    flashFill.style.opacity = '0';
+    flashFill.classList.remove('on');
+  }
+
+  // フラッシュのON/OFF（暗い場所用。まぶしい会場では客が自分で切れる）
+  const flashPanel = $('#flash-panel');
+  const flashToggle = $('#btn-flash-toggle');
+  function syncFlashUI() {
+    if (!flashPanel) return;
+    flashPanel.style.display = flashAvailable() ? '' : 'none';
+    if (!flashToggle) return;
+    flashToggle.dataset.on = String(state.flashOn);
+    flashToggle.classList.toggle('on', state.flashOn);
+    flashToggle.textContent = state.flashOn ? '⚡ フラッシュ ON' : '🌙 フラッシュ OFF';
+  }
+  if (flashToggle) {
+    flashToggle.addEventListener('click', () => {
+      state.flashOn = !state.flashOn;
+      playSound('seTap');
+      syncFlashUI();
+    });
   }
 
   /* 準備カウント（全身モードのみ）
@@ -4868,15 +5032,87 @@
   }
 
   /* ---------- オブジェクト描画・再描画 ---------- */
+  /* ペンの種類ごとの質感（2026-08-22 モニター要望④）で使う擬似乱数。
+     🚨 Math.random を直に使ってはいけない。この関数はプレビュー中も、保存時の再描画でも
+        同じ点列に対して呼ばれる。乱数が毎回変わると、描いた形と保存された形が別物になる。
+        点の座標と番号だけから値を作れば、何度描き直しても必ず同じ絵になる。 */
+  function strokeNoise(x, y, i, salt) {
+    const v = Math.sin((x * 12.9898 + y * 78.233 + i * 37.719 + salt * 4.271)) * 43758.5453;
+    return v - Math.floor(v); // 0〜1
+  }
+
+  /* ---- 金・銀（メタリック）2026-08-22 柄本仕様書 C-2 ----
+     キララ（メイクソフトウェア・1999年11月）「業界初の金色銀色落書き」／
+     キララ2（2000年7月）「メタリックカラーが二色」の再現。**平成専用。**
+     金銀は「色」ではなくて「箔の質感」。`#ffd700` のベタ塗りではただの黄色にしかならない。
+     箔は「1方向から光を受けて明暗の帯ができる」ものなので:
+       ・帯の向きは 35° 固定（線ごとに向きが変わると金属に見えず、ただの模様になる）
+       ・帯の周期は 18px 固定（線の長短で見た目が変わらない＝同じ素材に見える）
+     グラデを使うが、これは意味の無い光沢ではなく **当時の実物（特色インク）の再現**。 */
+  const METAL_RAMP = {
+    kin: [[0, '#7a5410'], [0.16, '#c9931f'], [0.30, '#ffe98f'], [0.38, '#fffbe0'],
+      [0.48, '#e8b93a'], [0.66, '#9a6c14'], [0.82, '#d8a52c'], [1, '#7a5410']],
+    gin: [[0, '#5c6169'], [0.16, '#9aa2ab'], [0.30, '#e8edf2'], [0.38, '#ffffff'],
+      [0.48, '#c2c9d1'], [0.66, '#6d737b'], [0.82, '#b3bac2'], [1, '#5c6169']],
+  };
+  const METAL_DARK = { kin: '#3d2907', gin: '#3f444a' };  // 明るい写真の上でも輪郭が消えないフチ
+  const METAL_GRAIN = { kin: '#fffbe0', gin: '#ffffff' }; // 箔の粒
+  const METAL_PERIOD = 18;   // 帯の周期(px)。素材の性質なので線の太さに連動させない
+  const METAL_ANGLE = 0.61;  // 約35°
+
+  /* 線の外接矩形を35°方向へ射影し、その長さぶん帯を敷き詰めた線形グラデを作る。
+     canvasのグラデは繰り返せないので、ランプ自体を n 回ぶん addColorStop して周期を作る。
+     外接矩形から決まる＝同じ線を描き直せば必ず同じ帯になる（やり直しでもシール焼き込みでも揺れない） */
+  function metalGradient(ctx, kind, pts, size) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    minX -= size; minY -= size; maxX += size; maxY += size;
+    const ux = Math.cos(METAL_ANGLE), uy = Math.sin(METAL_ANGLE);
+    let s0 = Infinity, s1 = -Infinity;
+    for (const [x, y] of [[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]]) {
+      const s = x * ux + y * uy;
+      if (s < s0) s0 = s;
+      if (s > s1) s1 = s;
+    }
+    const len = Math.max(1, s1 - s0);
+    const g = ctx.createLinearGradient(s0 * ux, s0 * uy, s1 * ux, s1 * uy);
+    const n = Math.max(1, Math.round(len / METAL_PERIOD));
+    const ramp = METAL_RAMP[kind];
+    for (let k = 0; k < n; k++) {
+      for (const [pos, c] of ramp) {
+        const at = (k + pos) / n;
+        if (at <= 1) g.addColorStop(at, c);
+      }
+    }
+    return g;
+  }
+
   function strokePolyline(ctx, pts, type, color, size) {
     if (pts.length < 2) {
       const p = pts[0];
       ctx.save();
+      /* トンと1回置いただけのとき。金銀はここを通さないと黒い点になる（柄本仕様 C-2） */
+      if (type === 'kin' || type === 'gin') {
+        ctx.fillStyle = METAL_DARK[type];
+        ctx.beginPath(); ctx.arc(p.x, p.y, (size + 3) / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = metalGradient(ctx, type, pts, size);
+        ctx.beginPath(); ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        return;
+      }
       if (type === 'fuchi') {
         ctx.fillStyle = '#ffffff';
         ctx.beginPath(); ctx.arc(p.x, p.y, (size + 6) / 2, 0, Math.PI * 2); ctx.fill();
       }
       if (type === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = size * 1.6; }
+      if (type === 'marker') ctx.globalAlpha = 0.45;
+      if (type === 'crayon') ctx.globalAlpha = 0.75;
+      if (type === 'nijimi') { ctx.shadowColor = color; ctx.shadowBlur = size * 0.9; ctx.globalAlpha = 0.7; }
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
@@ -4908,6 +5144,81 @@
       ctx.strokeStyle = 'rgba(255,255,255,.9)';
       ctx.lineWidth = Math.max(1.5, size * 0.35);
       path(); ctx.stroke();
+    } else if (type === 'marker') {
+      /* 蛍光マーカー: 太い・平らな筆先・半透明。写真が透けて見えるので囲みや下線に向く。
+         1本のパスを1回だけ引く（同じ線を2回引くと重なりで濃くなり、マーカーらしさが消える）。
+         落書きレイヤーは透明キャンバスなので multiply は写真に届かない（source-overで載る）。
+         そこで「濃さ」ではなく **透け** でマーカーを表現する */
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.42;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size * 1.9;
+      path(); ctx.stroke();
+    } else if (type === 'crayon') {
+      /* クレヨン: 芯の線＋左右にずれたかすれ線を重ね、ところどころ粒を落とす。
+         ずれと粒の位置は strokeNoise（座標から決まる値）で作るので、
+         何度描き直しても同じ絵になる */
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.62;
+      ctx.lineWidth = size * 0.92;
+      path(); ctx.stroke();
+      ctx.globalAlpha = 0.34;
+      [-1, 1].forEach((side, si) => {
+        ctx.lineWidth = size * (0.36 + si * 0.14);
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          const j = (strokeNoise(p.x, p.y, i, si) - 0.5) * size * 0.7;
+          const k = (strokeNoise(p.y, p.x, i, si + 3) - 0.5) * size * 0.7;
+          const x = p.x + j * side, y = p.y + k * side;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      });
+      // かすれの粒（ざらつき）。間引いて置かないと重くなるだけで質感は変わらない
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = color;
+      for (let i = 0; i < pts.length; i += 2) {
+        const p = pts[i];
+        const n = strokeNoise(p.x, p.y, i, 7);
+        if (n < 0.45) continue;
+        const r = size * (0.06 + n * 0.10);
+        const ox = (strokeNoise(p.x, p.y, i, 11) - 0.5) * size * 1.1;
+        const oy = (strokeNoise(p.y, p.x, i, 13) - 0.5) * size * 1.1;
+        ctx.beginPath(); ctx.arc(p.x + ox, p.y + oy, r, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (type === 'kin' || type === 'gin') {
+      /* 金・銀（2026-08-22 柄本仕様書 C-2）。ペン色パレットの選択は**使わない**（金は金・銀は銀）。
+         ①暗いフチ ②35°の帯で光る本体 ③箔の粒 の3層。順番を入れ替えると金属に見えない */
+      ctx.strokeStyle = METAL_DARK[type];
+      ctx.lineWidth = size + 3;
+      path(); ctx.stroke();
+      ctx.strokeStyle = metalGradient(ctx, type, pts, size);
+      ctx.lineWidth = size;
+      path(); ctx.stroke();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = METAL_GRAIN[type];
+      for (let i = 0; i < pts.length; i += 4) {
+        const p = pts[i];
+        if (strokeNoise(p.x, p.y, i, 17) < 0.72) continue; // 粒は間引く（全部置くと重いだけ）
+        const r = Math.max(0.6, size * 0.055);
+        const ox = (strokeNoise(p.x, p.y, i, 19) - 0.5) * size * 0.5;
+        const oy = (strokeNoise(p.y, p.x, i, 23) - 0.5) * size * 0.5;
+        ctx.beginPath(); ctx.arc(p.x + ox, p.y + oy, r, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (type === 'nijimi') {
+      /* にじみペン: 外へ向かって薄く広がる3層。水性ペンが紙に染みた感じ。
+         ネオンと違って白い芯を入れない＝光らずに「にじむ」 */
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      [{ w: 2.4, a: 0.10, b: size * 1.1 }, { w: 1.55, a: 0.20, b: size * 0.5 }, { w: 1.0, a: 0.85, b: 0 }]
+        .forEach(({ w, a, b }) => {
+          ctx.globalAlpha = a;
+          ctx.shadowBlur = b;
+          ctx.lineWidth = size * w;
+          path(); ctx.stroke();
+        });
+      ctx.shadowBlur = 0;
     } else {
       ctx.strokeStyle = color;
       ctx.lineWidth = size;
@@ -7699,6 +8010,37 @@
     }),
     waDisable: () => { WA_KEYS.forEach(k => delete waBuffers[k]); }, // 無音環境の再現用
     lastSaveRoute: () => lastSaveRoute, // 保存経路の検証用（share|download|fallback|share-cancel）
+    /* フラッシュの検証用（2026-08-22）。
+       実機のカメラが無い環境では「顔が何段明るくなるか」は測れないので、
+       測れるものだけを外に出す:
+         flashRoute   … torch と 画面フラッシュ のどちらを通ったか
+         flashTimings … 点灯した時刻・撮った時刻・消した時刻（＝露光の窓に入っているか）
+         FLASH_EXPOSURE_MS … 点灯から撮るまでの待ち */
+    flashLightOn, flashLightOff, flashReset,
+    rawShots: () => state.shots.slice(), // 撮れた生の4枚（盛り加工前）。フラッシュの検証用
+    flashRoute: () => lastFlashRoute,
+    flashTimings: () => flashTimings.slice(),
+    // 実際に使われる余韻の長さ（モードで変わる。令和380ms／平成210ms・柄本仕様 C-1）
+    flashConst: () => ({ FLASH_EXPOSURE_MS, FLASH_FADE_MS, FLASH_FADE_MS_H, 実効の余韻: flashFadeMs() }),
+    flashOn: () => state.flashOn,
+    setFlash: (v) => { state.flashOn = !!v; syncFlashUI(); },
+    flashAvailable,
+    // torch（LEDライト）が使えるかを偽の capabilities で試す用
+    fakeTorch: (ok) => { torchTrack = ok ? { getCapabilities: () => ({ torch: true }), applyConstraints: (c) => { torchCalls.push(c.advanced[0].torch); return Promise.resolve(); } } : null; },
+    torchCalls: () => torchCalls.slice(),
+    torchDetected: () => !!torchTrack,
+    // リップ／チークの色（2026-08-22）
+    makeupColorOf: (kind) => makeupColor(modeConf(), kind),
+    setMakeupColor: (kind, id) => { if (kind === 'lip') state.lipColorId = id; else state.cheekColorId = id; },
+    makeupColorList: (kind) => ((modeConf()[kind === 'lip' ? 'lipColors' : 'cheekColors']) || []).map(c => ({ ...c })),
+    drawMakeup,
+    // ペン種（2026-08-22）
+    penTypes: () => (modeConf().penTypes || []).slice(),
+    strokePolyline,
+    setPenType: (t) => { state.penType = t; },
+    // 写真1まい保存（2026-08-22）
+    composeSinglePhoto,
+    buildSingleSaveRow,
     saveEnv, // 端末判定の検証用（isIOS/isAndroid/canDownload/isInApp）
     deliverImage, // 保存経路の分岐だけを撃つ検証用（画面遷移なしで呼べる）
     // カメラ起動の検証用（getUserMediaをスタブに差し替えて経路と案内を確かめる）
