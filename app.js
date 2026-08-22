@@ -135,7 +135,11 @@
         { id: 'vivid', label: 'ビビッド', colors: ['#ff2e88', '#ff3b30', '#ff8a00', '#ffe100', '#22c55e', '#00c2c7', '#2563eb', '#8b2fd6', '#ffffff', '#111111'] },
         { id: 'pastel', label: 'パステル', colors: ['#ffb3d1', '#ffc9a8', '#ffe9a8', '#bdf0c4', '#a8e6ef', '#bcc8ff', '#e0b8ff', '#ffffff'] },
       ],
-      penTypes: ['normal', 'neon', 'fuchi', 'kira'],
+      /* ペン種7つ（2026-08-22 モニター要望④「筆の種類も増やした方がラクガキ感が楽しめる」）。
+         既存4つの並びは変えずに後ろへ3つ足す（前の客が覚えた位置を動かさない）。
+         別のモニターから「選択項目が多くてパニック」の声も来ているので、
+         **見た目がはっきり違うものだけ**を3つに絞った（塗る/こする/にじむ） */
+      penTypes: ['normal', 'neon', 'fuchi', 'kira', 'marker', 'crayon', 'nijimi'],
       stamps: ['🤍', '🫶', '✨', '🌷', '🧸', '☁️', '🍓', '🥐', '📷', '🎧', '🪞', '🎀'],
       // 手描き風スタンプ（Canvas描画。参考画像のハート各種・キラ・吹き出しを再現）
       drawnStamps: ['heartSticker', 'heartGlossy', 'heartOutline', 'heartLine', 'heartArrow', 'heartChalk', 'sparkleLine', 'bubble', 'dateCute'],
