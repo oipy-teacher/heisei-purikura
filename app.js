@@ -6400,14 +6400,56 @@
        **貼れることを見た目より優先する**（この機能は探させたら意味が無い）。
        境目の45%は「道具箱の半分より下」＝ペンと色が最初の画面に残る線 */
     g.classList.remove('compact', 'mini', 'stuck');
-    const limit = bar.clientHeight * 0.45;
+    /* 🚨 2026-08-23【要修正4】: 境目は 0.45（道具箱の半分弱）だった。
+       これだと iPhone12縦（道具箱315px）で 130px の形がそのまま貼り付き、
+       その下の「ふとさ」「色」が初期表示から押し出されていた
+       ＝8/17に直した場所（R-101）の押し戻し。**この機能のために他の道具を消してはいけない。**
+       境目を 0.28 まで下げ、mini（1行）も痩せさせた。
+       「らくらくが在ること」と「ペン・ふとさ・色が見えること」を両立させる線。 */
+    const limit = bar.clientHeight * 0.28;
     if (g.getBoundingClientRect().height > limit) g.classList.add('compact');
-    /* iPhone SE1（320×568）は道具箱の見える高さが91pxしかなく、畳んでも8割を占める。
+    /* iPhone SE1（320×568）は道具箱の見える高さが91pxしかなく、畳んでも大半を占める。
        ここまで来たら「4まい ぜんぶに」を落として本体だけ残す（本体が見えることが最優先） */
     if (g.getBoundingClientRect().height > limit) g.classList.add('mini');
     if (g.getBoundingClientRect().height <= limit) g.classList.add('stuck');
+    placeRakuraku(rakurakuUrgentOn);
   }
   window.addEventListener('resize', syncRakurakuFit);
+
+  /* 🚨【要修正4】の残り: **どんなに痩せさせても、在れば1行ぶんの場所は要る。**
+     道具箱の見える高さが 149px（iPhone8縦）・141px（Android縦）・91px（SE1縦）の端末では、
+     らくらくを先頭に置くと「ふとさ」か「ペン種」が必ず1つ押し出される
+     （実測: 149px の窓に らくらく37 + ペン種36 + ふとさ44 は入らない。算数で入らない）。
+     **道具を消す／らくらくを消す の二択ではなく、置き場所で解く。**
+       ・入る端末 … 従来どおり先頭に貼り付ける（探させない）
+       ・入らない端末 … ペン群の**うしろ**へ回す。最初の2分は主要な道具が全部見えて、
+         らくらくはひと巻きで届く。そして **のこり1分になったら自動で先頭へ戻し、
+         道具箱を先頭までスクロールして呼びかける**（この機能がいちばん要る時刻に、必ず目に入る）
+     判定は画面サイズではなく**実測**（道具箱の高さは画面サイズだけでは決まらない・R-125）。 */
+  let rakurakuUrgentOn = false;
+  function coreToolsVisible(bar) {
+    const cue = $('#toolbar-more');
+    const limitBottom = (cue && !cue.classList.contains('at-end'))
+      ? cue.getBoundingClientRect().top
+      : bar.getBoundingClientRect().bottom;
+    const el = $('#pen-size'); // 主要な道具の最後＝「ふとさ」のバー
+    if (!el) return true;
+    return el.getBoundingClientRect().bottom <= limitBottom + 0.5;
+  }
+  function placeRakuraku(front) {
+    const bar = $('.deco-toolbar');
+    const g = $('#group-rakuraku');
+    if (!bar || !g || g.style.display === 'none') return;
+    const toFront = () => { if (bar.firstElementChild !== g) bar.insertBefore(g, bar.firstElementChild); };
+    toFront();
+    if (front) return;                       // のこり1分：何があっても先頭
+    if (coreToolsVisible(bar)) return;       // 先頭に置いても主要な道具が見えている端末はそのまま
+    const stamp = $('#group-stamp');
+    if (stamp && stamp.parentNode === bar) {
+      bar.insertBefore(g, stamp);            // ペン群のうしろへ回す
+      g.classList.remove('stuck');           // 貼り付けない（回したのに居座ったら意味が無い）
+    }
+  }
 
   /* 残りが少ないほど効く機能なので、終盤は見た目を変えて呼びかける（2026-08-23）。
      貼り付けられていない端末（道具箱が短い端末）では見えていない可能性があるので、
@@ -6415,11 +6457,15 @@
      （客がスタンプを押している最中に道具箱が飛ぶのは邪魔なだけ） */
   const RAKURAKU_URGENT_SEC = 60;
   function setRakurakuUrgent(on) {
+    rakurakuUrgentOn = !!on;
     const g = $('#group-rakuraku');
     if (g) g.classList.toggle('urgent', !!on);
     const sub = $('#rakuraku-sub');
     if (sub) sub.textContent = on ? 'のこりわずか！ おすだけで しあがるよ' : 'おすだけで いっしゅんで かんせい！';
     if (!on || !g) return;
+    /* のこり1分。小さい端末ではペン群のうしろへ回してあるので、ここで先頭へ戻す
+       （この機能がいちばん要る時刻に、必ず目に入るようにする・2026-08-23） */
+    placeRakuraku(true);
     const bar = $('.deco-toolbar');
     if (bar && !g.classList.contains('stuck') && bar.scrollTop > 8) {
       bar.scrollTo({ top: 0, behavior: 'smooth' });

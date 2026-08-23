@@ -460,8 +460,14 @@
                  横持ちの道具箱（幅170〜230px）では12色が3〜4行に折り返し、
                  ふとさが初期表示の外に沈んでいた（平成で83px・令和で132px スクロールが必要）。
                  色パレットの "上" へ移す。太さ調整という機能自体は前からあり、ここで増えるものは無い -->
-            <p class="tool-label sub" id="pen-size-label">ふとさ</p>
-            <input type="range" id="pen-size" min="4" max="52" value="16" aria-labelledby="pen-size-label">
+            <!-- 2026-08-23: 名前と바ーを2段から1段へ（道具箱の縦を18px節約する。
+                 v31で「らくらくお絵かき」が道具箱の先頭に入ったぶん、「ふとさ」「色」が
+                 小さい端末で画面外へ押し出された＝8/17に直した場所の押し戻し。
+                 名前は消さない（D-4で「何のバーか分からない」と指摘された箇所） -->
+            <div class="tool-inline">
+              <p class="tool-label sub" id="pen-size-label">ふとさ</p>
+              <input type="range" id="pen-size" min="4" max="52" value="16" aria-labelledby="pen-size-label">
+            </div>
             <!-- 色の系統（令和のみ・2026-08-17 JKモニター指摘④「ペンの色がくすみ過ぎる」）。
                  くすみは令和様式の柱なので既定のまま残し、選べる系統を足す -->
             <div class="pal-row" id="pen-palette-row"></div>
@@ -494,8 +500,10 @@
               <button class="size-btn" data-stampsize="144">大</button>
             </div>
             <!-- 大きさの無段バー（令和のみ・2026-08-17 指摘③）。ペンの「ふとさ」と同じ形にする -->
-            <p class="tool-label sub" id="stamp-size-label">おおきさ</p>
-            <input type="range" id="stamp-size" min="28" max="220" value="96" aria-labelledby="stamp-size-label">
+            <div class="tool-inline">
+              <p class="tool-label sub" id="stamp-size-label">おおきさ</p>
+              <input type="range" id="stamp-size" min="28" max="220" value="96" aria-labelledby="stamp-size-label">
+            </div>
             <!-- 🚨 2026-08-18: ここに .stamp-hint を付けてはいけない。
                  app.js の COPY_BY_MODE['.stamp-hint'] が querySelectorAll で
                  **同じクラスを全部** 書き換えるため、v26ではこの一文が

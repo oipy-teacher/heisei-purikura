@@ -778,15 +778,25 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
   max-width: 320px;
   background: rgba(255,255,255,.85);
   border-radius: 18px;
-  padding: 14px;
+  /* 上だけ詰める（2026-08-23【要修正4】）。左右は .rakuraku-group.stuck の
+     負のマージン(-14px)と対になっているので変えない */
+  padding: 10px 14px 14px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  /* 2026-08-23【要修正4】: 群と群のすきまを 16px → 10px。
+     道具箱の中身は1200〜1900pxあり、見える高さは端末によって91pxしかない。
+     すきまだけで4群ぶん24px使っていた。密度は落ちるが、道具が画面に入るほうを取る */
+  gap: 10px;
 }
-.tool-label { font-size: 13px; font-weight: 800; color: #7a3fb0; margin: 0 0 6px; }
+.tool-label { font-size: 13px; font-weight: 800; color: #7a3fb0; margin: 0 0 4px; }
 /* 小見出し（「目のかたち」など、すぐ上の項目にぶら下がる名前・2026-08-15） */
 .tool-label.sub { font-size: 12px; opacity: .85; margin: 4px 0 4px; }
+/* 名前とバーを1行に並べる（2026-08-23【要修正4】・道具箱の縦を項目ごとに約18px節約）。
+   名前は消さない（D-4「何のバーか分からない」の答えを保ったまま、場所だけ詰める） */
+.tool-inline { display: flex; align-items: center; gap: 8px; }
+.tool-inline .tool-label.sub { margin: 0; flex: 0 0 auto; }
+.tool-inline input[type="range"] { flex: 1 1 auto; min-width: 0; margin: 0; }
 /* 顔が取れなかった回に、効かないバーを触れなくする（検見 要修正3・2026-08-15）。
    触れないものは触らせない。押せて動くのに絵が変わらない状態が最も不信を招く */
 .face-unavailable { opacity: .38; filter: grayscale(1); pointer-events: none; }
@@ -797,7 +807,9 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
   font-weight: 700;
   opacity: .9;
 }
-.color-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+/* 2026-08-23【要修正4】: 縦のすきまだけ詰める（横は指の間隔なので8pxのまま）。
+   12色は3行に折り返すので、縦を3px詰めると6px戻る */
+.color-row { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-bottom: 6px; }
 .color-swatch {
   width: 30px; height: 30px; border-radius: 50%;
   border: 3px solid #fff; box-shadow: 0 0 0 1px #ccc;
@@ -805,6 +817,13 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
 }
 .color-swatch.selected { box-shadow: 0 0 0 3px #333; }
 #pen-size { width: 100%; }
+/* 2026-08-23（検見の令和検査⑥）: #stamp-size の実寸が 129×16px で、推奨44pxの半分以下だった。
+   指で掴むところ（つまみ）が小さいと、盛りのスライダーで直したのと同じ不満が出る（R-058）。
+   当たり判定を44pxに広げる。見た目のレールは細いまま（背景を透過させて上下に余白を作る） */
+input[type="range"]#stamp-size, input[type="range"]#pen-size {
+  min-height: 44px;
+  background: transparent;
+}
 /* 道具の切替は2列（2026-08-15・D-1/D-2）。1行4列だと1つ40px前後しか取れず、
    動作の一言（「なぞって けずる」等）が入らなかった */
 .mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
@@ -828,7 +847,7 @@ body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff;
   font-weight: 900;
 }
 
-.pen-type-row, .size-row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.pen-type-row, .size-row { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
 .pen-type-btn, .size-btn {
   flex: 1;
   min-width: 52px;
@@ -979,17 +998,33 @@ body[data-mode="reiwa"] .tool-btn.hint-pulse { animation-name: hintPulseR; }
 .rakuraku-btn b { font-size: 14px; font-weight: 900; color: #d81b7a; line-height: 1.2; }
 .rakuraku-btn small { font-size: 10px; font-weight: 700; color: #7a3fb0; line-height: 1.25; }
 .rakuraku-btn:active { transform: translateY(1px); }
-.rakuraku-all-btn { width: 100%; margin-top: 5px; padding: 3px 6px; font-size: 11px; }
+/* 2026-08-23（検見の平成検査【軽微5】）: 高さ25〜28pxで推奨44pxの6割だった。
+   ふつうの形では44pxを確保する。畳んだ形（compact/mini）は「入らないから畳んでいる」ので、
+   ここで44pxを強いると道具箱から他の道具が押し出される（要修正4の再発）。畳んだ形は据え置き */
+.rakuraku-all-btn { width: 100%; margin-top: 5px; padding: 3px 6px; font-size: 11px; min-height: 44px; }
+.rakuraku-group.compact .rakuraku-all-btn, .rakuraku-group.mini .rakuraku-all-btn { min-height: 0; }
 /* 道具箱の見える高さが足りない端末（iPhone8縦=149px など）は1行に畳む。
    見本の絵と補足は落とし、押せることだけ残す（無くなるより、小さくても在るほうがよい） */
-.rakuraku-group.compact { padding: 6px !important; }
+/* 2026-08-23【要修正4】: compact は「見本の絵を落として2段」で74pxあり、
+   それだけで iPhone12縦（道具箱323px）の「色」を追い出していた。
+   **2つのボタンを横に並べて1段にする**。機能はどちらも残したまま高さが半分以下になる
+   （機能を削るより先に、並べ方で詰める） */
+.rakuraku-group.compact { padding: 5px !important; display: flex; align-items: stretch; gap: 5px; }
 .rakuraku-group.compact canvas,
 .rakuraku-group.compact .rakuraku-btn small { display: none; }
-.rakuraku-group.compact .rakuraku-btn { padding: 5px 8px; border-width: 2px; }
+.rakuraku-group.compact .rakuraku-btn { flex: 1 1 auto; padding: 5px 8px; border-width: 2px; justify-content: center; }
 .rakuraku-group.compact .rakuraku-btn b { font-size: 13px; }
-.rakuraku-group.compact .rakuraku-all-btn { margin-top: 4px; font-size: 10px; padding: 2px 6px; }
-/* 道具箱が91pxしかない端末（iPhone SE1・320×568）。本体1つだけにする */
+.rakuraku-group.compact .rakuraku-all-btn { flex: 0 0 auto; width: auto; margin-top: 0; font-size: 10px; padding: 2px 7px; }
+/* 道具箱が91pxしかない端末（iPhone SE1・320×568）。本体1つだけにする。
+   2026-08-23【要修正4】: mini でも45〜48px あり、それだけで道具箱の半分を食っていた。
+   1行のボタンそのものまで削る（枠・余白・字を落とす）。**在ることが最優先** */
+.rakuraku-group.mini { padding: 3px !important; border-width: 2px; }
 .rakuraku-group.mini .rakuraku-all-btn { display: none; }
+.rakuraku-group.mini .rakuraku-btn { padding: 2px 6px; border-width: 2px; border-radius: 8px; }
+.rakuraku-group.mini .rakuraku-btn b { font-size: 12px; }
+.rakuraku-group.mini.stuck { padding: 5px 14px 4px !important; margin: -14px -14px 0; }
+/* compact のまま貼り付けるときも、左右は道具箱の padding ぶん広げる */
+.rakuraku-group.compact.stuck { padding: 6px 14px 5px !important; margin: -14px -14px 0; }
 /* 残り1分から。押せば間に合う、が一目で分かる強さにする（点滅は帯ではなくボタンだけ） */
 .rakuraku-group.urgent { border-bottom-color: #ff2f2f; }
 .rakuraku-group.urgent .rakuraku-btn {
@@ -2139,7 +2174,7 @@ body.theme-heisei .deco-toolbar {
 body.theme-heisei .tool-group {
   background: rgba(255,255,255,.92);
   border-radius: 10px;
-  padding: 10px;
+  padding: 8px; /* 2026-08-23【要修正4】: 10px → 8px（1群につき上下4px節約） */
 }
 body.theme-heisei .tool-label { color: var(--h-ink); font-weight: 800; }
 /* ペン色: ペン軸形（縦長カプセル＋先端の三角ペン先）。選択中は4px飛び出す */
