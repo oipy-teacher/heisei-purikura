@@ -444,17 +444,13 @@
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[id].classList.add('active');
     currentScreenId = id;
+    /* いまどの画面かをCSSからも見えるようにする（2026-08-23）。
+       「飾りが操作の文字に重なる」を画面ごとに逃がすのに使う（.spark など）。
+       ⚠️ 画面の出し分けをここに増やしていくと白リストになる。使うのは**飾りの位置だけ**に留めること */
+    document.body.dataset.screen = id;
     // タイトルへ戻ったら待機デモのアイドル計測を仕掛け直す（関数はこの後で定義される）
     if (id === 'screen-title' && typeof armAttractIdle === 'function') armAttractIdle();
-    /* 保存画面ではホーム画面追加の案内バー（#pwa-hint）を引っ込める
-       （2026-08-15 検見の総合検収【軽微⑨】）。z-index 310 で最前面にいるため、
-       非常口「▶ ながおしで保存」や「16分割ver.」の上に乗り、
-       落書き中に一度も画面を触らなかった客だけ最後の出口が押せなくなっていた。
-       ここまで来た客に「ホーム画面に追加」を勧める意味はもう無い */
-    if (id === 'screen-print') {
-      const pwaBar = document.getElementById('pwa-hint');
-      if (pwaBar) pwaBar.classList.add('hidden');
-    }
+    syncPwaHint(); // 案内バーは「タイトル画面だけ」（下の syncPwaHint に理由）
     if (typeof updateThemeFx === 'function') updateThemeFx(id);
   }
 
@@ -7485,11 +7481,9 @@
       shBtn.classList.toggle('hidden', !sharable);
     }
     $('#save-modal').classList.remove('hidden');
-    /* ホーム画面追加の案内バーは z-index 310 でモーダル(290)より上にいる。
-       横持ちでは「とじる」に重なって押せなくなるため、保存モーダルを出す間は引っ込める
-       （2026-08-15 横持ちのスクショで発見。最後の砦が袋小路になっていた） */
-    const pwaBar = $('#pwa-hint');
-    if (pwaBar) pwaBar.classList.add('hidden');
+    /* （2026-08-23）案内バーをここで引っ込める処理は消した。
+       出る画面がタイトルだけになり、かつバー自体がタップを食べない形になったので、
+       画面ごとに「隠す」を書き足す必要がなくなった＝白リストが1つ減った。 */
     /* 「がぞうを ながおしして…」（2026-08-15）。iOSは「しゃしんに追加」で文言が一致するが、
        Androidの長押しメニューは「画像をダウンロード」なので、そのままだと客が探す項目とズレる。
        ボイスは iOS のときだけ鳴らし、Androidは画面の文字（端末別に出し分け済み）に任せる。
@@ -8277,28 +8271,51 @@
   })();
 
   /* ホーム画面に追加のおすすめ（Safariのタブで開いているときだけ）。
-     ホーム画面から起動すると端スワイプの戻るが無くなるので、本番はこちらが前提。 */
-  (function pwaHint() {
-    const bar = $('#pwa-hint');
-    if (!bar) return;
+     ホーム画面から起動すると端スワイプの戻るが無くなるので、本番はこちらが前提。
+
+     🚨🚨 2026-08-23（検見の総ざらい検査【致命2】・平成/令和の両方で報告）—
+     このバーが「撮影スタート！」の上に乗り、**iPhone SEクラスで撮影が始められなかった**
+     （5回中5回。elementFromPoint が #pwa-hint-text を返す）。375×667では
+     「えらび直す」「らくがきスタート」、320×568では「フラッシュON/OFF」まで飲まれていた。
+
+     真因は直し方の形にあった。2026-08-15（台帳 R-086）で保存画面だけを
+     `if (id === 'screen-print') hide` と**白リスト**で塞いだため、
+     **表に入らなかった画面が全部漏れた**。画面を1つ足すたびに漏れが1つ増える形だった。
+
+     → 白リストをやめ、**構造で保証する**形にした。守るのは次の2つ:
+       ① **出るのはタイトル画面だけ。** 判定を「隠す画面を数える」から
+          「出す画面はここだけ」へ反転した。新しい画面を足しても自動的に出ない。
+          文面は【係の人へ】＝開店前の係の人あてなので、そもそもタイトルで足りる。
+       ② **どの画面にいても、このバーはタップを一切食べない。**
+          `.pwa-hint` は pointer-events:none、✕ ボタンだけ auto（style.css）。
+          万一①が破れても、押せないボタンは生まれない。
+     ✕は 24px → 44px（推奨サイズ。いちばん困っている人が押すボタンなので小さくしない）。 */
+  function pwaHintEligible() {
     const standalone = window.navigator.standalone === true
       || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
       || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
     let dismissed = false;
     try { dismissed = sessionStorage.getItem('purikura.pwaHint.off') === '1'; } catch (e) { /* 読めなければ出す */ }
-    if (standalone || !ios || dismissed) return;
-    bar.classList.remove('hidden');
-    $('#btn-pwa-hint-close').addEventListener('click', () => {
-      bar.classList.add('hidden');
-      try { sessionStorage.setItem('purikura.pwaHint.off', '1'); } catch (e) { /* 保存できなくても閉じる */ }
-    });
-    // 落書きが始まったら邪魔なので自動で引っ込める
-    document.addEventListener('click', function hideOnDeco() {
-      if (!decoActive) return;
-      bar.classList.add('hidden');
-      document.removeEventListener('click', hideOnDeco);
-    }, true);
+    return !standalone && ios && !dismissed;
+  }
+  function syncPwaHint() {
+    const bar = document.getElementById('pwa-hint');
+    if (!bar) return;
+    const on = currentScreenId === 'screen-title' && pwaHintEligible();
+    bar.classList.toggle('hidden', !on);
+    // タイトルの注記（※上か下をタッチしてね）をバーのぶんだけ上げる（重なりを実測0にするため）
+    document.body.classList.toggle('pwa-hint-on', on);
+  }
+  (function pwaHint() {
+    const closeBtn = $('#btn-pwa-hint-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        try { sessionStorage.setItem('purikura.pwaHint.off', '1'); } catch (e) { /* 保存できなくても閉じる */ }
+        syncPwaHint();
+      });
+    }
+    syncPwaHint();
   })();
 
   // 動作検証用フック（アプリの動作には影響しない）

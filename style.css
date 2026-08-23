@@ -1141,6 +1141,10 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
 }
 .resume-note { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #7a6a86; }
 /* ---- ホーム画面に追加のおすすめ（Safariのタブで開いている時だけ） ---- */
+/* 🚨 2026-08-23【致命2】: この帯が「撮影スタート！」を飲んで、iPhone SEクラスで
+   撮影が始められなかった。出す画面をタイトルだけに絞った（app.js の syncPwaHint）うえで、
+   **帯そのものがタップを食べない**ようにしてある。この2行（pointer-events）は
+   保険ではなく本体。消すと「隠し忘れた画面＝押せない画面」がまた作れるようになる。 */
 .pwa-hint {
   position: fixed;
   left: 50%; bottom: 10px;
@@ -1155,13 +1159,17 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
   font-size: 12px;
   line-height: 1.5;
   box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  pointer-events: none; /* 下のボタンへタップを素通しする（この帯は読むだけのもの） */
 }
 .pwa-hint-close {
   flex: none;
   border: none; background: rgba(255,255,255,.18); color: #fff;
-  width: 24px; height: 24px; border-radius: 999px;
-  font-size: 12px; cursor: pointer;
+  width: 44px; height: 44px; border-radius: 999px; /* 2026-08-23: 24px→44px（推奨サイズ） */
+  font-size: 15px; cursor: pointer;
+  pointer-events: auto; /* ✕だけは押せる */
 }
+/* 案内バーが出ている間は、タイトルの注記をバーの上へ逃がす（重なり実測0にするため） */
+body.pwa-hint-on .title-note { bottom: 76px; }
 /* 端スワイプの吸収は、要素をかぶせる方式ではなく app.js の touchstart で行う
    （帯を置くと横持ちのとき道具箱の右端26pxが押せなくなるため。2026-08-14 の設計判断） */
 
@@ -1756,6 +1764,12 @@ body.theme-heisei #sparkle-layer { display: block; }
    画面の横スクロールは生まれないが、飾りが画面の外に立つのは正しくない）。
    右端からの距離で置けば、幅がいくつでも必ず中に収まる（広い画面での見え方は94%とほぼ同じ） */
 #sparkle-layer .spark:nth-child(7) { left: auto; right: 2%; top: 46%; animation-delay: 3.2s; width: 44px; height: 44px; }
+/* 2026-08-23（検見の平成検査【軽微3】・台帳 R-020 と同じ型）: 落書き画面では
+   キラキラ1番（left 6% / top 14%）が「↺もどす」の文字に重なる（320・360・375の3サイズ）。
+   飾りは操作の邪魔をしない、を守る。落書き画面だけ、ヘッダーの下へ逃がす
+   （#sparkle-layer は pointer-events:none なので押せなくなる害は無い＝**読めない**のが問題） */
+body[data-screen="screen-deco"] #sparkle-layer .spark:nth-child(1) { top: 30%; }
+body[data-screen="screen-deco"] #sparkle-layer .spark:nth-child(5) { top: 26%; }
 #sparkle-layer .spark:nth-child(8) { left: 3%;  top: 40%; animation-delay: 1.6s; }
 @keyframes sparkPop {
   0%, 55% { opacity: 0; transform: scale(.2) rotate(0deg); }
@@ -1798,6 +1812,11 @@ body.theme-reiwa #particle-layer { display: block; }
   height: 34px;
   display: flex;
   align-items: center;
+  /* 🚨 2026-08-23: この帯は**読むだけの飾り**なのに、画面下端いっぱい・不透明・z-index 155 で
+     ペンの色スウォッチやフィルターのボタンを飲んでいた（14端末のヒットテストで検出。
+     iPad横のフィルター6個・Android縦の色8個など）。#pwa-hint（致命2）と同じ型。
+     **飾りはタップを食べない**を全部の飾りに通す。押すものではないので実害はゼロ */
+  pointer-events: none;
 }
 body:not(.theme-heisei) #marquee { display: none; }
 #marquee-inner {
