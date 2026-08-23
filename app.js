@@ -6991,12 +6991,32 @@
     stopUgokasuHint();
   }
 
+  /* 🚨 2026-08-23（検見の総ざらい検査【要修正3】・14台中9台）: このトーストが
+     「↺もどす」「🗑ぜんぶ消す」「✨できあがり！」の3ボタンの上に重なっていた
+     （最大 1084px²・背景は rgba(255,255,255,.95) でほぼ不透明＝その間ボタンの文字が読めない）。
+     台帳 R-108 で「画面外に切れる」は直したが、収まった先がボタンの上だった
+     ＝**「収まった≠読める」の3回目**。
+
+     旧版は CSS で `top: 64px` の決め打ちだった。ヘッダーの高さは端末と文字の折り返しで
+     変わるので、決め打ちは必ずどこかで当たる。
+     → **ヘッダーの実際の下端を測って、その下に置く。**
+       これならヘッダーにボタンを1つ足しても、文字が2行に折り返しても、
+       トーストがその上に乗ることは**構造的に起きない**。 */
+  function placeDecoToast() {
+    const screen = document.getElementById('screen-deco');
+    const header = screen && screen.querySelector('.deco-header');
+    if (!screen || !header) return;
+    const top = header.getBoundingClientRect().bottom - screen.getBoundingClientRect().top + 8;
+    if (isFinite(top) && top > 0) decoToastEl.style.top = Math.round(top) + 'px';
+  }
   function showDecoToast(text) {
     decoToastEl.textContent = text;
     decoToastEl.classList.remove('hidden');
+    placeDecoToast(); // 出す直前に測る（回転・折り返しのあとでも正しい位置に出る）
     if (decoToastId) clearTimeout(decoToastId);
     decoToastId = setTimeout(() => decoToastEl.classList.add('hidden'), 2600);
   }
+  window.addEventListener('resize', () => { if (!decoToastEl.classList.contains('hidden')) placeDecoToast(); });
 
   /* ---------- シールに載せる写真えらび（2026-08-13 実機テスト指摘対応） ----------
      2枚ワイド/6分割などで「4枚のどれがシールに載るか」が選べなかった。
