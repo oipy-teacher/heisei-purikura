@@ -403,6 +403,56 @@
     warningPlayed: false,
   };
 
+  /* ===================== 「もう一回あそぶ」のリセット（2026-08-23 作り替え） =====================
+     🚨 **リセット漏れは4回目**（R-004 BGM/年代 → R-009 スクロール位置 → R-014 data-mode →
+     R-043 分割 → 今回 shotMode / chromaOn）。毎回「直した」のに毎回また漏れたのは、
+     **直し方が「リセットする項目を手で並べる」形だったから**。
+     項目を1つ足すたびに、書き足すのを忘れる機会が1つ増える作りになっていた。
+
+     今回の被害は無人運用では事故に近い: 前の客が「全身コース」で終わると、
+     次の客がいきなり **背面カメラ・鏡像OFF** で始まる（自分が画面に映らない）。
+     「うしろの色がえ」も残り、触っていないのに背景がくり抜かれる。しかも**モードをまたぐ**。
+
+     → 列挙をやめる。**起動時の state をそのまま控えとして持ち、
+       「もう一回あそぶ」ではこの控えから機械的に戻す。**
+       新しい state を足したら、その初期値が**自動でリセット対象に入る**。
+       持ち越すものだけを STATE_KEEP に書く（＝書き忘れたら「戻る」側に倒れる）。
+
+     ※ 控えは浅い複製で足りる。中身が書き換わるのは配列と beauty だけなので、
+       戻すときにその2種類だけ複製し直す。
+     ※ curtain / frame / layout は MODES / LAYOUTS の定義オブジェクトを指しているが、
+       比較はすべて `.id` で行っているので複製されても壊れない（確認済み）。 */
+  const STATE_DEFAULTS = { ...state };
+  /* 戻さないもの。**ここに足すときは理由を書くこと**（黙って増やすと元の木阿弥）
+     - mode  … 次の客が扉で選ぶ。ここで 'heisei' に戻すと、令和で遊んだ客への
+               「ありがとう」が平成の口調で鳴ってしまう（announceByMode が state.mode を見る）
+     - stream … MediaStream の実体。停止は stopCamera() の仕事なので、ここでは触らない */
+  const STATE_KEEP = new Set(['mode', 'stream']);
+  function resetStateForNextGuest() {
+    Object.keys(STATE_DEFAULTS).forEach((k) => {
+      if (STATE_KEEP.has(k)) return;
+      const v = STATE_DEFAULTS[k];
+      if (Array.isArray(v)) state[k] = v.slice();
+      else if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) state[k] = { ...v };
+      else state[k] = v;
+    });
+  }
+  /* 検証用: いま初期値と違っている state のキーを返す（アプリの動作には影響しない）。
+     「リセット後にこれが空になること」を回帰テストで機械的に確かめるための窓口。 */
+  function stateKeysDifferingFromDefaults() {
+    const same = (a, b) => {
+      if (a === b) return true;
+      if (Array.isArray(a) && Array.isArray(b)) return a.length === 0 && b.length === 0;
+      if (a && b && typeof a === 'object' && typeof b === 'object') {
+        try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+      }
+      return false;
+    };
+    return Object.keys(STATE_DEFAULTS)
+      .filter(k => !STATE_KEEP.has(k))
+      .filter(k => !same(state[k], STATE_DEFAULTS[k]));
+  }
+
   const modeConf = () => MODES[state.mode];
 
   /* ===================== ユーティリティ ===================== */
@@ -1507,11 +1557,22 @@
     if (full && state.chromaOn) {
       // 全身モードは実物のスクリーン投影が背景。くりぬきは邪魔になるので切る
       state.chromaOn = false;
-      const t = $('#btn-chroma-toggle');
-      if (t) { t.dataset.on = 'false'; t.textContent = 'つかわない'; }
     }
+    syncChromaToggle();
     const chromaSec = $('#sel-chroma');
     if (chromaSec) chromaSec.style.display = full ? 'none' : '';
+  }
+  /* 🚨 2026-08-23: トグルの見た目は **必ず state から描く**（自分で状態を持たない）。
+     以前は押したときにだけ dataset.on と文字を書き換えていたので、
+     「もう一回あそぶ」で state.chromaOn が false に戻っても、
+     **ボタンだけ「つかう」のまま**次の客に出ていた（state は直ったのに画面が嘘をつく）。
+     リセット漏れの直し方を「初期値から機械的に戻す」に変えた以上、
+     画面側も「state を写す」形にしないと、同じ穴がUIの側に残る。 */
+  function syncChromaToggle() {
+    const t = $('#btn-chroma-toggle');
+    if (!t) return;
+    t.dataset.on = String(state.chromaOn);
+    t.textContent = state.chromaOn ? 'つかう' : 'つかわない';
   }
 
   document.querySelectorAll('.shotmode-btn').forEach(btn => {
@@ -1526,8 +1587,7 @@
   const chromaToggle = $('#btn-chroma-toggle');
   chromaToggle.addEventListener('click', () => {
     state.chromaOn = !state.chromaOn;
-    chromaToggle.dataset.on = String(state.chromaOn);
-    chromaToggle.textContent = state.chromaOn ? 'つかう' : 'つかわない';
+    syncChromaToggle();
     if (state.chromaOn && !imageSegmenter && !segmenterLoading) initSegmenter();
   });
 
@@ -4173,10 +4233,20 @@
     }
   }
 
-  /* メイクりれき（Bloomit型・2026-08-14）: 前回保存したレタッチ設定を4枚全部へワンタッチ再現 */
+  /* メイクりれき（Bloomit型・2026-08-14）: 前回保存したレタッチ設定を4枚全部へワンタッチ再現。
+
+     🚨 2026-08-23（検見の令和検査③）: この保存先は localStorage なので、
+     タブを閉じても翌日でも残る。家で使うアプリなら「前回の再現」で正しいが、
+     **無人の文化祭ブースでは「前の客の顔の設定」を次の客に勧めている**ことになる
+     （実測: 1人目の涙袋55・脚なが40・フィルター kusumi が3人目の画面に出た）。
+     → 「もう一回あそぶ」で消す＝1組の中でだけ有効、に変えた。
+     ⚠️ どちらを取るかはオーナー確認中。**元の挙動へは下の定数1つで戻せる**
+        （false にすれば客をまたいで残る。鍵の名前も1箇所にまとめてある）。 */
+  const MAKEUP_HISTORY_KEY = 'purikura.makeupHistory.v1';
+  const CLEAR_MAKEUP_HISTORY_PER_GUEST = true;
   $('#btn-makeup-history').addEventListener('click', () => {
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem('purikura.makeupHistory.v1')); } catch (e) { /* 壊れた保存は無視 */ }
+    try { saved = JSON.parse(localStorage.getItem(MAKEUP_HISTORY_KEY)); } catch (e) { /* 壊れた保存は無視 */ }
     if (!saved) return;
     const list = Array.isArray(saved) ? saved : [saved];
     if (state.beautyShots) {
@@ -4332,7 +4402,7 @@
     const histBtn = $('#btn-makeup-history');
     if (histBtn) {
       let has = false;
-      try { has = !!localStorage.getItem('purikura.makeupHistory.v1'); } catch (e) { /* 読めない環境では出さない */ }
+      try { has = !!localStorage.getItem(MAKEUP_HISTORY_KEY); } catch (e) { /* 読めない環境では出さない */ }
       histBtn.classList.toggle('hidden', !has);
       /* ボタンを出したときだけ案内する（2026-08-15）。beauty→moriageLevel の
          あとに来るよう、りれきがある回はさらに後ろへ繋ぐ */
@@ -4397,7 +4467,7 @@
        写真・氏名等の個人情報は一切保存しない（守屋ライン: 端末外への送信もゼロ）。次回の盛り画面で
        「まえの盛れを再現」ボタンとして出てくる */
     try {
-      localStorage.setItem('purikura.makeupHistory.v1', JSON.stringify(state.beautyShots || [state.beauty]));
+      localStorage.setItem(MAKEUP_HISTORY_KEY, JSON.stringify(state.beautyShots || [state.beauty]));
     } catch (e) { /* プライベートブラウズ等で保存できない場合は何もしない */ }
     // 各ショットに「その1枚の」パラメータを適用（2026-08-12: 1枚ごとの盛り設定に対応）
     state.processedShots = state.shots.map((shot, i) =>
@@ -8002,24 +8072,21 @@
     if (state.timerId) clearInterval(state.timerId);
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
     if (printReadyId) { clearTimeout(printReadyId); printReadyId = null; }
-    state.shots = [];
-    state.processedShots = [];
-    state.faceData = [];
-    state.photoPick = null; // シール写真えらびも次の客のためにリセット（2026-08-13）
-    /* 無人運用では前の客の設定が残ると事故になる（2026-08-12 qa-tester指摘と同じ理由）。
-       リップ／チークの色とフラッシュも既定へ戻す（2026-08-22） */
-    state.lipColorId = null;
-    state.cheekColorId = null;
-    state.flashOn = true;
     const ssRow = $('#single-save-row');
     if (ssRow) ssRow.innerHTML = ''; // 前の客の写真をサムネイルに残さない
-    // 次の客のために選択系もまっさらへ（2026-08-12 qa-tester指摘。無人運用では前の客の設定が残ると事故）
-    state.bgmChoice = 'auto';
-    state.heiseiEra = 'standard';
-    /* 分割も初期値へ（2026-08-13 考証回帰の回帰実走で発見）:
-       平成は落書き後のゲートで state.layout を書き換えるため、リセットしないと
-       前の客が選んだ分割が次の令和の客の初期選択に化ける */
-    state.layout = LAYOUTS[0];
+    /* 🚨 state は1つずつ並べて戻さない（2026-08-23・リセット漏れ4回目の構造対策）。
+       起動時に取っておいた控えから機械的に戻す。詳しい理由は STATE_DEFAULTS の定義を見ること。
+       この1行で shotMode（アップ/全身＝背面カメラ）も chromaOn（うしろの色がえ）も
+       写真・盛り・落書きの道具も、**これから足す state も**まとめて初期値へ戻る。 */
+    resetStateForNextGuest();
+    /* メイクりれきも1組ぶんで終わりにする（2026-08-23 検見の令和検査③）。
+       家で使うアプリなら「前回の再現」で正しいが、無人の文化祭ブースでは
+       **前の客の顔の設定を次の客に勧める**ことになる（localStorage なので翌日も残る）。
+       ⚠️ オーナー確認中。元の挙動（客をまたいで残す）に戻すときは、
+          この定数を false にするだけでよい（消す場所を探し回らなくて済むように1箇所にした）。 */
+    if (CLEAR_MAKEUP_HISTORY_PER_GUEST) {
+      try { localStorage.removeItem(MAKEUP_HISTORY_KEY); } catch (e) { /* 消せない環境は諦める */ }
+    }
     voiceGaveUp = false; // 次の客は音声から仕切り直す
     /* 一時保存も必ず消す（2026-08-14・守屋ライン）。
        前の客の顔写真と落書きが端末に残ったまま次の客が触る、が起きないようにする */
@@ -8033,11 +8100,23 @@
     delete document.body.dataset.mode; // 前回のモード値を残さない（qa-tester検収指摘6）
     setTheme(null); // タイトルはモード決定前の「対比の画面」なのでテーマを外す
     playBgmSrc(BGM_TITLE); // タイトルへ戻ったらタイトル曲へ
+    /* 🚨 順番を入れ替えてはいけない（2026-08-23 音羽の点検【致命①】）。
+       旧版はここで先に thanks を鳴らし、最後に showScreen を呼んでいた。
+       showScreen は画面が変わるとき必ず stopVoice() する設計なので、
+       **鳴らしたばかりの「ありがとねー！」を自分で消していた**（実測 実効23ms・6走6回）。
+       文化祭で組が入れ替わるその瞬間の一言が、開店から閉店まで一度も客の耳に届いていなかった。
+       showScreen のコメントにある「showScreen → その画面の案内」の順を、ここでも守る。
+       ※ thanks は state.mode を見るので、モードは resetStateForNextGuest で戻していない
+         （STATE_KEEP の理由参照）。 */
     showScreen('screen-title');
+    announceByMode('thanks'); // 「ありがとねー！また 太子祭プリ とりに きてねー！」
   });
 
   /* ===================== 効果音（タッチ/決定） ===================== */
-  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish'];
+  /* 2026-08-23（音羽の点検【軽微③】）: らくらくお絵かきの2つがこの表に無かったため、
+     共通ハンドラの seTap と、ボタン側が自分で鳴らす seDecide が **8ms差で同時に鳴って**
+     「押した感じ」がにじんでいた。表に足して、ボタン側の playSound は消す（窓口は1つ）。 */
+  const DECIDE_IDS = ['btn-mode-heisei', 'btn-mode-reiwa', 'btn-to-camera', 'btn-start-shooting', 'btn-beauty-done', 'btn-confirm-yes', 'btn-finish', 'btn-rakuraku', 'btn-rakuraku-all'];
   document.addEventListener('click', (e) => {
     const el = e.target.closest('button, .choice-item, .layout-item, .color-swatch');
     if (!el) return;
