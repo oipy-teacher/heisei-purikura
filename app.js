@@ -6191,28 +6191,62 @@
   function rakurakuNext() { return RAKURAKU_HEISEI[rakurakuIdx % RAKURAKU_HEISEI.length]; }
 
   /* 🚨 シールに焼くとき、写真はセルの形に合わせて **切り取られる**（drawShotFit の cover）。
-     実測（2026-08-23）: 4分割・16分割・まる4 では横 **64.7%** しか残らない（左右が落ちる）。
-     2枚ワイドは縦 74.1% しか残らない（上下が落ちる）。6分割だけ全部残る。
      写真の端に置いた飾りは、**画面では見えていたのにシールには入らない**。
      らくらくお絵かきは「押したら完成」の機能なので、ここがズレると約束を破ることになる。
-     → 型は「切り取られても残る範囲」の中に収める。範囲はいま選ばれているレイアウトから計算する
-       （客がレイアウトを選ぶのは落書きより前なので、途中で変わることはない）。
-     ※ まる型（まる4・まるMIX）は円で抜くので四隅はさらに欠ける。そこまでは追わない
-       （丸を選んだ客は丸くなることを承知しているため）。 */
+
+     🚨🚨 2026-08-23（検見の総ざらい検査【致命1】）— ここには**誤った前提**が書いてあった。
+     旧版は「範囲はいま選ばれているレイアウトから計算する（客がレイアウトを選ぶのは
+     落書きより前なので、途中で変わることはない）」としていた。**平成では成立しない。**
+     平成は 2026-08-13 のオーナー裁定で「撮影 → 落書き → 分割えらび → 排出」の順であり、
+     落書き中の state.layout は常に 4分割（enterMode が LAYOUTS[0] に固定）で、
+     客はそのあと6つから選ぶ。結果、2枚ワイドを選ぶと縦74.1%しか残らず、
+     5つの型すべてが上下で切れた（「永久不滅」は主題の「我等友情永久不滅成」が丸ごと消失）。
+
+     → **いま選ばれているレイアウトを見ない。** LAYOUTS 全部の共通安全域を計算して、
+       そこに収める。あとから分割が変わっても壊れようがない形にした。
+       レイアウトを1つ足しても、この計算に自動で入る（表に書き足す必要が無い）。
+
+     計算（実測ではなく、レイアウト定義から機械的に導く）:
+       ・四角セル … cover の結果、写真のうち (cw/scale)/SHOT_W × (ch/scale)/SHOT_H だけが残る
+       ・丸セル  … 正方形の枠に cover したうえで半径 min(SHOT_W,SHOT_H)/2 の円で抜かれる。
+                   安全域の**四隅**がその円に入るまで、縦横の比を保ったまま縮める
+                   （旧版は「丸は追わない」と割り切っていたが、まる4で見出しと日付が
+                     欠けるのを検見が実測したので、ここで一緒に閉じる） */
+  let rakurakuSafeCache = null;
   function rakurakuSafeCell() {
+    if (rakurakuSafeCache) return rakurakuSafeCache;
     const full = { x: 0, y: 0, w: SHOT_W, h: SHOT_H };
-    let cells = [];
-    try { cells = layoutCells(state.layout || LAYOUTS[0]) || []; } catch (e) { return full; }
-    if (!cells.length) return full;
     let vx = 1, vy = 1;
-    cells.forEach((c) => {
-      const scale = Math.max(c.w / SHOT_W, c.h / SHOT_H);
-      vx = Math.min(vx, (c.w / scale) / SHOT_W);
-      vy = Math.min(vy, (c.h / scale) / SHOT_H);
+    let circleR = Infinity; // 丸セルで抜かれるときの、写真座標での半径
+    let seen = 0;
+    LAYOUTS.forEach((L) => {
+      let cells = [];
+      try { cells = layoutCells(L) || []; } catch (e) { return; }
+      if (!cells.length) return;
+      seen++;
+      if (L.shape === 'circle') {
+        // 丸セルは正方形の枠へ cover するので、見える範囲は「写真の短辺ぶんの正方形」
+        const side = Math.min(SHOT_W, SHOT_H);
+        vx = Math.min(vx, side / SHOT_W);
+        vy = Math.min(vy, side / SHOT_H);
+        circleR = Math.min(circleR, side / 2);
+        return;
+      }
+      cells.forEach((c) => {
+        const scale = Math.max(c.w / SHOT_W, c.h / SHOT_H);
+        vx = Math.min(vx, (c.w / scale) / SHOT_W);
+        vy = Math.min(vy, (c.h / scale) / SHOT_H);
+      });
     });
-    vx = Math.max(0.6, Math.min(1, vx));   // 縮めすぎない床（型が小さくなりすぎると別の手抜きに見える）
-    vy = Math.max(0.6, Math.min(1, vy));
-    return { x: SHOT_W * (1 - vx) / 2, y: SHOT_H * (1 - vy) / 2, w: SHOT_W * vx, h: SHOT_H * vy };
+    if (!seen) return full;
+    if (isFinite(circleR)) {
+      const dist = Math.hypot(vx * SHOT_W / 2, vy * SHOT_H / 2);
+      if (dist > circleR) { const k = circleR / dist; vx *= k; vy *= k; }
+    }
+    vx = Math.max(0.45, Math.min(1, vx));  // 縮めすぎない床（型が小さくなりすぎると別の手抜きに見える）
+    vy = Math.max(0.45, Math.min(1, vy));
+    rakurakuSafeCache = { x: SHOT_W * (1 - vx) / 2, y: SHOT_H * (1 - vy) / 2, w: SHOT_W * vx, h: SHOT_H * vy };
+    return rakurakuSafeCache;
   }
 
   function rakurakuObjects(design) {
@@ -8348,6 +8382,16 @@
     rakurakuLabels: () => RAKURAKU_HEISEI.map(d => d.label),
     rakurakuNextLabel: () => rakurakuNext().label,
     rakurakuCount: () => decoObjects.filter(o => o && o.rk).length,
+    /* 型が「シールに焼いても欠けないか」を外から測るための窓口（2026-08-23【致命1】）。
+       置かれた実座標を返す。画面のスクショではなく座標で見るので、
+       レイアウト6種 × 型5つ = 30通りを機械判定できる */
+    rakurakuPlaced: () => decoObjects.filter(o => o && o[RK_MARK]).map(o => JSON.parse(JSON.stringify(o))),
+    /* リセット漏れを機械で捕まえるための窓口（2026-08-23・4回目の再発を最後にするため）。
+       「いま初期値と違う state のキー」を返す。回帰テストは
+       ①わざと全部いじる ②もう一回あそぶ ③これが空配列 を確かめる。
+       **テスト側でも項目を列挙しない**ので、state を足してもテストが自動で見張る */
+    stateDiff: () => stateKeysDifferingFromDefaults(),
+    rakurakuSafe: () => ({ ...rakurakuSafeCell() }),
     // ペン種（2026-08-22）
     penTypes: () => (modeConf().penTypes || []).slice(),
     strokePolyline,
