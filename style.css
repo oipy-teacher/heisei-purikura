@@ -208,9 +208,11 @@ body[data-mode="reiwa"] .btn-back { color: #ab9a8a; background: #f6f1ea; border-
 .door-logo-r {
   position: absolute; bottom: calc(14% + 44px); right: 9%;
   font-family: Georgia, "Hiragino Mincho ProN", serif;
-  font-size: clamp(34px, 7vw, 58px); font-weight: 500;
+  /* 2026-08-23: 商品名が「太子プリ」→「太子祭プリ」で1文字増え、320×568 で右へ4pxはみ出した。
+     下限を 34px → 30px、字間を .18em → .14em にして 320px でも収める（実測0px） */
+  font-size: clamp(30px, 7vw, 58px); font-weight: 500;
   white-space: nowrap;
-  letter-spacing: .18em;
+  letter-spacing: .14em;
   color: #4a3f38;
   will-change: transform;
   animation: floatY 4s ease-in-out infinite;
@@ -1762,7 +1764,7 @@ body.theme-reiwa #theme-frame {
 body.theme-reiwa #theme-frame::before {
   /* 商品名は app.js の BRAND_R から --brand-r で降りてくる（2026-08-23 オーナー裁定）。
      変数が無い環境でも文字が消えないよう、同じ文言を既定値に置く */
-  content: var(--brand-r, 'taishi puri  \2014  photo sticker');
+  content: var(--brand-r, 'taishisai puri  \2014  photo sticker');
   position: absolute;
   top: 8px; left: 22px;
   font-family: Georgia, serif;
