@@ -84,6 +84,26 @@ const PRECACHE = [
   'audio/save_longpress.mp3',
   'audio/save_retry.mp3',
   'audio/save_success.mp3',
+  /* 令和ボイス18本（2026-08-23 音羽の全面作り直し）。
+     🚨 ここに足し忘れると **オフラインのときだけ令和が無音になる**（画面では気づけない） */
+  'audio/reiwa_attract_call.mp3',
+  'audio/reiwa_course_select.mp3',
+  'audio/reiwa_intro_shot1.mp3',
+  'audio/reiwa_intro_shot2.mp3',
+  'audio/reiwa_intro_shot3.mp3',
+  'audio/reiwa_intro_shot4.mp3',
+  'audio/reiwa_pose_free.mp3',
+  'audio/reiwa_beauty.mp3',
+  'audio/reiwa_moriage_select.mp3',
+  'audio/reiwa_deco_start.mp3',
+  'audio/reiwa_doodle_halftime.mp3',
+  'audio/reiwa_time_warning.mp3',
+  'audio/reiwa_timeup.mp3',
+  'audio/reiwa_doodle_owaru.mp3',
+  'audio/reiwa_finish.mp3',
+  'audio/reiwa_save.mp3',
+  'audio/reiwa_print_out.mp3',
+  'audio/reiwa_count_hai.mp3',
 ];
 
 /* 🚨 2026-08-15 検見の互換検収【致命】への構造対応。

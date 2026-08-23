@@ -667,38 +667,24 @@
     start: 'audio/01_start.mp3',
     selectCurtain: 'audio/02_select_curtain.mp3',
     selectFrame: 'audio/03_select_frame.mp3',
-    introShot1: 'audio/intro_shot1.mp3',
-    introShot2: 'audio/intro_shot2.mp3',
-    introShot3: 'audio/intro_shot3.mp3',
-    introShot4: 'audio/intro_shot4.mp3',
     count3: 'audio/count_3.mp3',
     count2: 'audio/count_2.mp3',
     count1: 'audio/count_1.mp3',
-    countHai: 'audio/count_hai.mp3',
-    beauty: 'audio/13_beauty.mp3',
-    decoStart: 'audio/08_deco_start.mp3',
-    timeWarning: 'audio/09_time_warning.mp3',
-    timeup: 'audio/10_timeup.mp3',
-    finish: 'audio/11_finish.mp3',
-    save: 'audio/12_save.mp3',
+    /* 「はい」だけ平成/令和で別の声（数字3本は両モード共通・2026-08-23 音羽）。
+       H/R の対にしてあるので announceByMode / voiceKeyByMode の規約に乗る */
+    countHaiH: 'audio/count_hai.mp3',
     seTap: 'audio/se_tap.mp3',
     seDecide: 'audio/se_decide.mp3',
     seShutter: 'audio/se_shutter.mp3',
     /* --- 実機模倣アップデート（2026-08-12）で追加した音声。
            音声ファイルは別担当が並行制作中のため、ファイルが無い間は
            soundAvailable の仕組みで「黙ってスキップ」される（アプリは止まらない）。 --- */
-    attractCall: 'audio/attract_call.mp3',        // 待機デモの呼び込み
-    courseSelectV2: 'audio/course_select_v2.mp3', // コース選択画面の案内
     pose1: 'audio/pose_01.mp3',                   // ポーズ提案ボイス（ランダム）
     pose2: 'audio/pose_02.mp3',
     pose3: 'audio/pose_03.mp3',
     pose4: 'audio/pose_04.mp3',
     pose5: 'audio/pose_05.mp3',
     pose6: 'audio/pose_06.mp3',
-    moriageSelect: 'audio/moriage_select.mp3',    // 盛れ感レベル選択
-    decoOwaru: 'audio/doodle_owaru.mp3',          // 落書き「おわる」ボタン
-    decoHalftime: 'audio/doodle_halftime.mp3',    // 落書き残り時間の中間通知
-    printOut: 'audio/print_out.mp3',              // シール排出
     /* --- 新機能向け 追加ボイスパック（2026-08-15 音羽納品・27本） ---
        `heisei_` / `reiwa_` の対になっているものは announceByMode() で自動的に選ぶ。
        キー名は末尾に H/R を付けて対を作る（announceByMode がこの規約に依存している）。
@@ -730,6 +716,53 @@
     saveError: 'audio/save_error.mp3',                    // 画像を作れなかったとき
     cameraError: 'audio/camera_error.mp3',                // カメラを起動できなかったとき
     resumeOffer: 'audio/resume_offer.mp3',                // 落書きの復帰モーダル
+    /* --- 令和ボイス18本（2026-08-23 音羽納品・全面作り直し） ---
+       きっかけはオーナーの問い「令和だからって本当に落ち着いているのか？？？」。
+       柄本の実機調査（reiwa-voice-tone-20260823.md）の結論は
+       **「令和＝落ち着いている」は半分誤り。変わったのはテンションの高低ではなく、
+       機械が客に指示する量**。よって直したのはトーンではなく**原稿**で、
+       令和の声は「短く・少なく・押しつけない」型になっている
+       （例:「らくがきタイム、スタート！制限時間は3分だよ！」→「らくがき、スタート。3分あるよ。」）。
+       これまで `heisei_` の接頭辞が無いために**令和でも平成原稿が鳴っていた**場面の令和版。
+       キー名は末尾 H/R の規約（announceByMode がこの規約に依存している）。
+       🚨 ここに足したら **sw.js の PRECACHE にも足すこと**（漏れるとオフラインだけ無音になる） */
+    attractCallH: 'audio/attract_call.mp3',               // 待機デモの呼び込み
+    attractCallR: 'audio/reiwa_attract_call.mp3',
+    courseSelectV2H: 'audio/course_select_v2.mp3',        // コース選択画面の案内
+    courseSelectV2R: 'audio/reiwa_course_select.mp3',
+    introShot1H: 'audio/intro_shot1.mp3',                 // 各ショットの前置き
+    introShot1R: 'audio/reiwa_intro_shot1.mp3',
+    introShot2H: 'audio/intro_shot2.mp3',
+    introShot2R: 'audio/reiwa_intro_shot2.mp3',
+    introShot3H: 'audio/intro_shot3.mp3',
+    introShot3R: 'audio/reiwa_intro_shot3.mp3',
+    introShot4H: 'audio/intro_shot4.mp3',
+    introShot4R: 'audio/reiwa_intro_shot4.mp3',
+    poseFreeR: 'audio/reiwa_pose_free.mp3',               // 令和のポーズ提案（1セッション1回だけ）
+    beautyH: 'audio/13_beauty.mp3',                       // 盛り調整画面に入った瞬間
+    beautyR: 'audio/reiwa_beauty.mp3',
+    moriageSelectH: 'audio/moriage_select.mp3',           // 盛れ度選択
+    moriageSelectR: 'audio/reiwa_moriage_select.mp3',
+    decoStartH: 'audio/08_deco_start.mp3',                // 落書き開始
+    decoStartR: 'audio/reiwa_deco_start.mp3',
+    decoHalftimeH: 'audio/doodle_halftime.mp3',           // 落書きの中間通知
+    decoHalftimeR: 'audio/reiwa_doodle_halftime.mp3',
+    timeWarningH: 'audio/09_time_warning.mp3',            // 残り10秒
+    timeWarningR: 'audio/reiwa_time_warning.mp3',
+    timeupH: 'audio/10_timeup.mp3',                       // 時間切れ
+    timeupR: 'audio/reiwa_timeup.mp3',
+    decoOwaruH: 'audio/doodle_owaru.mp3',                 // 落書き「おわる」
+    decoOwaruR: 'audio/reiwa_doodle_owaru.mp3',
+    finishH: 'audio/11_finish.mp3',                       // できあがり確定
+    finishR: 'audio/reiwa_finish.mp3',
+    saveH: 'audio/12_save.mp3',                           // 保存画面
+    saveR: 'audio/reiwa_save.mp3',
+    printOutH: 'audio/print_out.mp3',                     // 排出演出
+    printOutR: 'audio/reiwa_print_out.mp3',
+    /* カウントは「3・2・1」が両モード共通で、「はい」だけ令和版がある
+       （2024年の実機でも3カウントは健在＝数字を分ける必要が無い・音羽の判断）。
+       🚨 ここは WebAudio 経路なので WA_KEYS にも足すこと（足さないと HTMLAudio に落ちる） */
+    countHaiR: 'audio/reiwa_count_hai.mp3',
   };
 
   const sounds = {};
@@ -750,9 +783,11 @@
     if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 1500 });
     else setTimeout(fn, 120);
   }
-  const SOUND_WARM_FIRST = ['seTap', 'seDecide', 'start', 'courseSelectV2', 'attractCall',
-    'count3', 'count2', 'count1', 'countHai', 'seShutter',
-    'introShot1', 'introShot2', 'introShot3', 'introShot4'];
+  const SOUND_WARM_FIRST = ['seTap', 'seDecide', 'attractCallH', 'attractCallR',
+    'courseSelectV2H', 'courseSelectV2R',
+    'count3', 'count2', 'count1', 'countHaiH', 'countHaiR', 'seShutter',
+    'introShot1H', 'introShot1R', 'introShot2H', 'introShot2R',
+    'introShot3H', 'introShot3R', 'introShot4H', 'introShot4R'];
   Object.entries(SOUND_FILES).forEach(([key, src]) => {
     const a = new Audio(src);
     a.preload = 'none'; // 暖機のときに 'auto' へ上げる
@@ -807,7 +842,7 @@
        タップのたびに再試行するので「ユーザージェスチャ内での解錠」がコードパスで保証される
      - BGM・長尺ボイス（前置き/ポーズ提案等）は従来の HTMLAudio のまま（実機で鳴っている実績）
      - AudioBuffer が未デコード/未解錠のときは従来の HTMLAudio 経路へフォールバック */
-  const WA_KEYS = ['count3', 'count2', 'count1', 'countHai', 'seShutter', 'seTap', 'seDecide'];
+  const WA_KEYS = ['count3', 'count2', 'count1', 'countHaiH', 'countHaiR', 'seShutter', 'seTap', 'seDecide'];
   let audioCtx = null;
   const waBuffers = {};
   let waPlayCount = 0; // 検証用（WebAudio経路で鳴らした回数）
@@ -865,18 +900,24 @@
       audioCtx.resume().catch(() => {}); // ジェスチャ外では拒否されうるが、次のタップで再試行される
     }
   });
+  /* 効果音専用の WebAudio 再生（seTap / seDecide / seShutter）。
+     効果音は声とかぶってよい音なので、バスには載せない。 */
   function waPlay(key) {
-    if (!audioCtx || audioCtx.state !== 'running') return false;
+    return waStart(key) !== null;
+  }
+  // 実体。鳴らせたら BufferSource を返す（声として鳴らすときは、これを止められるように持つ）
+  function waStart(key) {
+    if (!audioCtx || audioCtx.state !== 'running') return null;
     const buf = waBuffers[key];
-    if (!buf) return false;
+    if (!buf) return null;
     try {
       const src = audioCtx.createBufferSource();
       src.buffer = buf;
       src.connect(audioCtx.destination);
       src.start();
       waPlayCount++;
-      return true;
-    } catch (e) { return false; }
+      return src;
+    } catch (e) { return null; }
   }
 
   /* ===================== 声のバス（voice bus・2026-08-17 JKモニター指摘⑥） =====================
@@ -907,6 +948,16 @@
   let voiceCleanups = [];   // ended待ちなどの後始末（stopVoiceでまとめて外す）
   let curVoice = null;      // いま鳴っている声のAudio要素
   let curVoiceKey = null;
+  /* いま鳴っている「WebAudioの声」（＝カウント3・2・1・ハイ）。
+     🚨 2026-08-23（音羽の点検【重大②】）: カウントは WebAudio 経路で鳴らしており、
+     **声のバスの外にいた**。stopVoice() は BufferSource を止められず、
+     waPlay() はバスに「前の声を止めて」と伝えないので、
+     8/17に一本化した「声を鳴らす窓口は1つ」の保証がカウントにだけ効いていなかった。
+     実測: 「カメラ、オッケー！ …さつえいスタート おしてー！」（4.19秒）の上に
+     3・2・1 が重なり、合計1.11秒ぶん二人が同時に喋っていた。
+     → バスに参照を持たせ、止められる／止めさせられるようにする。
+       これをやらない限り、声を1本足すたびに同じ型の重なりをまた作れてしまう。 */
+  let curVoiceWa = null;
   /* いまの声のあとに続けて鳴らす予約（連鎖）: [{ key, gap }]。
      2026-08-18: 連鎖の順番はここ1箇所で持つ。詳しくは chainAnnounce のコメント */
   let voiceQueue = [];
@@ -933,9 +984,37 @@
     if (curVoice) {
       try { curVoice.pause(); curVoice.currentTime = 0; } catch (e) { /* 停止失敗は無視 */ }
     }
+    if (curVoiceWa) {
+      // WebAudioで鳴らしている声（カウント）も同じ窓口で止める（2026-08-23）
+      try { curVoiceWa.onended = null; curVoiceWa.stop(); } catch (e) { /* 既に終わっていれば無視 */ }
+      curVoiceWa = null;
+    }
     closeVoiceHistory();
     curVoice = null;
     curVoiceKey = null;
+  }
+  /* WebAudioで「声」を1本鳴らす（カウント専用）。HTMLAudio版の startVoice と同じ約束を守る:
+       ・鳴らす前に、いま鳴っている声（HTMLAudioでもWebAudioでも）を必ず止める
+       ・鳴っている間はバスが参照を持つ＝あとから来た声に止められる
+       ・voiceHistory に載る＝重なりの検査に出てくる（外から数えられる）
+     鳴らせなかったら false を返すので、呼び出し側は従来の HTMLAudio 経路へ落ちる。 */
+  function playVoiceWa(key) {
+    if (!audioCtx || audioCtx.state !== 'running' || !waBuffers[key]) return false;
+    stopVoice();
+    const src = waStart(key);
+    if (!src) return false;
+    curVoiceWa = src;
+    curVoiceKey = key;
+    voiceHistory.push({ key, start: performance.now(), end: null });
+    if (voiceHistory.length > 200) voiceHistory.shift();
+    src.onended = () => {
+      if (curVoiceWa !== src) return; // すでに別の声へ移っている＝割り込んだ側が正
+      closeVoiceHistory();
+      curVoiceWa = null;
+      curVoiceKey = null;
+      advanceVoiceQueue();
+    };
+    return true;
   }
   /* 声を1本鳴らす。**声はすべてここを通る**（案内も、撮影の前置きも、ポーズ提案も、カウントも）。
      戻り値は鳴らし始めたAudio要素（鳴らせなかったときは null）。
@@ -1020,8 +1099,9 @@
   /* モード別ボイスの選択（2026-08-15 追加ボイスパック）。
      `decoGate` を渡すと平成なら decoGateH・令和なら decoGateR を鳴らす。
      片側しか無いもの（moriageLevelR 等）はキーを直接 playAnnounce に渡すこと */
+  const voiceKeyByMode = (base) => base + (state.mode === 'heisei' ? 'H' : 'R');
   function announceByMode(base) {
-    playAnnounce(base + (state.mode === 'heisei' ? 'H' : 'R'));
+    playAnnounce(voiceKeyByMode(base));
   }
   /* 「1本目のあとに続けて2本目」を繋ぐ（2026-08-18 作り替え・v26の回帰修正）。
 
@@ -1086,24 +1166,35 @@
       playVoice(key);
       return sleep(nominalMs);
     }
+    /* 🚨 2026-08-23（音羽の点検【重大②】の派生・voiceGaveUp のラッチ問題）:
+       旧版は「ended が来ずに保険が発火した」も「別の声に切られた」も、
+       まとめて `finish(true)` ＝ voiceGaveUp を立てていた。
+       voiceGaveUp が立つと以後は鳴り終わりを待たず固定1300msで進むので、
+       pose_04(1.97秒) などがカウントに重なり続けた。
+       **切られたのは環境の失敗ではない。** 終わり方を4つに分けて、
+       環境の失敗（failed / timeout）のときだけ諦めるようにする。
+       「切られた」の検知はバスの後始末（voiceCleanups）に相乗りする＝
+       別の声が来たときも、画面が変わったときも、同じ1箇所で拾える。 */
     return new Promise((resolve) => {
       let done = false;
       let timer = null;
-      const finish = (failed) => {
+      const finish = (kind) => { // 'ended' | 'failed' | 'timeout' | 'superseded'
         if (done) return;
         done = true;
         clearTimeout(timer);
         a.removeEventListener('ended', onEnded);
-        if (failed) voiceGaveUp = true;
+        if (kind === 'failed' || kind === 'timeout') voiceGaveUp = true;
         resolve();
       };
-      const onEnded = () => finish(false);
+      const onEnded = () => finish('ended');
       a.addEventListener('ended', onEnded);
-      if (!playVoice(key, () => finish(true))) { finish(true); return; } // バス経由（前の声を止めてから鳴らす）
+      if (!playVoice(key, () => finish('failed'))) { finish('failed'); return; } // バス経由（前の声を止めてから鳴らす）
+      // この1本が別の声・画面遷移に止められたら、待たずに先へ進む（諦めの印は立てない）
+      voiceCleanups.push(() => finish('superseded'));
       // 保険: クリップ実測長+350ms・長さ不明なら1.5秒（旧4秒は無音環境で1枚25秒に化けた）。
       // 実測長より長くは待たないので、正常時にセリフを切ることはない
       const clip = soundDurationMs(key);
-      timer = setTimeout(() => finish(true), clip ? clip + 350 : 1500);
+      timer = setTimeout(() => finish('timeout'), clip ? clip + 350 : 1500);
     });
   }
 
@@ -1209,8 +1300,28 @@
       attractOverlay.classList.toggle('cut', prev === 2 && attractSlideIdx === 3);
       attractSlides.forEach((s, i) => s.classList.toggle('active', i === attractSlideIdx));
     }, ATTRACT_SLIDE_MS);
-    // 呼び込み音声（ファイル未着ならスキップ）。連呼しすぎないよう間隔を空けてループ
-    playAnnounce('attractCall');
+    /* 呼び込み音声（ファイル未着ならスキップ）。連呼しすぎないよう間隔を空けてループ。
+       🚨 2026-08-23: タイトルは**まだモードが決まっていない**ので announceByMode では
+       出し分けられない（state.mode の既定は 'heisei' なので、令和版が一度も鳴らない）。
+       音羽さんの推奨どおり **ループのたびに平成版と令和版を交互に鳴らす**。
+       待機デモのスライドが 平成様式→令和様式→対比 と切り替わる作りなので、
+       声でも同じ対比が見せられる（この機能の趣旨そのもの）。 */
+    attractCallTurn = 0;
+    playAttractCall();
+  }
+  let attractCallTurn = 0;
+  const attractCallKey = () => (attractCallTurn % 2 === 0 ? 'attractCallH' : 'attractCallR');
+  function playAttractCall() {
+    const key = attractCallKey();
+    attractCallTurn++;
+    playAnnounce(key);
+    /* 次の呼び込みの予約は「鳴り終わり」を要素の ended で待たない（2026-08-23）。
+       交互に鳴らすようになったので、要素ごとに ended を張ると
+       台帳 R-103（リスナ登録順で連鎖が空振りする）と同じ穴をまた掘ることになる。
+       クリップの実測長＋間合いで予約し、バスの窓口（queueVoice）に載せる。 */
+    if (attractCallId) { clearTimeout(attractCallId); attractCallId = null; }
+    const wait = (soundDurationMs(key) || 3000) + ATTRACT_CALL_GAP_MS;
+    attractCallId = setTimeout(() => { attractCallId = null; if (attractOn) playAttractCall(); }, wait);
   }
 
   function stopAttract() {
@@ -1220,14 +1331,7 @@
     if (attractSlideId) { clearInterval(attractSlideId); attractSlideId = null; }
     if (attractCallId) { clearTimeout(attractCallId); attractCallId = null; }
     // 呼び込みもバスの上の声なので、バスごと黙らせる（要素を直接止めるとバスの帳簿がずれる）
-    if (curVoiceKey === 'attractCall') stopVoice();
-  }
-
-  if (sounds.attractCall) {
-    sounds.attractCall.addEventListener('ended', () => {
-      if (!attractOn) return;
-      attractCallId = setTimeout(() => { if (attractOn) playAnnounce('attractCall'); }, ATTRACT_CALL_GAP_MS);
-    });
+    if (curVoiceKey === 'attractCallH' || curVoiceKey === 'attractCallR') stopVoice();
   }
 
   function armAttractIdle() {
@@ -1285,8 +1389,8 @@
        実機テストで「2種類の声がダブる」と指摘された。新ボイスがあるときは
        旧アナウンス（start / selectCurtain / selectFrame）を一切鳴らさず、
        ファイル未着時だけ従来の3本を「終わってから次」の順送りで鳴らす */
-    if (!soundMissing('courseSelectV2')) {
-      playAnnounce('courseSelectV2');
+    if (!soundMissing(voiceKeyByMode('courseSelectV2'))) {
+      announceByMode('courseSelectV2'); // 平成=course_select_v2／令和=reiwa_course_select（2026-08-23）
     } else {
       /* 旧3本チェーンは「鳴らしてから次を予約」の逐次連鎖にする
          （playAnnounceが予約を全消しするため、先にまとめて予約すると2本目で3本目が消える） */
@@ -2335,8 +2439,9 @@
     segEMA = null; // 前回セッションのマスク残像を消す
     buildShotIndicator();
     $('#shots-left').textContent = NUM_SHOTS;
-    btnStartShooting.disabled = false;
+    shootingInProgress = false;
     btnStartShooting.style.display = 'inline-block';
+    syncStartShootingEnabled(); // カメラが出るまでは押せない（2026-08-23・下の定義参照）
     $('#btn-back-select').style.display = ''; // 撮影開始前は戻れる
     $('#darkroom').classList.add('hidden'); // 前セッションの現像中表示を消す
     document.querySelector('.camera-stage').classList.remove('developing'); // 右パネルの非表示も解除（保険）
@@ -2406,13 +2511,20 @@
         t.addEventListener('ended', () => {
           if (!previewRunning) return;
           previewRunning = false;
+          syncStartShootingEnabled();
           showCamFail({ name: 'NotReadableError', message: 'track ended' });
         });
       });
       showCamLoading(false);
       if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
-      announceByMode('cameraReady'); // 「カメラ、オッケー！」（2026-08-15）
+      /* 🚨 撮影がもう始まっていたら「カメラ、オッケー！ポーズ きまったら、さつえいスタート
+         おしてー！」は鳴らさない（2026-08-23 音羽の点検【重大②】(a)）。
+         カメラ起動中でも撮影スタートは押せるので、押したあとに getUserMedia が解決すると、
+         **もう押した後の客に「スタートを押して」と言いながら 3・2・1 に丸かぶり**していた
+         （実測 合計1.11秒）。案内は「まだ押していない客」にだけ意味がある。 */
+      if (!shootingInProgress) announceByMode('cameraReady'); // 「カメラ、オッケー！」（2026-08-15）
       previewRunning = true;
+      syncStartShootingEnabled();
       previewLoop();
     } catch (err) {
       showCamLoading(false);
@@ -2464,6 +2576,17 @@
   const camFailEl = $('#cam-fail');
   function showCamLoading(on) {
     if (camLoadingEl) camLoadingEl.classList.toggle('hidden', !on);
+  }
+  /* 「撮影スタート！」を押せる条件を1箇所で決める（2026-08-23 音羽の点検【重大②】(b)）。
+     旧版は disabled をカメラ失敗のときだけ立てていたので、
+     **カメラ起動中でも押せた**。押しても映像はまだ無いのに撮影ループが走り出し、
+     あとから来る「カメラ、オッケー！」がカウントに丸かぶりしていた。
+     押せるのは「映像が出ていて、まだ撮り始めていないとき」だけ。
+     見た目でも押せないと分かる（:disabled のCSSは 2026-08-15 に入れてある・R-080）。 */
+  let shootingInProgress = false;
+  function syncStartShootingEnabled() {
+    if (!btnStartShooting) return;
+    btnStartShooting.disabled = !previewRunning || shootingInProgress;
   }
   function hideCamFail() {
     if (camFailEl) camFailEl.classList.add('hidden');
@@ -2523,7 +2646,8 @@
     playAnnounce('cameraError'); // 「あわてなくて だいじょうぶ。かかりの人を よんでね。」（2026-08-15）
     /* 黒画面のまま撮影が始まる事故を止める（4枚とも真っ暗で撮れてしまうため）。
        起動できるまで「撮影スタート」は押させない */
-    btnStartShooting.disabled = true;
+    shootingInProgress = false;
+    syncStartShootingEnabled();
     if (camError) camError.textContent = '';
   }
   $('#btn-cam-retry').addEventListener('click', () => {
@@ -2533,6 +2657,7 @@
 
   function stopCamera() {
     previewRunning = false;
+    syncStartShootingEnabled();
     showCamLoading(false);
     if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
     /* フラッシュの後始末（2026-08-22）。撮影を途中でやめても白い覆いとLEDを必ず消す。
@@ -2584,6 +2709,7 @@
     if (poseOrderIdx >= poseOrder.length) resetPoseOrder();
     return poseOrder[poseOrderIdx++];
   }
+  let poseFreeDone = false; // 令和「そのままで、いいよ。」を鳴らしたか（1セッション1回）
 
   /* ポーズ提案の吹き出し（2026-08-12 デザイン刷新・柄本仕様書3-5）:
      文言が変わるたびにポンと出る（平成）／静かにフェードイン（令和）。CSSがテーマ別に演出する */
@@ -2604,10 +2730,18 @@
   async function runCountdown(shotIndex, opts) {
     const { skipIntro = false, poseKey = null } = opts || {};
     const isHeiseiTheme = document.body.classList.contains('theme-heisei');
-    // 前置き（1枚目いくよー等）。撮り直しのときは飛ばしてテンポを保つ
-    if (!skipIntro) await playSoundAwait('introShot' + (shotIndex + 1), 1100);
-    // ポーズ提案ボイス（ファイル未着なら黙ってスキップ）
-    if (poseKey) await playSoundAwait(poseKey, 1300);
+    // 前置き（平成「1枚目、いくよー！」／令和「1枚目。」）。撮り直しのときは飛ばしてテンポを保つ
+    if (!skipIntro) await playSoundAwait(voiceKeyByMode('introShot' + (shotIndex + 1)), 1100);
+    /* ポーズ提案ボイス（ファイル未着なら黙ってスキップ）。
+       🚨 令和では pose_01〜06 を鳴らさない（2026-08-23 音羽納品・柄本の「いちばん効く1手」）。
+       令和の機械は**裏方**で、ポーズを指定しないのが型。代わりに
+       「そのままで、いいよ。」を **1セッションに1回だけ**（毎ショット喋らない）。 */
+    if (state.mode === 'heisei') {
+      if (poseKey) await playSoundAwait(poseKey, 1300);
+    } else if (!poseFreeDone) {
+      poseFreeDone = true;
+      await playSoundAwait('poseFreeR', 1000);
+    }
     /* 数字のリズムは完全な固定値 COUNT_INTERVAL_MS（2026-08-13 実機体感指摘対応）:
        以前は「クリップ実測長＋固定の間合い」だったため、実機で音声が使えない・
        メタデータが取れない場合に枠が短縮方向へ働き、カウントが「せっかち」になっていた。
@@ -2636,9 +2770,13 @@
          voiceGaveUp は「待たない」の印であって「鳴らさない」の印ではない。
          再生は常に試みる（playSoundAwait の gaveUp 分岐と同じ扱い）。
          muted=false も明示する（unlockAudio の解錠が残っても消音で鳴らないことがないように） */
-      if (!waPlay(step.key)) {
+      /* 🚨 2026-08-23: ここは waPlay（バスの外）だった。playVoiceWa は
+         「鳴らす前にいま鳴っている声を必ず止める」＝バスの約束を守るWebAudio再生。
+         これでカウントに案内が丸かぶりする経路が閉じる（音羽の点検【重大②】(c)）。 */
+      const cKey = step.key === 'countHai' ? voiceKeyByMode('countHai') : step.key; // 「はい」だけ令和版がある
+      if (!playVoiceWa(cKey)) {
         // WebAudioが使えない環境だけ従来のHTMLAudioで鳴らす（こちらも声のバス経由・2026-08-17）
-        playVoice(step.key);
+        playVoice(cKey);
       }
       await sleep(60);
       countdownEl.style.transform = 'scale(1)';
@@ -2870,8 +3008,11 @@
   }
 
   btnStartShooting.addEventListener('click', async () => {
+    if (btnStartShooting.disabled) return; // 二度押し・カメラ起動中の押下は無視（2026-08-23）
     voiceGaveUp = false; // 環境は直っていることがある。撮影のたびに音声へ再挑戦する
-    btnStartShooting.disabled = true;
+    poseFreeDone = false; // 令和の「そのままで、いいよ。」は1セッション1回（撮影のたびに戻す）
+    shootingInProgress = true;
+    syncStartShootingEnabled();
     btnStartShooting.style.display = 'none';
     $('#btn-back-select').style.display = 'none'; // 撮影開始後は実機同様戻れない
     const poseGuideEl = $('#pose-guide');
@@ -4195,7 +4336,7 @@
         cur._preset = basePreset.id;
         cur._level = lv.id;
         applyPresetToCur(basePreset, lv.f);
-        playSoundOr('moriageSelect', 'seDecide');
+        playSoundOr(voiceKeyByMode('moriageSelect'), 'seDecide');
         syncBeautyUIFromCur();
         queueBeautyRender();
       });
@@ -4268,7 +4409,7 @@
     if (!state.beautyShots || !beautyInitial) return;
     const i = state.beautySelected || 0;
     state.beautyShots[i] = { ...(beautyInitial[i] || beautyInitial[0]) };
-    playSoundOr('moriageSelect', 'seDecide');
+    playSoundOr(voiceKeyByMode('moriageSelect'), 'seDecide');
     syncBeautyUIFromCur();
     queueBeautyRender();
     setFaceNote(`🔄 ${i + 1}まいめを さいしょに もどしたよ`);
@@ -4280,7 +4421,7 @@
     if (!state.beautyShots) return;
     const src = curBeauty();
     state.beautyShots = state.beautyShots.map(() => ({ ...src }));
-    playSoundOr('moriageSelect', 'seDecide');
+    playSoundOr(voiceKeyByMode('moriageSelect'), 'seDecide');
     setFaceNote('💫 4まい ぜんぶ おなじにしたよ！');
     setTimeout(hideFaceNote, 1800);
   });
@@ -4391,9 +4532,9 @@
 
   function startBeautyScreen() {
     showScreen('screen-beauty');
-    playAnnounce('beauty'); // 案内は1本チャンネル経由（前画面の案内が残っていても止まる）
+    announceByMode('beauty'); // 案内は1本チャンネル経由（前画面の案内が残っていても止まる）
     // 令和は続けて「盛れ感レベルは三だんかい」（2026-08-15。平成に盛り画面は無い）
-    if (state.mode !== 'heisei') chainAnnounce('beauty', 'moriageLevelR');
+    if (state.mode !== 'heisei') chainAnnounce('beautyR', 'moriageLevelR');
     // 脚長バーは全身コースのときだけ出す（アップコースでは意味が無い・piemo型）
     const legsRow = $('#row-legs');
     if (legsRow) legsRow.style.display = state.shotMode === 'full' ? '' : 'none';
@@ -4446,7 +4587,7 @@
         beautyTimerDisplay.classList.add('warn');
         if (!state.beautyWarned) {
           state.beautyWarned = true;
-          playSound('timeWarning');
+          announceByMode('timeWarning');
         }
       }
       if (state.beautyRemaining <= 0) {
@@ -6361,7 +6502,6 @@
       renderDeco();
       scheduleThumbUpdate();
       scheduleSessionSave();
-      playSound('seDecide');
       showDecoToast(`⚡ 「${design.label}」で かんせい！ もう一回おすと ちがう かざりに なるよ`);
     });
   }
@@ -6376,7 +6516,6 @@
       renderDeco();
       scheduleThumbUpdate();
       scheduleSessionSave();
-      playSound('seDecide');
       showDecoToast(`⚡ 4まい ぜんぶに 「${design.label}」を かけたよ！`);
     });
   }
@@ -6949,7 +7088,7 @@
 
   $('#btn-finish').addEventListener('click', () => {
     if (state.remaining <= 0) return;
-    playSound('decoOwaru'); // 実機の「おわる」ボタンボイス（未着なら無音でスキップ）
+    announceByMode('decoOwaru'); // 実機の「おわる」ボタンボイス（未着なら無音でスキップ）
     confirmModal.classList.remove('hidden');
   });
   $('#btn-confirm-no').addEventListener('click', () => {
@@ -7206,12 +7345,17 @@
     if (pickOn) chainAnnounce('decoGateR', 'photoPickR');
   }
 
-  $('#btn-deco-start').addEventListener('click', () => {
+  $('#btn-deco-start').addEventListener('click', (e) => {
+    /* 2026-08-23（音羽の点検【軽微④】）: 2連打すると案内が2回鳴り始めて
+       「らくが…らくがきタイム、スタート！」とどもる。ゲートを隠したあとも
+       押せてしまうのが原因なので、押した瞬間に無効化する（連打の窓を閉じる）。 */
+    if (e.currentTarget.disabled) return;
+    e.currentTarget.disabled = true;
     $('#deco-start-gate').classList.add('hidden');
     drawCanvas.style.pointerEvents = 'auto';
-    playAnnounce('decoStart'); // 案内は1本チャンネル経由
-    // 08_deco_start のあとに続けて「写真は1枚ずつ大きく描ける」を鳴らす（2026-08-15）
-    chainAnnounce('decoStart', state.mode === 'heisei' ? 'decoPhotoSwitchH' : 'decoPhotoSwitchR');
+    announceByMode('decoStart'); // 案内は1本チャンネル経由
+    // 落書き開始のあとに続けて「写真は1枚ずつ大きく描ける」を鳴らす（2026-08-15）
+    chainAnnounce(voiceKeyByMode('decoStart'), state.mode === 'heisei' ? 'decoPhotoSwitchH' : 'decoPhotoSwitchR');
     startDecoTimer();
   });
 
@@ -7262,7 +7406,7 @@
         showDecoToast('⏰ のこり1分！ ⚡らくらくお絵かき を おせば 一発で しあがるよ');
       }
       if (state.remaining === halfPoint) {
-        playSound('decoHalftime');
+        announceByMode('decoHalftime');
         showDecoToast(`⏰ のこり はんぶん！（${formatTime(halfPoint)}）`);
       }
       if (state.remaining <= 10) {
@@ -7270,7 +7414,7 @@
         timerDisplay.parentElement.classList.add('warn-box');
         if (!state.warningPlayed) {
           state.warningPlayed = true;
-          playSound('timeWarning');
+          announceByMode('timeWarning');
         }
         // 終盤カウントダウン演出: 最後の10秒はシート上に大きく数字を出す
         if (state.remaining > 0) {
@@ -7313,7 +7457,7 @@
   function offerExtend() {
     if (!extendModal) { finishDeco('timeup'); return; }
     drawCanvas.style.pointerEvents = 'none';
-    playSound('timeup');
+    announceByMode('timeup');
     extendModal.classList.remove('hidden');
     let left = EXTEND_DECIDE_SEC;
     const cd = $('#extend-countdown');
@@ -7366,7 +7510,7 @@
        押せたのかどうかが分からなかった。結果側は「かんせい！」にして操作と結果を分ける */
     $('#deco-timeup-text').textContent = reason === 'manual' ? '✨ かんせい！' : '⏰ タイムアップ！';
     $('#deco-timeup').classList.remove('hidden');
-    playSound(reason === 'manual' ? 'finish' : 'timeup');
+    announceByMode(reason === 'manual' ? 'finish' : 'timeup');
     await sleep(1300);
     $('#deco-timeup').classList.add('hidden');
     if (state.mode === 'heisei') {
@@ -7804,12 +7948,12 @@
     printStage.classList.add('printing');
     // 写真1まいずつの保存の並びを組み立てる（2026-08-22。令和のみ・平成では非表示）
     buildSingleSaveRow();
-    playSound('printOut');
+    announceByMode('printOut');
     if (printReadyId) clearTimeout(printReadyId);
     printReadyId = setTimeout(() => {
       printStage.classList.remove('printing'); // アニメ終端＝transform:0 と同じ位置なので外してよい
       printStage.classList.add('ready');
-      playSound('save');
+      announceByMode('save');
     }, PRINT_EJECT_MS);
   }
 
@@ -8126,9 +8270,8 @@
   });
 
   $('#btn-restart').addEventListener('click', () => {
-    stopAnnounce(); // 案内ボイスも次の客へ持ち越さない
-    announceByMode('thanks'); // 「またプリクラ とりに きてねー！」（2026-08-15）
-    resetOnceVoices();        // 初回だけ鳴らす案内を次の客のために戻す
+    stopAnnounce();     // 前の客の案内ボイスは次の客へ持ち越さない
+    resetOnceVoices();  // 初回だけ鳴らす案内を次の客のために戻す
     // 保存モーダル・トースト・直近画像も次の客へ持ち越さない（2026-08-14）
     $('#save-modal').classList.add('hidden');
     if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
