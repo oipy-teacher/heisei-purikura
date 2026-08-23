@@ -662,7 +662,13 @@ body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #e
   color: #7d6b7d;
   box-shadow: 0 0 14px rgba(255,255,255,.5);
 }
-.flash-note { font-size: 11px; opacity: .7; margin: 6px 0 0; line-height: 1.4; }
+/* 2026-08-23（検見の平成検査【軽微4】）: 暗い水玉背景に薄いピンクの11px・不透明度.7で
+   読めなかった。字を大きくし、不透明度を上げ、うすい黒の下敷きを敷いてコントラストを確保する */
+.flash-note {
+  font-size: 12px; opacity: .95; margin: 6px 0 0; line-height: 1.45;
+  background: rgba(0,0,0,.32); color: #fff;
+  padding: 3px 8px; border-radius: 8px; display: inline-block;
+}
 
 /* 発光面。**照明器具**なので画面いっぱい・純白・最前面（詳細は index.html のコメント）。
    ふだんは display:none で合成レイヤーごと外しておく（常駐させると描画コストを払い続ける） */

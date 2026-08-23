@@ -3081,6 +3081,11 @@
       await sleep(60); // オーバーレイを描画させてから重い現像処理へ
       await finishHeiseiProcessing();
       document.querySelector('.camera-stage').classList.remove('developing');
+      /* 2026-08-23（検見の平成検査【軽微6】）: 現像が終わっても #darkroom を hidden に
+         戻していなかった。次に startCamera が走るまで暗幕が残る（画面は切り替わっているので
+         実害は出ていないが、次に「撮り直し」を足したときに黒画面で始まる芽になる）。
+         出したものは、出した側で片づける。 */
+      $('#darkroom').classList.add('hidden');
     } else {
       startBeautyScreen();
     }
