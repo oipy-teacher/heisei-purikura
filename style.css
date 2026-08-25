@@ -780,6 +780,29 @@ body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #e
 body[data-mode="reiwa"] .deco-thumb.selected { border-color: #a8917d; box-shadow: 0 0 0 3px rgba(168,145,125,.35); }
 body[data-mode="reiwa"] .deco-thumb .dt-mark { background: #a8917d; color: #fff; }
 
+/* ---- シールに載らない写真の札（2026-08-25 障害①）----
+   実ユーザー報告「撮った4枚のうち落書き以降反映されない」への対応。
+   2枚ワイド（2マス）を選ぶと3・4枚目は1画素もシールに載らないのに、
+   落書き画面は4枚とも同じ顔で並べていた。**描く前に見分けがつく**ようにする。
+   写真そのものは薄くするだけで消さない（入れかえれば載るので、中身は見せておく）。 */
+.deco-thumb .dt-off {
+  position: absolute; left: 50%; bottom: 4px;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(40,34,30,.82);
+  color: #fff;
+  font-size: 10px; font-weight: 900; line-height: 16px;
+  white-space: nowrap;
+  display: none;
+  pointer-events: none; /* 飾りはタップを食べない（8/23の規約） */
+}
+.deco-thumb.offsheet .dt-off { display: block; }
+.deco-thumb.offsheet canvas { opacity: .34; filter: grayscale(1); }
+.deco-thumb.offsheet { border-style: dashed; border-color: rgba(120,110,105,.7); }
+/* 選択中は薄くしすぎない（描いている写真が見えなくなるため） */
+.deco-thumb.offsheet.selected canvas { opacity: .62; filter: grayscale(.55); }
+
 .deco-toolbar {
   flex: 1;
   min-width: 220px;

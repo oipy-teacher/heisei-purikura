@@ -5010,6 +5010,38 @@
     return state.processedShots.length ? state.processedShots : state.shots;
   }
 
+  /* ---------- シールに「実際に載る」写真を1か所で決める（2026-08-25 障害①） ----------
+     🚨 実ユーザー報告「令和版は撮った4枚のうち、落書き以降反映されない」の正体。
+     落書き画面は decoShots() ＝ **常に4枚** を出すのに、シールへ載るのは
+     layoutCells(layout) のマス数ぶんしかない。2枚ワイド（2マス）を選んだ客は
+     3・4枚目に3分かけて描いたものが、シールに1画素も載らないまま排出されていた
+     （令和・平成の両方で再現。他の分割は4マス以上なので起きない）。
+
+     直し方の方針は「載せる」ではなく「**載らないことが描く前に分かる**」。
+     マス数は分割の意味そのものなので、2マスに4枚載せるわけにはいかない。
+     載らないなら載らないと、客が描き始める前に言う。
+
+     composeSheet / composeDoodleOntoSheet と **同じ order の作り方**をここに集約する。
+     表示側（サムネイル・分割ゲート）はこの関数の答えだけを見るので、
+     合成の規則が変わっても表示が置いていかれることがない。 */
+  function sheetShotIndices(layout) {
+    const shots = decoShots();
+    const pick = (state.photoPick && state.photoPick.length)
+      ? state.photoPick.filter(idx => idx < shots.length)
+      : null;
+    const order = (pick && pick.length) ? pick : shots.map((_, idx) => idx);
+    if (!order.length) return new Set();
+    const cells = layoutCells(layout || state.layout);
+    return new Set(cells.map((_, i) => order[i % order.length]));
+  }
+
+  /* その分割で「撮った何枚のうち何枚が載るか」。撮影前の選択画面でも使うので
+     枚数は引数で受ける（撮影前は state.shots が空のため） */
+  function layoutFit(layout, shotN) {
+    const cells = layoutCells(layout).length;
+    return { cells, on: Math.min(shotN, cells), all: cells >= shotN };
+  }
+
   /* ---------- 手描き風スタンプ（Canvas描画） ---------- */
   function heartPath(ctx, s) {
     ctx.beginPath();
@@ -5551,6 +5583,19 @@
   }
 
   /* ---------- ショット切り替え（サムネイル1〜4） ---------- */
+  /* 「のらない写真」に切り替えたときの一言（2026-08-25 障害①）。
+     札を出すだけだと、小さいサムネイルは見落とされる。切り替えた瞬間に
+     **理由と直し方**を言う（令和は「えらび直す」で入れかえられる＝客が取れる行動がある）。
+     1枚につき1回だけ。3分の落書き時間を説明で埋めない。 */
+  const offSheetNoticed = new Set();
+  function noticeOffSheet(i) {
+    if (!decoActive) return;
+    if (sheetShotIndices().has(i)) return;
+    if (offSheetNoticed.has(i)) return;
+    offSheetNoticed.add(i);
+    showDecoToast(`⚠️ ${i + 1}まいめは シールに のらないよ。「のせる しゃしんを えらび直す」で 入れかえられるよ`);
+  }
+
   function selectShot(i) {
     curShot = i;
     if (typeof clearEditSel === 'function') clearEditSel(); // 編集選択は写真ごと（前の写真のindexを持ち越さない）
@@ -5563,6 +5608,7 @@
     renderDeco();
     renderDecoFramePreview();
     refreshDecoThumbs();
+    noticeOffSheet(i); // 載らない写真なら、描き始める前に言う（2026-08-25 障害①）
     scheduleSessionSave(); // 見ている写真も一時保存に含める（復帰したとき同じ写真から続けられる）
   }
 
@@ -5595,6 +5641,12 @@
       mark.className = 'dt-mark';
       mark.textContent = '✎';
       b.appendChild(mark);
+      /* 「この写真はシールに載らない」の札（2026-08-25 障害①）。
+         出す/消すは refreshDecoThumbs が state から決める（見た目は必ず state から描く） */
+      const off = document.createElement('span');
+      off.className = 'dt-off';
+      off.textContent = 'のらない';
+      b.appendChild(off);
       b.addEventListener('click', () => { if (i !== curShot) selectShot(i); });
       row.appendChild(b);
     });
@@ -5606,11 +5658,14 @@
     const row = $('#deco-thumbs');
     if (!row) return;
     const shots = decoShots();
+    const onSheet = sheetShotIndices();
     Array.from(row.children).forEach((b) => {
       const i = Number(b.dataset.idx);
       b.classList.toggle('selected', i === curShot);
       const doodled = !!(shotDeco[i] && shotDeco[i].objects.length);
       b.classList.toggle('doodled', doodled);
+      // シールに載らない写真は、ひと目で分かるように薄くして札を出す（2026-08-25 障害①）
+      b.classList.toggle('offsheet', !onSheet.has(i));
       const cv = b.querySelector('canvas');
       const cctx = cv.getContext('2d');
       cctx.clearRect(0, 0, cv.width, cv.height);
@@ -7219,6 +7274,10 @@
         }
         composeSheet();       // 後ろのシールにその場で反映（選んだ結果が見える）
         refreshPhotoPick();
+        /* 落書き画面のサムネイルの「のらない」札も同時に取り直す（2026-08-25 障害①）。
+           ここを忘れると、入れかえたのに札が残って「直っていない」に見える */
+        offSheetNoticed.clear();
+        refreshDecoThumbs();
       });
       row.appendChild(b);
     });
@@ -7310,6 +7369,7 @@
     armHistorySentinel();
     // 写真拡大表示方式: 落書きは写真ごとに持つ。1枚目を拡大表示して開始
     shotDeco = decoShots().map(() => ({ objects: [], undo: [] }));
+    offSheetNoticed.clear(); // 「のらないよ」の一言は客ごとに言い直す（2026-08-25 障害①）
     resetUgokasuHint(); // 次の客には「うごかす」の案内をもう一度出す（2026-08-17）
     extendUsed = 0;     // 延長の回数は客ごとにリセット（2026-08-17 指摘⑤）
     closeExtendModal();
