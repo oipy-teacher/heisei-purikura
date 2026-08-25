@@ -2269,12 +2269,23 @@
     if (liveBeauty) liveAutoDegrade(performance.now() - t0);
   }
 
-  async function previewLoop() {
-    if (!previewRunning) return;
+  /* プレビューの世代番号（2026-08-25 障害②）。
+     🚨 previewRunning は真偽値なので、startCamera が重なると **走っているループが
+     何本あっても全部 true を見て回り続ける**（連打ぶんだけ描画負荷が倍になる）。
+     iPadを一日中回す文化祭では、これがそのまま発熱と処理落ちになる。
+     世代番号を持たせて、古いループは自分で降りるようにした。
+     ⚠️ 引数なしで呼ばれたときだけ新しい世代を始める。
+     　（requestAnimationFrame(previewLoop) と書くと第1引数に時刻が渡るので、
+     　　継続は必ず `() => previewLoop(gen)` の形で渡すこと） */
+  let previewGen = 0;
+  async function previewLoop(gen) {
+    if (gen === undefined) gen = ++previewGen; // 外から呼ばれた＝新しい世代の始まり
+    if (!previewRunning || gen !== previewGen) return;
     if (video.readyState >= 2 && video.videoWidth > 0) {
       await renderPreviewFrame(video);
+      syncStartShootingEnabled(); // 映像の寸法が取れた時点で「撮影スタート」を解禁する
     }
-    if (previewRunning) requestAnimationFrame(previewLoop);
+    if (previewRunning && gen === previewGen) requestAnimationFrame(() => previewLoop(gen));
   }
 
   /* ===================== 顔ランドマーク（盛り機能用） ===================== */
