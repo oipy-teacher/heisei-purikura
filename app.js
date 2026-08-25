@@ -2988,10 +2988,19 @@
   function flashAvailable() { return !!modeConf().flash; }
   function flashEnabled() { return flashAvailable() && state.flashOn; }
 
+  /* 🚨 2026-08-25（障害②の観点1の点検結果）: applyConstraints に **返ってこない端末がある**
+     （Androidの一部機種で、torch の切り替えがトラックの作り直しを引き起こして固まる）。
+     ここに上限が無いと、撮影ループ（4枚のfor）がその場で止まったまま二度と進まない。
+     客からは「カメラが動かない」に見える。光らないことより、止まらないことを優先する。 */
+  const TORCH_TIMEOUT_MS = 900;
   async function setTorch(on) {
     if (!torchTrack) return false;
     try {
-      await torchTrack.applyConstraints({ advanced: [{ torch: on }] });
+      const r = await Promise.race([
+        torchTrack.applyConstraints({ advanced: [{ torch: on }] }).then(() => 'ok'),
+        sleep(TORCH_TIMEOUT_MS).then(() => 'timeout'),
+      ]);
+      if (r === 'timeout') { torchTrack = null; return false; } // 以後は画面フラッシュに任せる
       torchCalls.push(on);
       return true;
     } catch (e) {
