@@ -2443,7 +2443,24 @@
   }
   buildShotIndicator();
 
+  /* 起動の世代番号（2026-08-25 障害②）。連打・画面往復で startCamera が重なったとき、
+     **あとから始めたほうだけを本物にする**ための札。追い越された側は自分で後始末して黙って降りる */
+  let camStartSeq = 0;
+
   async function startCamera() {
+    /* 🚨 2026-08-25（実ユーザー報告「カメラが起動しないという報告がポツポツ」）:
+       前のストリームを止めずに次を取りに行っていた。
+       「もう一度ためす」や「この組み合わせでOK！」を連打すると、カメラが何本も
+       生きたまま積み上がる（実測: 3連打で4本が live のまま）。
+       Android Chrome では2本目以降の getUserMedia が NotReadableError で落ちるので、
+       **「もう一度ためす」を押すほど直らなくなる**。文化祭で何十組も回す機械では致命的。
+       起動のたびに、必ず前の後始末をしてから取りに行く。 */
+    const seq = ++camStartSeq;
+    previewRunning = false; // 前のプレビューループをここで終わらせる（多重走行を残さない）
+    if (state.stream) {
+      try { state.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* 既に死んでいる分は無視 */ }
+      state.stream = null;
+    }
     camError.textContent = '';
     state.shots = [];
     state.processedShots = [];
@@ -2517,7 +2534,11 @@
        コース選択へ戻ったあとに「カメラ、じゅんび中ー！」だけが追いかけて鳴る */
     camWaitVoiceId = queueVoice(() => { camWaitVoiceId = null; announceByMode('cameraWait'); }, 1200);
     try {
-      state.stream = await acquireCamera(facing);
+      const stream = await acquireCamera(facing);
+      /* 待っている間に別の起動が始まっていたら、いま取れたぶんは自分で止めて降りる。
+         これをしないと、勝った側の映像を映しながら負けた側のカメラも点きっぱなしになる */
+      if (seq !== camStartSeq) { stream.getTracks().forEach(t => t.stop()); return; }
+      state.stream = stream;
       video.srcObject = state.stream;
       detectTorch(state.stream); // LEDが使える端末か（Android Chromeの背面のみ。iOSは常に非対応）
       syncFlashUI();
@@ -2542,6 +2563,7 @@
       syncStartShootingEnabled();
       previewLoop();
     } catch (err) {
+      if (seq !== camStartSeq) return; // 追い越された側の失敗で、動いている起動の画面を壊さない
       showCamLoading(false);
       if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
       showCamFail(err);
