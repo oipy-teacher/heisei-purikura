@@ -2619,17 +2619,28 @@
     const env = saveEnv(); // 端末判定は保存経路と同じものを使い回す
     const CALL = 'ちかくの 係の人を よんでください🙏';
     const TITLE = 'カメラが うまく始まりませんでした';
+    const INAPP = 'LINEなどの アプリの中で ひらいていると カメラが つかえないよ。画面のすみの「…」や「⋮」から「ブラウザでひらく」（Safari／Chrome）を えらんでね。それでも だめなら ' + CALL;
     if (!window.isSecureContext) {
       return { title: TITLE, body: CALL };
     }
+    /* 🚨 2026-08-25（実ユーザー報告「カメラが起動しないという報告がポツポツ」の最有力候補）:
+       アプリ内ブラウザの案内を **UnsupportedError / TypeError のときにしか出していなかった**。
+       ところが LINE・Instagram・Facebook の内蔵ブラウザは navigator.mediaDevices を
+       ちゃんと持っているので UnsupportedError にはならず、**NotAllowedError で落ちる**
+       （WebView にカメラの許可が降りていないため）。実際に LINE の UA で撃って確認した:
+       客に出ていたのは「カメラを つかう せっていが オフに なっているみたい」で、
+       これは無人のプリクラ機の前に立った客が**自分では何もできない**文面だった。
+       QRやリンクをLINEのトークで配ると、開いた人全員がここに落ちる＝「ポツポツ」の正体。
+
+       → 端末がアプリ内ブラウザだと分かっているなら、エラーの種類より先に
+         「ブラウザでひらいて」を出す。これがこの状況で客が取れる唯一の行動だから。
+       ⚠️ NotReadableError（他のアプリがカメラを使用中）だけは別扱いにする。
+         これはアプリ内ブラウザかどうかと関係なく、閉じて撮り直せば直るため。 */
+    if (env.isInApp && name !== 'NotReadableError' && name !== 'TrackStartError') {
+      return { title: 'この画面では カメラが つかえません', body: INAPP };
+    }
     if (name === 'UnsupportedError' || name === 'TypeError') {
-      return {
-        title: 'この画面では カメラが つかえません',
-        // アプリ内ブラウザだけは、客が自分の指で直せる（＝書く価値のある）唯一の手順
-        body: env.isInApp
-          ? 'LINEなどの中で ひらいていると つかえないことがあるよ。画面のすみの「…」から「ブラウザでひらく」を えらんでみてね。それでも だめなら ' + CALL
-          : CALL,
-      };
+      return { title: 'この画面では カメラが つかえません', body: CALL };
     }
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
       return { title: TITLE, body: 'カメラを つかう せっていが オフに なっているみたい。' + CALL };
