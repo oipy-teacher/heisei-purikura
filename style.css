@@ -373,6 +373,27 @@ body[data-mode="reiwa"] .layout-item { background: #f7f2ea; }
 body[data-mode="reiwa"] .layout-item.selected { border-color: #b39b8a; }
 body[data-mode="reiwa"] .layout-item .layout-label { color: #8a7568; }
 
+/* ---- 分割ごとの「何枚のるか」の札（2026-08-25 障害①）----
+   平成は落書きのあとに分割を選ぶので、ここが「描いたのに消えた」の分かれ道になる。
+   実機どおり1タップで進む導線は変えず、**タップする前に本当のことを書く**。 */
+.layout-item .lg-fit {
+  font-size: 10px; font-weight: 900; line-height: 1.35;
+  text-align: center;
+  padding: 1px 5px;
+  border-radius: 7px;
+  white-space: nowrap; /* 語の途中で折らない（R-108「収まった≠読める」） */
+  max-width: 100%;
+}
+.layout-item .lg-fit.ok { color: #4a7a52; background: rgba(120,180,130,.18); }
+.layout-item .lg-fit.warn { color: #9a3d1e; background: rgba(240,150,90,.24); }
+.layout-item .lg-lost {
+  font-size: 9px; font-weight: 800; line-height: 1.2;
+  text-align: center;
+  color: #9a3d1e;
+}
+.layout-item.layout-lossy { border-color: rgba(230,140,80,.55); }
+.layout-item.layout-lossy.selected { border-color: #ff2fa0; }
+
 .sel-section { margin-bottom: 4px; }
 
 .sel-advanced {

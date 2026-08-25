@@ -1521,7 +1521,14 @@
     LAYOUTS.forEach((layout, i) => {
       const el = document.createElement('div');
       el.className = 'layout-item' + (layout.id === state.layout.id ? ' selected' : '');
-      el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>`;
+      /* 撮る前に「この分割だと何枚のるか」を書く（2026-08-25 障害①）。
+         令和は分割をここで決めてしまい、以後は撮影→盛り→落書きと進むので、
+         2枚ワイドを選んだことを客が忘れたころに3・4枚目が消えていた。
+         枚数は NUM_SHOTS 固定なので、この札は撮影前でも正しく書ける */
+      const fit = layoutFit(layout, NUM_SHOTS);
+      el.classList.toggle('layout-lossy', !fit.all);
+      el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>`
+        + (fit.all ? '' : `<span class="lg-fit warn">${fit.on}まいだけ</span>`);
       el.addEventListener('click', () => {
         /* 令和の分割えらびは撮影後ではなく **この選択画面の中** にある（2026-08-15 音羽さんの申し送り）。
            はじめて分割に触れたときだけ「２枚ワイドから１６分割まで」を一度だけ言う。
@@ -7607,10 +7614,34 @@
     const list = $('#layout-gate-list');
     list.innerHTML = '';
     playAnnounce('layoutGateH'); // 「なんぶんかつで もってかえる？」（2026-08-15）
+    /* 🚨 2026-08-25（障害①・平成側）: ここが平成でいちばん危ない場所だった。
+       平成は **落書きのあとに分割を選ぶ**（8/13 オーナー裁定の考証回帰）ので、
+       4枚に3分かけて描いたあとで「2枚ワイド」を選ぶと、3・4枚目の落書きが
+       まるごと消える。しかも平成には写真えらびUIが無い（実機は撮影順固定）ので、
+       客には取り返す手段が一切ない。実測でも完成キャンバスが1画素も変わらなかった。
+
+       導線は実機どおり1タップのまま変えない。**選ぶ前に本当のことを書く**だけにする。
+       「4まい ぜんぶ のる」か「2まいだけ のる／3・4まいめの らくがきは のらない」かが
+       タップ前に読めれば、客は自分で 4分割 を選び直せる。 */
+    const totalShots = decoShots().length;
     LAYOUTS.forEach((layout) => {
       const el = document.createElement('div');
       el.className = 'layout-item' + (layout.id === state.layout.id ? ' selected' : '');
-      el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>`;
+      const fit = layoutFit(layout, totalShots);
+      const onSet = sheetShotIndices(layout);
+      const lost = [];
+      for (let i = 0; i < totalShots; i++) {
+        if (!onSet.has(i) && shotDeco[i] && shotDeco[i].objects.length) lost.push(i + 1);
+      }
+      /* 文言は3列に収まる長さで書く（R-108「収まった≠読める」）。
+         幅110px・10pxの札に「4まい ぜんぶ のる」は入らず「ぜん／ぶ」で割れていた */
+      let note = `<span class="lg-fit ok">ぜんぶ のる</span>`;
+      if (!fit.all) {
+        note = `<span class="lg-fit warn">${fit.on}まいだけ</span>`;
+        if (lost.length) note += `<span class="lg-lost">${lost.join('・')}まいめは<br>のらないよ</span>`;
+      }
+      el.classList.toggle('layout-lossy', !fit.all);
+      el.innerHTML = layoutIconSVG(layout) + `<span class="layout-label">${layout.label}</span>` + note;
       el.addEventListener('click', () => {
         list.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
