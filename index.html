@@ -352,9 +352,15 @@
             <p class="photo-pick-hint" id="photo-fit-hint"></p>
           </div>
           <p class="deco-gate-note" id="deco-gate-note">おしたらタイマーがスタートするよ。<br>すわって、おちついてからでOK！</p>
-          <button id="btn-deco-start" class="btn-main">▶ らくがきスタート</button>
-          <!-- 落書き中に開き直したときだけ出す戻り口（タイマーは走ったまま） -->
-          <button id="btn-photo-pick-close" class="btn-main hidden">◀ らくがきに もどる</button>
+          <!-- 進むボタンはゲートの底に貼りつける（2026-08-25）。
+               iPhone SE1 縦（320×568）では令和のゲートの中身が815pxになり、
+               このボタンが画面の外に落ちて客が先へ進めなくなっていた。
+               この帯だけを sticky にして、スクロールしなくても必ず見えるようにする -->
+          <div class="gate-actions">
+            <button id="btn-deco-start" class="btn-main">▶ らくがきスタート</button>
+            <!-- 落書き中に開き直したときだけ出す戻り口（タイマーは走ったまま） -->
+            <button id="btn-photo-pick-close" class="btn-main hidden">◀ らくがきに もどる</button>
+          </div>
         </div>
       </div>
       <div class="deco-header">
