@@ -2552,6 +2552,8 @@
         });
       });
       showCamLoading(false);
+      camAcquiredAt = performance.now(); // 安全弁（CAM_READY_GRACE_MS）の起点
+      setTimeout(() => { if (seq === camStartSeq) syncStartShootingEnabled(); }, CAM_READY_GRACE_MS + 30);
       if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
       /* 🚨 撮影がもう始まっていたら「カメラ、オッケー！ポーズ きまったら、さつえいスタート
          おしてー！」は鳴らさない（2026-08-23 音羽の点検【重大②】(a)）。
@@ -2621,9 +2623,22 @@
      押せるのは「映像が出ていて、まだ撮り始めていないとき」だけ。
      見た目でも押せないと分かる（:disabled のCSSは 2026-08-15 に入れてある・R-080）。 */
   let shootingInProgress = false;
+  /* 🚨 2026-08-25（障害②）: previewRunning は getUserMedia が返った瞬間に true になるが、
+     video.videoWidth が入るのはそのあと（実測で100ms遅れ・実機はもっと開く）。
+     この隙に押すと、まだ 0×0 の映像から撮影ループが走り出す。
+     「カメラが起動しない」の報告のうち、**押したのに真っ暗**の分がここに当たる可能性がある。
+     押せる条件に「映像の寸法が取れていること」を足す。
+     ⚠️ ただし videoWidth が最後まで 0 のままの端末があると押せなくなって全滅するので、
+     　　起動から CAM_READY_GRACE_MS たったら寸法が取れていなくても解禁する（安全弁）。 */
+  const CAM_READY_GRACE_MS = 2500;
+  let camAcquiredAt = 0;
+  function videoHasFrame() {
+    if (video.readyState >= 2 && video.videoWidth > 0) return true;
+    return camAcquiredAt > 0 && (performance.now() - camAcquiredAt) > CAM_READY_GRACE_MS;
+  }
   function syncStartShootingEnabled() {
     if (!btnStartShooting) return;
-    btnStartShooting.disabled = !previewRunning || shootingInProgress;
+    btnStartShooting.disabled = !previewRunning || shootingInProgress || !videoHasFrame();
   }
   function hideCamFail() {
     if (camFailEl) camFailEl.classList.add('hidden');
@@ -2705,6 +2720,7 @@
 
   function stopCamera() {
     previewRunning = false;
+    camAcquiredAt = 0; // 次の起動でまた「映像が出るまで押せない」に戻す（2026-08-25）
     syncStartShootingEnabled();
     showCamLoading(false);
     if (camWaitVoiceId) { clearTimeout(camWaitVoiceId); camWaitVoiceId = null; }
