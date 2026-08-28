@@ -32,6 +32,15 @@ body {
   width: 100%;
 }
 
+/* 撮影画面の横持ちレイアウトの寸法（2026-08-28）。
+   3箇所（映像の幅の式・右パネルの幅・すき間）が同じ数字を見るように変数にする。
+   手で3回書くと必ずどこかがズレて、映像がじわじわ縮む（今回の原因がまさにそれ）。 */
+:root {
+  --cam-side: clamp(168px, 19vw, 240px); /* 右パネル（撮影スタート等）の幅 */
+  --cam-gap: clamp(8px, 1.2vw, 18px);    /* 映像と右パネルのすき間 */
+  --cam-pad: clamp(6px, 1vw, 16px);      /* 撮影画面の左右余白 */
+}
+
 #app {
   position: relative;
   width: 100%;
@@ -3521,3 +3530,148 @@ body.theme-reiwa .btn-main.pulse:disabled { animation: none; }
 body .btn-main:disabled:active,
 body.theme-heisei .btn-main:disabled:active,
 body.theme-reiwa .btn-main:disabled:active { transform: none; box-shadow: none; }
+
+/* ================================================================
+   横持ちの余白を詰めて、被写体をできるだけ大きく写す
+   （2026-08-28 オーナー実機指摘②）
+   ================================================================
+   指摘の原文:「横向きにすると余白スペースが多いので、利用方法に合わせて
+   余白はなるべく少なく、被写体がなるべく大きく映るようにしてくれ」
+
+   利用方法 = **三脚に固定した iPad を横向きにして、全身を撮る**。
+   全身コースは人が奥に立つので、ファインダーが小さいと被写体はさらに小さくなる。
+   実測（iPad 1180×820・修正前）: 映像は 451×333px ＝ 画面の 15.5%。
+   残りの 84% は水玉の地とボタンの周りの余白だった。
+
+   原因は2つ:
+   ① `.camera-viewport { width: min(62vw, 560px) }` の **560px の上限**。
+      画面が広くなっても映像は 560px から先へ伸びない（縦の余りも一切使わない）
+   ② `.camera-stage` が `width: min(94vw, 900px)` で、右パネル（のこりポーズ・
+      フラッシュ・撮影スタート）の max-content 幅が広いため、flex が
+      **映像側を 560 → 470 まで縮めていた**（映像に flex-shrink の下限が無かった）
+
+   直し方:
+   ・横持ちのときは幅の上限を外し、**画面の高さから 4:3 を逆算**して映像を決める
+   ・右パネルは幅を固定枠（clamp）にして、映像を縮めさせない（flex: 0 0 auto）
+   ・縦持ち・スマホ横持ちの既存の見え方は変えない（下の条件で切り分けている）
+
+   ⚠️ ボタンが押せなくなったら本末転倒。右パネルの下限（170px）と
+      画面の高さの取り分は 14端末サイズのヒットテストで決めた値。動かすときは測り直すこと。 */
+@media (orientation: landscape) {
+  .camera-stage {
+    width: 100%;
+    height: 100%;
+    gap: var(--cam-gap);
+    padding: clamp(4px, 1vh, 12px) var(--cam-pad);
+    justify-content: center;
+  }
+  .camera-viewport {
+    /* 幅の上限（560px）を外し、**残っている場所を全部使う**。
+       右辺 = 画面の高さから 4:3 を逆算した幅（縦にはみ出さない上限）
+       左辺 = 右パネル・すき間・左右余白を引いた実際に空いている幅
+       2px 引いてあるのは、端数の丸めで1px はみ出して縮むのを防ぐため */
+    flex: 0 0 auto;
+    width: min(
+      calc(100vw - var(--cam-side) - var(--cam-gap) - 2 * var(--cam-pad) - 2px),
+      calc((100dvh - 26px) * 4 / 3)
+    );
+    max-width: none;
+  }
+  /* 右パネルは「映像を縮めない固定枠」にする。
+     旧版は幅の指定が min-width だけで、中の文言の max-content 幅（409px）が
+     そのまま効いて映像を 560→470 まで押し戻していた */
+  .camera-side {
+    flex: 0 0 auto;
+    min-width: 0;
+    width: var(--cam-side);
+  }
+  /* 枠に収める（R-108「収まった≠読める」。.btn-main は white-space:nowrap なので
+     幅ではなく**級数**で収める。18px は 7文字＋余白が 168px の枠に入る下限） */
+  #screen-camera .btn-main {
+    width: 100%;
+    font-size: clamp(18px, 1.75vw, 22px);
+    padding: 14px 12px;
+  }
+  #screen-camera .cam-caption.small { font-size: 12px; line-height: 1.5; }
+}
+/* dvh が使えない端末（iOS 15.3 以前）は JS 実測の --app-h で同じ式を組む */
+@supports not (height: 100dvh) {
+  @media (orientation: landscape) {
+    .camera-viewport {
+      width: min(
+        calc(100vw - var(--cam-side) - var(--cam-gap) - 2 * var(--cam-pad) - 2px),
+        calc((var(--app-h, 100vh) - 26px) * 4 / 3)
+      );
+    }
+  }
+}
+
+/* 横持ちで高さが無い端末（スマホ横）は、右パネルの中身が縦に積み上がって
+   「えらび直す」が画面の下へ落ちる（2026-08-28 の幅詰めで顕在化。v34 でも余裕は3pxしか無かった）。
+   ここだけ **枠を少し広げて折り返しを減らし、同時に縦の目方を落とす**。
+   映像は元々「高さ由来の上限」に当たっているので、枠を広げても映像の面積はほとんど減らない。
+   🚨 ボタンが押せることが先。余白を詰めるのは、押せることを壊さない範囲まで。 */
+@media (orientation: landscape) and (max-height: 520px) {
+  :root { --cam-side: clamp(200px, 30vw, 260px); }
+}
+/* 高さが 620px を切る画面（スマホ横持ち全部＋iPhone SE1 の縦）は、
+   撮影画面の右パネル（令和はライブ盛れの列が入るので特に高い）が縦に溢れて
+   「◀ えらび直す」が画面の外へ落ちる。
+   🚨 これは v34 でも起きていた（実測: SE1縦・令和で下端 605px / 画面 568px。
+      新旧まったく同じ数字だったので、自分の変更による退行ではなく元からの不具合）。
+      横持ちの詰めと同じ手当てをここで縦にも効かせて、まとめて閉じる。 */
+@media (max-height: 620px) {
+  #screen-camera .cam-caption { font-size: 14px; margin: 0 0 2px; }
+  #screen-camera .cam-caption.small { font-size: 11px; margin-bottom: 4px; line-height: 1.35; }
+  #screen-camera .live-beauty-panel,
+  #screen-camera .flash-panel { margin: 0 0 6px; }
+  #screen-camera .live-toggle,
+  #screen-camera .flash-toggle { padding: 5px 12px; font-size: 13px; }
+  #screen-camera #pose-guide { font-size: 13px; padding: 4px 10px; }
+  #screen-camera .btn-main { padding: 9px 10px; font-size: 17px; }
+  #screen-camera .btn-back { padding: 6px 12px; font-size: 13px; }
+  #screen-camera #segmenter-status { font-size: 11px; }
+  /* 盛れ感プリセットの列と説明文が右パネルの高さの3分の1を食っていた（実測137px）。
+     横持ちのスマホでは列を詰め、説明文は級数を落とす（消しはしない） */
+  #screen-camera .live-preset-row { gap: 4px; }
+  #screen-camera .live-preset-row > * { padding: 4px 8px; font-size: 12px; }
+  #screen-camera .live-note,
+  #screen-camera .flash-note { font-size: 11px; line-height: 1.35; margin: 4px 0 0; }
+}
+
+/* 落書き画面（タブレット横持ち）: 編集中の写真が、置き場所に対して小さいまま止まっていた。
+   4枚のキャンバスは intrinsic 640×480 で、`max-width/max-height: 100%` は
+   **縮めることしかしない**（拡大はしない）。結果、iPad横では 818×600 の場所に 660×495 で座っていた。
+   `width:100% / height:auto / max-height:100%` にすると、CSS の置換要素の規則により
+   **縦横比を保ったまま置き場所いっぱいまで拡大**する（幅で頭打ちなら幅、高さで頭打ちなら高さ）。
+   ⚠️ 4枚は必ず同じ大きさで重なること。指の座標は getCanvasPos が
+      getBoundingClientRect から毎回スケールを取り直すので、拡大しても描く位置はズレない。
+   （2026-08-28 オーナー実機指摘②「横向きの余白をなるべく少なく」の落書き画面ぶん） */
+@media (orientation: landscape) and (min-height: 521px) {
+  .deco-wrap, .beauty-wrap { padding: 8px 10px; }
+  .deco-header, .beauty-header { padding: 4px 4px 8px; }
+  .deco-main, .beauty-main { gap: 10px; }
+}
+/* 🚨 最初 `width:100% / height:auto / max-height:100%` で書いたら **写真が伸びた**
+   （実測 縦横比 1.320 → 1.566。AndroidTab横で顔が横に潰れる）。
+   幅を明示した置換要素に max-height が当たると、ブラウザは高さだけ切って
+   **幅を計算し直さない**。「縦横比は保たれるはず」は思い込みだった。
+   置き場所（.deco-photo-stage）の寸法を直接読める **コンテナクエリ単位**で
+   「入るほうの辺」を自分で選ぶ。cqh/cqw が無い端末では従来どおり（拡大しない）に落ちる。
+   --cv-border は重なる4枚が共通で持つ透明フチの合計幅（平成 10px×2 ／ 令和 8px×2）。
+   ここを変えるときは body.theme-* 側のフチ幅と必ず一緒に変えること。 */
+@supports (container-type: size) {
+  @media (orientation: landscape) and (min-height: 521px) {
+    .deco-photo-stage { container-type: size; }
+    #deco-photo-canvas, #draw-canvas, #stroke-canvas, #deco-frame-canvas {
+      --cv-border: 20px;
+      width: min(100cqw, calc((100cqh - var(--cv-border)) * 4 / 3 + var(--cv-border)));
+      height: auto;
+      max-width: 100cqw;
+    }
+    body.theme-reiwa #deco-photo-canvas,
+    body.theme-reiwa #draw-canvas,
+    body.theme-reiwa #stroke-canvas,
+    body.theme-reiwa #deco-frame-canvas { --cv-border: 16px; }
+  }
+}
