@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- 平成 落書きスタンプ「リボン」（柄本 手描き・2026-08-28）
+       出典/確度:
+         ① 本アプリの平成モードのフレーム8種にすでに「リボン 🎀」がある。
+            手描きスタンプ側にだけ無かったので、既存の意匠に合わせて埋めるもの
+            （RULE.md「既存の意匠と揃える」）／確度=中（内部整合）
+         ② パールフラッシュ（2002年11月20日）の当時の商品ページに
+            「落書きツールのノーマルスタンプ・透明スタンプ・くるくるスタンプの絵柄を総入れ替え！
+             さらに季節に応じた全60種類のデザインがあります。」（原文・確度=強）。
+            当時の実機がスタンプを60種類も積んでいたことは裏が取れているが、
+            **その中にリボンがあったという直接の記述は無い**（要検証）。
+       ねらい: 手描きスタンプが「ハート／星／ピース／水玉／ボーダー／キラ／日付／ふきだし」
+             ばかりで、女の子の落書きの定番であるリボンだけが穴になっていた。
+       規律: グラデ禁止・ハードエッジのみ。左右の輪を対称にしない（型抜きに見せない）。
+             輪はふっくら（つぶすとちょうネクタイに見える）。結び目の白ハイライトは1本だけ。 -->
+
+  <!-- 左の輪（下がり気味・少し大きい） -->
+  <path d="M43 47 C33 25 9 25 5 40 C1 55 18 65 43 57 Z" fill="#ffffff" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M43 47 C33 25 9 25 5 40 C1 55 18 65 43 57 Z" fill="#ff2fa0" stroke="#3a1030" stroke-width="4.5" stroke-linejoin="round"/>
+
+  <!-- 右の輪（上がり気味・少し小さい。左と同じ形にしない） -->
+  <path d="M55 46 C67 26 88 28 91 41 C94 54 78 62 55 55 Z" fill="#ffffff" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M55 46 C67 26 88 28 91 41 C94 54 78 62 55 55 Z" fill="#ff2fa0" stroke="#3a1030" stroke-width="4.5" stroke-linejoin="round"/>
+
+  <!-- 垂れ（左は長く外へ、右は短く。左右で長さを変える） -->
+  <path d="M44 58 C39 70 33 79 23 88 L34 92 C42 83 47 73 50 62 Z" fill="#ffffff" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M44 58 C39 70 33 79 23 88 L34 92 C42 83 47 73 50 62 Z" fill="#ff8fc7" stroke="#3a1030" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M53 59 C57 68 62 74 70 80 L60 85 C53 78 49 70 47 62 Z" fill="#ffffff" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M53 59 C57 68 62 74 70 80 L60 85 C53 78 49 70 47 62 Z" fill="#ff8fc7" stroke="#3a1030" stroke-width="4.5" stroke-linejoin="round"/>
+
+  <!-- 結び目（最後に載せて重なりを隠す。輪より一回り太く） -->
+  <path d="M39 40 C45 34 53 34 59 40 C64 46 63 57 57 62 C51 67 43 67 38 62 C33 56 33 46 39 40 Z" fill="#ffffff" stroke="#ffffff" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M39 40 C45 34 53 34 59 40 C64 46 63 57 57 62 C51 67 43 67 38 62 C33 56 33 46 39 40 Z" fill="#ff2fa0" stroke="#3a1030" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M42 48 C44 43 49 41 53 43" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+</svg>

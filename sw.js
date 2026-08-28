@@ -63,6 +63,7 @@ const PRECACHE = [
   'audio/heisei_deco_gate.mp3',
   'audio/heisei_deco_photo_switch.mp3',
   'audio/heisei_korokoro.mp3',
+  'audio/heisei_rakuraku_first.mp3',
   'audio/heisei_layout_gate.mp3',
   'audio/heisei_thanks.mp3',
   'audio/reiwa_beauty_parts.mp3',

@@ -712,6 +712,13 @@
     decoPhotoSwitchR: 'audio/reiwa_deco_photo_switch.mp3',
     layoutGateH: 'audio/heisei_layout_gate.mp3',          // 分割えらび
     layoutGateR: 'audio/reiwa_layout_gate.mp3',
+    /* らくらくお絵かきの初回押下だけ（2026-08-28 音羽納品・柄本の依頼）。
+       「型を12にしても『押すと変わる』を知らない客は1型しか見ない」——
+       トーストは落書き中に読まれないので、この1本が無いと12型化が半分しか効かない。
+       🚨 キー名に H を付けない: **H/R の対ではない**（令和版は作らない＝らくらくは平成の実機機能）。
+       `rakurakuFirstH` と名付けると announceByMode('rakurakuFirst') が書けてしまい、
+       令和で `rakurakuFirstR` を探して無音になる。音羽さんの指定どおりの名前にする。 */
+    heiseiRakurakuFirst: 'audio/heisei_rakuraku_first.mp3',
     korokoroH: 'audio/heisei_korokoro.mp3',               // スタンプのコロコロ（初回のみ）
     korokoroR: 'audio/reiwa_korokoro.mp3',
     cameraWaitH: 'audio/heisei_camera_wait.mp3',          // カメラ起動待ち
@@ -5270,6 +5277,84 @@
       bar([17, 61, 71, 58.5, 71, 67, 17, 70], '#3a1030');  // 細いほう・右端が短い
       ctx.restore();
     } },
+    /* ヒョウ柄（2026-08-28・柄本納品 assets/heisei-stamp-leopard.svg のCanvas化）。
+       原本SVGの96×96をそのまま写した（形の一次資料はSVG側。ここは実体）。
+       dotsPop / stripePop と同じく「なぞる＝コロコロ」で柄の帯になる駒。
+       ⚠️ 出典の確度: ヒョウ柄が平成ギャル文化の柱なのは確度=中（社内で2026-08-12に意匠確定済み）。
+          「当時の実機のスタンプにヒョウ柄があった」という直接の記述は**無い**（要検証）。
+          SVGのコメントに書いてある但し書きを、ここでも丸めない。 */
+    leopardPop: { label: 'ヒョウ柄', draw(ctx, s) {
+      const k = s / 80;
+      ctx.save(); ctx.scale(k, k); ctx.translate(-48, -48);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      // 斑（白フチ→本体の2度がけ。3つとも形が違う＝回転コピペで量産しない）
+      const spot = (outer, inner, color) => {
+        const run = (d, fill) => {
+          ctx.beginPath();
+          ctx.moveTo(d[0], d[1]);
+          for (let i = 2; i < d.length; i += 6) ctx.bezierCurveTo(d[i], d[i+1], d[i+2], d[i+3], d[i+4], d[i+5]);
+          ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+        };
+        run(outer, '#ffffff'); run(inner, color);
+      };
+      // 鉤（斑に添える曲線。白の太い線の上に濃い線を重ねて輪郭を残す）
+      const hook = (d, wOut, wIn) => {
+        const path = () => { ctx.beginPath(); ctx.moveTo(d[0], d[1]); ctx.bezierCurveTo(d[2], d[3], d[4], d[5], d[6], d[7]); };
+        path(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = wOut; ctx.stroke();
+        path(); ctx.strokeStyle = '#3a1030'; ctx.lineWidth = wIn; ctx.stroke();
+      };
+      // 斑1: 左上（大きめ・右下へ流れる）
+      spot([22,24, 17,15, 29,8, 39,12, 50,16, 53,30, 45,38, 36,47, 25,36, 22,24],
+           [25,26, 21,18, 30,13, 38,16, 47,20, 49,30, 43,36, 36,43, 27,34, 25,26], '#ff2fa0');
+      hook([13,21, 9,13, 16,5, 25,5], 10, 6);
+      hook([50,6, 59,8, 64,17, 60,25], 10, 6);
+      hook([50,45, 55,51, 50,59, 43,58], 9, 5);
+      // 斑2: 右下（縦長・少し傾く）
+      spot([64,58, 60,48, 71,42, 79,47, 88,53, 87,68, 78,72, 69,76, 66,67, 64,58],
+           [67,59, 64,51, 72,46, 78,50, 85,55, 84,66, 77,69, 71,72, 68,65, 67,59], '#ff2fa0');
+      hook([56,52, 52,44, 58,35, 67,35], 10, 6);
+      hook([90,44, 96,49, 97,58, 92,64], 9, 5);
+      hook([72,81, 67,87, 58,85, 56,79], 9, 5);
+      // 斑3: 左下（小・横につぶれる。色を変えて単調さを崩す）
+      spot([11,68, 7,61, 16,55, 25,58, 34,61, 35,71, 28,75, 20,80, 13,74, 11,68],
+           [14,68, 11,63, 18,59, 24,61, 31,63, 31,70, 26,73, 20,76, 15,72, 14,68], '#ffef5c');
+      hook([5,62, 2,56, 6,49, 13,48], 9, 5);
+      hook([34,84, 30,89, 22,89, 19,84], 8, 4.5);
+      ctx.restore();
+    } },
+    /* リボン（2026-08-28・柄本納品 assets/heisei-stamp-ribbon.svg のCanvas化）。
+       平成のフレームには「リボン 🎀」があるのに、手描きスタンプ側にだけ穴が空いていた。
+       ⚠️ 出典の確度: 内部整合が=中。当時の実機のスタンプにリボンがあった直接の記述は**無い**（要検証）。 */
+    ribbonPop: { label: 'リボン', draw(ctx, s) {
+      const k = s / 80;
+      ctx.save(); ctx.scale(k, k); ctx.translate(-48, -48);
+      ctx.lineJoin = 'round';
+      /* 白フチ→本体の2度がけ。d は [mx,my, (c1x,c1y,c2x,c2y,x,y)... , 'L',x,y ...] を
+         受けるのではなく、部品ごとに関数で書く（読める形を優先する） */
+      const twice = (path, fill, wOut, wIn) => {
+        path(); ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = wOut; ctx.fill(); ctx.stroke();
+        path(); ctx.fillStyle = fill; ctx.strokeStyle = '#3a1030'; ctx.lineWidth = wIn; ctx.fill(); ctx.stroke();
+      };
+      // 左の輪（下がり気味・少し大きい）
+      twice(() => { ctx.beginPath(); ctx.moveTo(43,47); ctx.bezierCurveTo(33,25, 9,25, 5,40);
+        ctx.bezierCurveTo(1,55, 18,65, 43,57); ctx.closePath(); }, '#ff2fa0', 8, 4.5);
+      // 右の輪（上がり気味・少し小さい。左と同じ形にしない）
+      twice(() => { ctx.beginPath(); ctx.moveTo(55,46); ctx.bezierCurveTo(67,26, 88,28, 91,41);
+        ctx.bezierCurveTo(94,54, 78,62, 55,55); ctx.closePath(); }, '#ff2fa0', 8, 4.5);
+      // 垂れ（左は長く外へ、右は短く）
+      twice(() => { ctx.beginPath(); ctx.moveTo(44,58); ctx.bezierCurveTo(39,70, 33,79, 23,88);
+        ctx.lineTo(34,92); ctx.bezierCurveTo(42,83, 47,73, 50,62); ctx.closePath(); }, '#ff8fc7', 8, 4.5);
+      twice(() => { ctx.beginPath(); ctx.moveTo(53,59); ctx.bezierCurveTo(57,68, 62,74, 70,80);
+        ctx.lineTo(60,85); ctx.bezierCurveTo(53,78, 49,70, 47,62); ctx.closePath(); }, '#ff8fc7', 8, 4.5);
+      // 結び目（最後に載せて重なりを隠す）
+      twice(() => { ctx.beginPath(); ctx.moveTo(39,40); ctx.bezierCurveTo(45,34, 53,34, 59,40);
+        ctx.bezierCurveTo(64,46, 63,57, 57,62); ctx.bezierCurveTo(51,67, 43,67, 38,62);
+        ctx.bezierCurveTo(33,56, 33,46, 39,40); ctx.closePath(); }, '#ff2fa0', 7, 5);
+      // 結び目のハイライトは1本だけ（増やすとプラスチックに見える）
+      ctx.beginPath(); ctx.moveTo(42,48); ctx.bezierCurveTo(44,43, 49,41, 53,43);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
+      ctx.restore();
+    } },
     heartSticker: { label: 'ハートシール', draw(ctx, s) {
       heartPath(ctx, s);
       ctx.lineJoin = 'round';
@@ -6568,6 +6653,14 @@
       { type: 'dstamp', id: 'star4', nx: 0.83, ny: 0.80, fsize: 0.13 },
       { type: 'text', t: 'アゲアゲ⤴', style: 'sticker', color: '#ff8a2a', nx: 0.31, ny: 0.882, fs: 0.075, rotDeg: 4 },
     ] },
+    /* ★3 LOVE（淡・5点。銀枠と白中抜きだけ。いちばん写真が見える型） */
+    { label: 'LOVE', items: [
+      rkFrame('gin'),
+      { type: 'text', t: 'LOVE', style: 'outline', nx: 0.50, ny: 0.105, fs: 0.115, rotDeg: -4 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.145, ny: 0.185, fsize: 0.10 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.865, ny: 0.205, fsize: 0.085 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.735, ny: 0.925, fsize: 0.16 },
+    ] },
     { label: 'ラブラブ', items: [
       rkFrame('gin'),
       { type: 'dstamp', id: 'heartChalk', nx: 0.095, ny: 0.315, fsize: 0.12 },
@@ -6578,6 +6671,28 @@
       { type: 'dstamp', id: 'dateRetro', nx: 0.225, ny: 0.145, fsize: 0.15 },
       { type: 'stamp', char: '🌟', nx: 0.115, ny: 0.72, fsize: 0.11 },
       { type: 'text', t: 'ラブラブ♡', style: 'neon', nx: 0.50, ny: 0.895, fs: 0.095, rotDeg: 0 },
+    ] },
+    /* ★5 愛羅武勇（濃・10点。金は「最強」「永久不滅」で使っているので、ここは銀で差をつける） */
+    { label: '愛羅武勇', items: [
+      rkFrame('gin'),
+      { type: 'text', t: '愛羅武勇', style: 'sticker', color: '#ff3b30', nx: 0.50, ny: 0.115, fs: 0.102, rotDeg: -4 },
+      { type: 'stroke', penType: 'gin', size: 0.014, pts: [{ nx: 0.20, ny: 0.186 }, { nx: 0.50, ny: 0.176 }, { nx: 0.80, ny: 0.187 }] },
+      { type: 'stamp', char: '💀', nx: 0.110, ny: 0.285, fsize: 0.13 },
+      { type: 'stamp', char: '👊', nx: 0.890, ny: 0.270, fsize: 0.13 },
+      { type: 'stamp', char: '🔥', nx: 0.115, ny: 0.545, fsize: 0.12 },
+      { type: 'stamp', char: '⚡', nx: 0.885, ny: 0.520, fsize: 0.115 },
+      { type: 'dstamp', id: 'star4', nx: 0.875, ny: 0.755, fsize: 0.115 },
+      { type: 'dstamp', id: 'stripePop', nx: 0.125, ny: 0.790, fsize: 0.15 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.440, ny: 0.935, fsize: 0.155 },
+    ] },
+    /* ★6 2娘1（淡・6点。ふたりで撮った客のための型。左右対称に置かない） */
+    { label: '2娘1', items: [
+      { type: 'text', t: '2娘1', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.105, fs: 0.115, rotDeg: -5 },
+      { type: 'stroke', penType: 'kin', size: 0.012, pts: [{ nx: 0.33, ny: 0.172 }, { nx: 0.50, ny: 0.164 }, { nx: 0.68, ny: 0.174 }] },
+      { type: 'dstamp', id: 'heartChalk', nx: 0.115, ny: 0.245, fsize: 0.13 },
+      { type: 'dstamp', id: 'heartChalk', nx: 0.885, ny: 0.290, fsize: 0.115 },
+      { type: 'dstamp', id: 'ribbonPop', nx: 0.135, ny: 0.795, fsize: 0.145 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.755, ny: 0.925, fsize: 0.16 },
     ] },
     { label: 'チョベリグ', items: [
       { type: 'text', t: 'チョベリグ', style: 'sticker', color: '#5cc8ff', nx: 0.50, ny: 0.10, fs: 0.095, rotDeg: -2 },
@@ -6597,8 +6712,54 @@
       { type: 'text', t: '心友', style: 'sticker', color: '#5cc8ff', nx: 0.135, ny: 0.52, fs: 0.10, rotDeg: -8 },
       { type: 'dstamp', id: 'sparkleLine', nx: 0.875, ny: 0.45, fsize: 0.11 },
       { type: 'stamp', char: '🌟', nx: 0.115, ny: 0.78, fsize: 0.11 },
-      { type: 'stamp', char: '💫', nx: 0.885, ny: 0.76, fsize: 0.10 },
+      /* 2026-08-28 柄本の考証点検: 💫 は平成モードの stamps 一覧に無い絵文字だった。
+         ＝ **客が自分の手では絶対に押せない絵柄が、らくらくの型にだけ混ざっていた**。
+         規律: らくらくの型に置いてよいのは、その客が自分の手でも置ける道具だけ。 */
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.885, ny: 0.760, fsize: 0.105 },
       { type: 'text', t: '我等友情永久不滅成', style: 'sticker', color: '#ff2fa0', nx: 0.50, ny: 0.895, fs: 0.058, rotDeg: -1 },
+    ] },
+    /* ★9 金わく（淡・4点。**12型で唯一、見出しの文字を持たない型**。
+       これは抜けではなく設計: 「言葉は自分で書きたいが、枠と日付は欲しい」客の逃げ道。
+       実機が「落書きが苦手な人も」と言って用意した機能に、いちばん近いのがこの型） */
+    { label: '金わく', items: [
+      rkFrame('kin'),
+      { type: 'dstamp', id: 'star4', nx: 0.115, ny: 0.145, fsize: 0.115 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.885, ny: 0.815, fsize: 0.10 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.755, ny: 0.925, fsize: 0.165 },
+    ] },
+    /* ★10 仲良し4EVER（中・8点。ふきだし dstamp が12型中ここだけ＝見た目の指紋になる） */
+    { label: '仲良し4EVER', items: [
+      { type: 'text', t: '仲良し4EVER', style: 'sticker', color: '#3cae6a', nx: 0.50, ny: 0.095, fs: 0.072, rotDeg: -3 },
+      { type: 'stroke', penType: 'gin', size: 0.012, pts: [{ nx: 0.28, ny: 0.160 }, { nx: 0.52, ny: 0.152 }, { nx: 0.74, ny: 0.162 }] },
+      { type: 'dstamp', id: 'dotsPop', nx: 0.115, ny: 0.265, fsize: 0.145 },
+      { type: 'dstamp', id: 'dotsPop', nx: 0.885, ny: 0.240, fsize: 0.125 },
+      { type: 'dstamp', id: 'bubble', nx: 0.125, ny: 0.600, fsize: 0.155 },
+      { type: 'stamp', char: '🎤', nx: 0.885, ny: 0.575, fsize: 0.115 },
+      { type: 'dstamp', id: 'ribbonPop', nx: 0.875, ny: 0.815, fsize: 0.13 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.245, ny: 0.925, fsize: 0.15 },
+    ] },
+    /* ★11 アゲアゲ（濃・10点。ヒョウ柄を3つ打って"柄で余白を埋める"当時の落書きを再現する型） */
+    { label: 'アゲアゲ', items: [
+      rkFrame('kin'),
+      { type: 'text', t: 'アゲアゲ⤴', style: 'sticker', color: '#ff8a2a', nx: 0.50, ny: 0.115, fs: 0.098, rotDeg: -6 },
+      { type: 'dstamp', id: 'leopardPop', nx: 0.115, ny: 0.245, fsize: 0.15 },
+      { type: 'dstamp', id: 'leopardPop', nx: 0.885, ny: 0.235, fsize: 0.135 },
+      { type: 'stamp', char: '🐯', nx: 0.885, ny: 0.475, fsize: 0.125 },
+      { type: 'stamp', char: '🎤', nx: 0.115, ny: 0.500, fsize: 0.115 },
+      { type: 'dstamp', id: 'leopardPop', nx: 0.125, ny: 0.745, fsize: 0.13 },
+      { type: 'dstamp', id: 'star4', nx: 0.875, ny: 0.715, fsize: 0.12 },
+      { type: 'stamp', char: '🔥', nx: 0.875, ny: 0.900, fsize: 0.105 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.400, ny: 0.940, fsize: 0.15 },
+    ] },
+    /* ★12 太子祭（淡・6点。記念枠。実機の「季節限定ツール」の置き換え＝考証ではなく企画由来。
+       実機に「太子祭」があったのではない。文化祭の記念という、この企画固有の枠） */
+    { label: '太子祭', items: [
+      { type: 'text', t: '太子祭', style: 'sticker', color: '#d94a6a', nx: 0.50, ny: 0.100, fs: 0.105, rotDeg: -3 },
+      { type: 'stroke', penType: 'kin', size: 0.013, pts: [{ nx: 0.30, ny: 0.166 }, { nx: 0.50, ny: 0.157 }, { nx: 0.71, ny: 0.168 }] },
+      { type: 'dstamp', id: 'star4', nx: 0.115, ny: 0.200, fsize: 0.12 },
+      { type: 'dstamp', id: 'star4', nx: 0.885, ny: 0.215, fsize: 0.105 },
+      { type: 'dstamp', id: 'sparkleLine', nx: 0.125, ny: 0.800, fsize: 0.10 },
+      { type: 'dstamp', id: 'dateRetro', nx: 0.755, ny: 0.925, fsize: 0.17 },
     ] },
   ];
 
@@ -6810,11 +6971,40 @@
     c.restore();
   }
 
+  /* 🚨 音羽さんの注意4（2026-08-28）: `heisei_korokoro`（5.11秒）と鳴り合う恐れがある。
+     どちらも落書き画面の「初回だけの道具説明」で、案内チャンネルは1本なので
+     **後から鳴った方が前を切る**。スタンプを触った直後にらくらくを押した客は、
+     korokoro が途中で切れる（＝説明が意味をなさないまま消える）。
+
+     音羽さんが示した2案のうち **「queueAnnounce で繋ぐ」** を採った。
+     もう一案の「1セッションに1本まで・らくらく優先」だと、
+     先にスタンプを触った客には **12型化の告知そのものが届かない**（柄本さんが
+     「この1本が無いと12型化は半分しか効かない」と言っている、まさにその客に届かない）。
+     繋げば、どちらも最後まで鳴り、どちらも消えない。
+     chainAnnounce は「1本目がバスに居なければ、そのまま2本目へ」も面倒を見る。 */
+  function announceRakurakuFirst() {
+    if (onceVoiceDone.rakurakuFirst) return;
+    onceVoiceDone.rakurakuFirst = true;
+    /* 🚨 実測で分かったこと: 切ってしまう相手は korokoro とは限らない。
+       台本どおりに撃ったら `decoPhotoSwitchH` を 777ms で切っていた（クリップは1.6秒ある）。
+       なので **「korokoro が鳴っていたら」ではなく「いま何か鳴っていたら」** で繋ぐ。 */
+    const inFlight = curVoiceKey || (voiceQueue.length ? voiceQueue[voiceQueue.length - 1].key : null);
+    if (inFlight) chainAnnounce(inFlight, 'heiseiRakurakuFirst', 300);
+    else playAnnounce('heiseiRakurakuFirst');
+    /* 予約は「画面が変わった」等でバスごと捨てられることがある（stopVoice が voiceQueue を空にする）。
+       そのとき初回フラグだけ立っていると **一度も鳴らないまま二度と鳴らない**。
+       8秒たっても鳴った形跡が無ければフラグを戻し、次に押したときに鳴り直せるようにする。 */
+    setTimeout(() => {
+      if (!voiceHistory.some(v => v.key === 'heiseiRakurakuFirst')) onceVoiceDone.rakurakuFirst = false;
+    }, 8000);
+  }
+
   const rakurakuBtn = $('#btn-rakuraku');
   if (rakurakuBtn) {
     rakurakuBtn.addEventListener('click', () => {
       if (state.remaining <= 0) return;
       const design = rakurakuNext();
+      announceRakurakuFirst(); // 初回だけ「もういっかい おすと、ちがう かざりに なるよー！」
       applyRakurakuTo(curShot, design);
       rakurakuIdx++;
       renderRakurakuPreview();
@@ -6829,6 +7019,7 @@
     rakurakuAllBtn.addEventListener('click', () => {
       if (state.remaining <= 0) return;
       const design = rakurakuNext();
+      announceRakurakuFirst(); // 「4まいぜんぶに」から入った客にも1回だけ
       decoShots().forEach((_, i) => applyRakurakuTo(i, design));
       rakurakuIdx++;
       renderRakurakuPreview();
@@ -9033,6 +9224,7 @@
       applyRakurakuTo(i, d);
       return true;
     },
+    drawObject,      // 型の見本を検証用に別キャンバスへ焼くため（2026-08-28）
     rakurakuPlacedOn: (i) => ((shotDeco[i] && shotDeco[i].objects) || []).filter(o => o && o[RK_MARK]).map(o => JSON.parse(JSON.stringify(o))),
     /* 鏡像の検証用（2026-08-28）。**3つの根拠が同じ答えを出しているか**を外から測る。
        bodyMirror（ライブ映像のCSS）・isMirrored（撮影データとチラ見せ）・activeFacing（実際の向き） */
