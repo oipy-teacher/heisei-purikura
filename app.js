@@ -8298,7 +8298,7 @@
     }
     printStage.classList.remove('ready');
     printStage.classList.add('printing');
-    // 写真1まいずつの保存の並びを組み立てる（2026-08-22。令和のみ・平成では非表示）
+    // 写真1まいずつの保存の並びを組み立てる（2026-08-22新設・2026-08-28 オーナー裁定で平成にも出す）
     buildSingleSaveRow();
     announceByMode('printOut');
     if (printReadyId) clearTimeout(printReadyId);
@@ -8571,13 +8571,21 @@
 
   /* 1まい保存の並び。押した瞬間に deliverImage へ入る（＝タップと同じタスクの中で
      navigator.share に届く）。ここで await を挟むとiOSで共有シートが開かない。
-     ※ 平成モードには出さない（era-designer が考証確認中のため今回は令和だけ・2026-08-22） */
+
+     🚨 2026-08-28 オーナー裁定で **平成にも出す**（8/22は「考証確認中」で令和だけだった）。
+     「そこはアプリだから平成版も一枚ずつ保存可能にしよう！！」
+     判断の線引き＝**保存・持ち帰りに関わる機能は平成にも入れてよい。
+     演出・UI・語彙・写りなど"体験の中身"は従来どおり平成の考証に従う。**
+     （会社ノートの決めごと「💾『持ち帰る手段』は考証の対象外」）
+     写真は decoShots()＝平成の加工（うつりの年代の色味）が乗った processedShots を使い、
+     落書きと飾りも composeSinglePhoto がシールと同じ関数で重ねるので、
+     **平成の1まいは平成の見た目のまま**落ちる。見た目（CSS）だけ平成の様式に分けてある。 */
   function buildSingleSaveRow() {
     const box = $('#single-save');
     const row = $('#single-save-row');
     if (!box || !row) return;
     const shots = decoShots();
-    if (state.mode !== 'reiwa' || !shots.length) { box.style.display = 'none'; return; }
+    if (!shots.length) { box.style.display = 'none'; return; }
     box.style.display = '';
     row.innerHTML = '';
     shots.forEach((shot, i) => {

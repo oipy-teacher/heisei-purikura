@@ -1365,6 +1365,21 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
 }
 .single-save-btn canvas { display: block; width: 88px; height: 66px; border-radius: 4px; }
 .single-save-btn .ss-num { font-size: 12px; font-weight: 800; color: #7a3fb0; white-space: nowrap; }
+/* 平成の様式（2026-08-28 オーナー裁定で平成にも1まい保存を出した）。
+   素の指定がもともと平成寄りの色だったが、**たまたま合っている**状態に頼らない。
+   平成＝角を立てる・白フチ＋ネオンピンクの外輪・見出しは黄。令和のUIは持ち込まない。 */
+/* 🚨 最初 --h-yellow(#ffe066) にしたら、平成のプリント画面の地（クリーム色のノート）に
+   ほとんど溶けた（実測コントラスト比 1.3:1）。平成＝黄、と様式だけで決めない。
+   **地の色を見てから決める。** 同じ画面の他の文字と同じ濃さにする（R-108「収まった≠読める」） */
+body.theme-heisei .single-save-title { color: var(--h-ink); font-weight: 900; }
+body.theme-heisei .single-save-btn {
+  border: 3px solid var(--h-pink);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px #ffffff;
+  background: #fff;
+}
+body.theme-heisei .single-save-btn canvas { border-radius: 0; }
+body.theme-heisei .single-save-btn .ss-num { color: var(--h-purple); font-weight: 900; }
 body.theme-reiwa .single-save-title { color: var(--r-brown); font-weight: 600; }
 body.theme-reiwa .single-save-btn { border-color: rgba(74,63,56,.25); border-radius: 2px; background: #fefcf9; }
 body.theme-reiwa .single-save-btn canvas { border-radius: 2px; }
