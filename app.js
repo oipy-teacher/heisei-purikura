@@ -1545,6 +1545,7 @@
         container.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
         state.layout = layout;
+        refitRakuraku(); // 令和にらくらくは無いので通常は空振り。分割を変える経路は必ずここを通す（置いていかれない形）
       });
       container.appendChild(el);
     });
@@ -6628,45 +6629,117 @@
                    安全域の**四隅**がその円に入るまで、縦横の比を保ったまま縮める
                    （旧版は「丸は追わない」と割り切っていたが、まる4で見出しと日付が
                      欠けるのを検見が実測したので、ここで一緒に閉じる） */
-  let rakurakuSafeCache = null;
-  function rakurakuSafeCell() {
-    if (rakurakuSafeCache) return rakurakuSafeCache;
+  /* 🚨🚨 2026-08-28（オーナー実機指摘③「らくらく落書きの機能が、小さい。サイズが合ってなかった」）
+     — 8/23 の直し方は **効き過ぎていた**。
+
+     8/23 は「レイアウトが後から変わっても壊れない」ために **LAYOUTS 6種すべての共通安全域**を
+     取った。結果、どの分割を選んでも欠けない代わりに、型は写真の中央
+     **56.9% × 65.2%（面積で 37%）** の箱に押し込まれた（実測: 364×313 / 640×480）。
+     しかも sampleCellObjects は文字も飾りも「セル短辺に比例」させるので、
+     箱が小さいぶん **飾り自体も小さくなる**。二重に小さくなっていた。
+
+     ＝「切れない」は守れたが「小さすぎない」を落とした。オーナーが見たのはこれ。
+
+     直し方: **共通安全域をやめ、いま出す分割ぴったりの安全域に合わせる。**
+     そのうえで、平成のように **落書きのあとに分割が変わる** 経路では、
+     分割が決まった瞬間に **同じ型で置き直す**（refitRakuraku）。
+     置き直しは「型の名前」から作り直すだけなので、客が自分で描いた線・押したスタンプは触らない。
+     → 「あとから変わっても壊れない」は、**縮めて防ぐのではなく、変わったら合わせ直す**で満たす。
+
+     各分割の安全域（この関数の実際の出力を __puriDebug.rakurakuSafeFor() で実測した値。
+     RK_EDGE_INSET の 1.5% を引いた後の数字なので、上の理屈値より一回り小さい）:
+       4分割 408×473 ／ 2枚ワイド 630×350 ／ 6分割 630×473 ／ 16分割 409×473
+       まる4・まるMIX 334×334（正円に内接する正方形。ここは幾何学的にこれ以上広げられない）
+     旧版（共通安全域）は分割によらず 364×313 の一択だった。
+
+     計算（実測ではなくレイアウト定義から機械的に導く。レイアウトを足しても自動で入る）:
+       ・四角セル … cover の結果、写真のうち (cw/scale)/SHOT_W × (ch/scale)/SHOT_H だけが残る
+       ・丸セル  … 正方形の枠に cover したうえで半径 min(SHOT_W,SHOT_H)/2 の円で抜かれる。
+                   安全域の**四隅**がその円に入るまで、縦横の比を保ったまま縮める */
+  const RK_EDGE_INSET = 0.985; // 端に吸い付かせない保険（飾りは中心座標で置かれるため）
+  const rakurakuSafeByLayout = new Map();
+  function rakurakuSafeCellFor(layout) {
+    const L = layout || state.layout || LAYOUTS[0];
+    const key = L.id || 'default';
+    if (rakurakuSafeByLayout.has(key)) return rakurakuSafeByLayout.get(key);
     const full = { x: 0, y: 0, w: SHOT_W, h: SHOT_H };
     let vx = 1, vy = 1;
     let circleR = Infinity; // 丸セルで抜かれるときの、写真座標での半径
-    let seen = 0;
-    LAYOUTS.forEach((L) => {
-      let cells = [];
-      try { cells = layoutCells(L) || []; } catch (e) { return; }
-      if (!cells.length) return;
-      seen++;
-      if (L.shape === 'circle') {
-        // 丸セルは正方形の枠へ cover するので、見える範囲は「写真の短辺ぶんの正方形」
-        const side = Math.min(SHOT_W, SHOT_H);
-        vx = Math.min(vx, side / SHOT_W);
-        vy = Math.min(vy, side / SHOT_H);
-        circleR = Math.min(circleR, side / 2);
-        return;
-      }
+    let cells = [];
+    try { cells = layoutCells(L) || []; } catch (e) { return full; }
+    if (!cells.length) return full;
+    if (L.shape === 'circle') {
+      // 丸セルは正方形の枠へ cover するので、見える範囲は「写真の短辺ぶんの正方形」
+      const side = Math.min(SHOT_W, SHOT_H);
+      vx = side / SHOT_W;
+      vy = side / SHOT_H;
+      circleR = side / 2;
+    } else {
       cells.forEach((c) => {
         const scale = Math.max(c.w / SHOT_W, c.h / SHOT_H);
         vx = Math.min(vx, (c.w / scale) / SHOT_W);
         vy = Math.min(vy, (c.h / scale) / SHOT_H);
       });
-    });
-    if (!seen) return full;
+    }
     if (isFinite(circleR)) {
       const dist = Math.hypot(vx * SHOT_W / 2, vy * SHOT_H / 2);
       if (dist > circleR) { const k = circleR / dist; vx *= k; vy *= k; }
     }
-    vx = Math.max(0.45, Math.min(1, vx));  // 縮めすぎない床（型が小さくなりすぎると別の手抜きに見える）
-    vy = Math.max(0.45, Math.min(1, vy));
-    rakurakuSafeCache = { x: SHOT_W * (1 - vx) / 2, y: SHOT_H * (1 - vy) / 2, w: SHOT_W * vx, h: SHOT_H * vy };
-    return rakurakuSafeCache;
+    vx = Math.max(0.45, Math.min(1, vx)) * RK_EDGE_INSET;
+    vy = Math.max(0.45, Math.min(1, vy)) * RK_EDGE_INSET;
+    const cell = { x: SHOT_W * (1 - vx) / 2, y: SHOT_H * (1 - vy) / 2, w: SHOT_W * vx, h: SHOT_H * vy };
+    rakurakuSafeByLayout.set(key, cell);
+    return cell;
+  }
+  function rakurakuSafeCell() { return rakurakuSafeCellFor(state.layout); }
+
+  /* 型の1個ぶんの「置いた場所の大きさ」を見積もる（2026-08-28）。
+     drawObject はどれも **中心 (x,y) に size 相当の大きさで描く**ので、その約束を使う。
+     text だけは横に長いので、既に持っている推定幅 o.w を使い、縦は級数の1.6倍を見る。 */
+  function rkBBox(o) {
+    if (o.type === 'stroke') {
+      const xs = o.pts.map(q => q.x), ys = o.pts.map(q => q.y), h = o.size / 2;
+      return { x0: Math.min(...xs) - h, y0: Math.min(...ys) - h, x1: Math.max(...xs) + h, y1: Math.max(...ys) + h };
+    }
+    if (o.type === 'text') {
+      const hw = o.w / 2, hh = o.fontSize * 0.8;
+      return { x0: o.x - hw, y0: o.y - hh, x1: o.x + hw, y1: o.y + hh };
+    }
+    if (o.type === 'kira') {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      o.items.forEach(k => { const h = k.size / 2; x0 = Math.min(x0, k.x - h); y0 = Math.min(y0, k.y - h); x1 = Math.max(x1, k.x + h); y1 = Math.max(y1, k.y + h); });
+      return { x0, y0, x1, y1 };
+    }
+    const h = (o.size || 0) / 2;
+    return { x0: o.x - h, y0: o.y - h, x1: o.x + h, y1: o.y + h };
+  }
+  function rkMove(o, dx, dy) {
+    if (!dx && !dy) return;
+    if (o.type === 'stroke') { o.pts.forEach(q => { q.x += dx; q.y += dy; }); return; }
+    if (o.type === 'kira') { o.items.forEach(k => { k.x += dx; k.y += dy; }); return; }
+    o.x += dx; o.y += dy;
+  }
+  /* 🚨 2026-08-28: 安全域を広げたぶん、飾りそのものも大きくなる（サイズはセル短辺に比例）。
+     その結果、型の座標では端ぎりぎりだった飾りが **数px はみ出す**ようになった
+     （実測: 2枚ワイド・6分割の日付スタンプが 0.8〜3.5px 下へ出た）。
+     型の座標を1つずつ手で直すと、**型を足すたびに同じ作業が要る**（柄本さんの追加型が控えている）。
+     なので座標ではなく **仕組みで閉じる**: 置いたあとに1個ずつ枠へ押し戻す。
+     押し戻しは平行移動だけ（縮めない）。数pxの移動なので絵の意図は壊れない。 */
+  function rakurakuClampInto(objs, cell) {
+    const X0 = cell.x, Y0 = cell.y, X1 = cell.x + cell.w, Y1 = cell.y + cell.h;
+    objs.forEach((o) => {
+      const bb = rkBBox(o);
+      let dx = 0, dy = 0;
+      if (bb.x0 < X0) dx = X0 - bb.x0; else if (bb.x1 > X1) dx = X1 - bb.x1;
+      if (bb.y0 < Y0) dy = Y0 - bb.y0; else if (bb.y1 > Y1) dy = Y1 - bb.y1;
+      rkMove(o, dx, dy);
+    });
+    return objs;
   }
 
   function rakurakuObjects(design) {
-    const objs = sampleCellObjects(design.items, rakurakuSafeCell());
+    const cell = rakurakuSafeCell();
+    const objs = rakurakuClampInto(sampleCellObjects(design.items, cell), cell);
     objs.forEach(o => { o[RK_MARK] = 1; });
     return objs;
   }
@@ -6683,8 +6756,45 @@
     }
     const objs = rakurakuObjects(design);
     arr.push(...objs);
+    /* どの型を載せたかを覚えておく（2026-08-28）。分割が後から決まる平成では、
+       決まった瞬間に **同じ型で置き直す**（refitRakuraku）ためにこれが要る。
+       覚えるのは「型そのもの」ではなく label（＝名前）。型の定義を書き換えても壊れない */
+    shotDeco[i].rkLabel = design.label;
     shotDeco[i].undo.push({ op: 'rakuraku', removed, count: objs.length });
     if (shotDeco[i].undo.length > 60) shotDeco[i].undo.shift();
+  }
+
+  /* 分割が変わったら、載せてある らくらくの型を **その分割ぴったりの大きさで置き直す**（2026-08-28）。
+
+     平成は 8/13 のオーナー裁定で「撮影 → 落書き → **分割えらび** → 排出」の順なので、
+     客が らくらく を押した時点では、どの分割で焼くかがまだ決まっていない。
+     8/23 はこれを「全分割の共通安全域＝いちばん小さい箱」で防いだが、
+     その代償が「小さすぎる」だった（オーナー実機指摘③）。
+
+     ここでは **決まってから合わせ直す**。作り直すのは印（RK_MARK）が付いたものだけなので、
+     客が自分で描いた線・押したスタンプ・おなまえスタンプには一切触れない。
+
+     ⚠️ undo は積み直さない（積むと「もどす」1回の意味が変わる）。
+        この置き直しが走るのは分割ゲートで分割を選んだ瞬間＝そのまま排出へ進む地点で、
+        以降「もどす」に戻る導線が無いことを確認したうえでの判断。 */
+  function refitRakuraku() {
+    let changed = 0;
+    for (let i = 0; i < shotDeco.length; i++) {
+      const sd = shotDeco[i];
+      if (!sd || !sd.rkLabel) continue;
+      const design = RAKURAKU_HEISEI.find(d => d.label === sd.rkLabel);
+      if (!design) continue;
+      const arr = sd.objects;
+      let hadIndex = -1;
+      for (let k = arr.length - 1; k >= 0; k--) {
+        if (arr[k] && arr[k][RK_MARK]) { hadIndex = k; arr.splice(k, 1); }
+      }
+      if (hadIndex < 0) continue; // 客が「ぜんぶ消す」等で外していたら、勝手に復活させない
+      const objs = rakurakuObjects(design);
+      arr.splice(hadIndex, 0, ...objs); // 元の重ね順（客の落書きとの前後関係）を保つ
+      changed++;
+    }
+    return changed;
   }
 
   function renderRakurakuPreview() {
@@ -7780,6 +7890,10 @@
         list.querySelectorAll('.layout-item').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
         state.layout = layout; // 落書きは写真単位なので、分割を変えても composeFinal が付いてくる
+        /* 🚨 2026-08-28: 分割が決まった **この瞬間** に、らくらくの型をその分割ぴったりへ置き直す。
+           8/23 は「どの分割でも欠けない最小の箱」に縮めて防いだが、それが「小さすぎる」の原因だった。
+           縮めて防ぐのではなく、決まってから合わせ直す。客の手描きスタンプ・線には触らない */
+        refitRakuraku();
 
         composeSheet();
         gate.classList.add('hidden');
@@ -8823,7 +8937,7 @@
     // セルへの「おさまり」の検証用（2026-08-17 指摘②）
     drawShotFit, shotFocus, PHOTO_FITS, layoutCells, LAYOUTS,
     setPhotoFit: (v) => { state.photoFit = v; },
-    setLayout: (id) => { state.layout = LAYOUTS.find(l => l.id === id) || LAYOUTS[0]; },
+    setLayout: (id) => { state.layout = LAYOUTS.find(l => l.id === id) || LAYOUTS[0]; refitRakuraku(); },
     photoPick: () => state.photoPick || [],
     // 顔の位置を差し替えて「顔にあわせる」の寄せ方を測る（正規化座標の1点だけの偽ランドマーク）
     setFakeFace: (pt) => { state.faceData = pt ? [[[{ x: pt.x - 0.08, y: pt.y - 0.1 }, { x: pt.x + 0.08, y: pt.y + 0.1 }]]] : []; },
@@ -8900,9 +9014,18 @@
        **テスト側でも項目を列挙しない**ので、state を足してもテストが自動で見張る */
     stateDiff: () => stateKeysDifferingFromDefaults(),
     rakurakuSafe: () => ({ ...rakurakuSafeCell() }),
+    rakurakuSafeFor: (id) => ({ ...rakurakuSafeCellFor(LAYOUTS.find(l => l.id === id) || LAYOUTS[0]) }),
     refitRakuraku,
+    applyRakurakuTo,
+    rakurakuDesigns: () => RAKURAKU_HEISEI.map(d => d.label),
     // 型を名前で名指しして載せる（回帰テストが「押して回す」に頼らず 型×分割 を総当たりできる）
+    applyRakurakuByLabel: (i, label) => {
+      const d = RAKURAKU_HEISEI.find(x => x.label === label);
+      if (!d) return false;
+      applyRakurakuTo(i, d);
+      return true;
     },
+    rakurakuPlacedOn: (i) => ((shotDeco[i] && shotDeco[i].objects) || []).filter(o => o && o[RK_MARK]).map(o => JSON.parse(JSON.stringify(o))),
     /* 鏡像の検証用（2026-08-28）。**3つの根拠が同じ答えを出しているか**を外から測る。
        bodyMirror（ライブ映像のCSS）・isMirrored（撮影データとチラ見せ）・activeFacing（実際の向き） */
     mirrorState: () => ({
