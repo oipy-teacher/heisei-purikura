@@ -372,6 +372,14 @@
     frame: MODES.heisei.frames[0],
     layout: LAYOUTS[0],
     shotMode: 'bust',    // bust = 手持ち自撮り（前面カメラ） / full = 三脚・全身（背面カメラ）
+    /* 🚨 2026-08-28（オーナー裁定「アウトカメラで反転しないようにして」）:
+       鏡像にするかどうかは **shotMode（希望）ではなく、いま実際に開いているカメラ** で決める。
+       acquireCamera() は「希望の向き → 解像度を捨てる → **反対の向き** → 制約なし」と
+       段階フォールバックするので、背面が取れずに前面へ落ちた瞬間、
+       希望値で判断していると「実際は前面カメラなのに鏡像にしない」＝
+       客が手を上げると画面の中の手が逆に動く、が起きる（8/25 に自分が「裁定待ち」として上げた件）。
+       null = まだカメラを開いていない（＝希望値で仮に決める）。 */
+    activeFacing: null,  // 'user'（前面・鏡像あり） / 'environment'（背面・鏡像なし） / null
     bgmChoice: 'auto',   // BGM選択（1997年以降の実機の型・2026-08-12）。auto = モードおまかせ
     heiseiEra: 'standard', // 平成モードの写り年代。standard | y2k（〜2006の黄み肌・加工ひかえめ）
     chromaOn: false,
@@ -1666,10 +1674,50 @@
      bust = 手に持って自撮り。前面カメラ・鏡像。これまでどおりの写り。
      full = 三脚にiPadを固定し、背面カメラで全身を撮る。文化祭の撮影ルーム用。
             背景はプロジェクター投影を使うので、デジタル背景（くりぬき）は強制OFFにする。 */
+  /* ===== 鏡像の向きを1箇所で決める（2026-08-28・オーナー裁定） =====
+     旧版は `state.shotMode !== 'full'` を **3箇所に直書き**していた
+     （body[data-mirror] / captureFrame / showSnapPreview）。
+     希望の向きと実際に開いたカメラがズレたときに3箇所が同時に嘘をつくので、
+     ここ1本に集約する。**ライブ映像・撮影データ・チラ見せが必ず同じ答えを見る。**
+
+     判定の優先順位（上から確かなもの順）:
+       ① トラックの getSettings().facingMode … 実際の向き。これがあれば必ずこれ
+       ② getCapabilities().facingMode が1つだけ … そのカメラは向きが確定している
+       ③ トラックの label に back/rear/front などが入っている（Android Chrome等）
+       ④ どれも取れない（PCのUSBカメラ・テスト用の擬似デバイス等）→ 希望した向き
+          ＝ 従来と同じ挙動に落ちる（この端末では反転の食い違いも起きない） */
+  function facingOfStream(stream, requested) {
+    try {
+      const t = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+      if (t) {
+        const s = t.getSettings ? t.getSettings() : null;
+        if (s && s.facingMode) return s.facingMode === 'environment' ? 'environment' : 'user';
+        const caps = t.getCapabilities ? t.getCapabilities() : null;
+        if (caps && Array.isArray(caps.facingMode) && caps.facingMode.length === 1) {
+          return caps.facingMode[0] === 'environment' ? 'environment' : 'user';
+        }
+        const label = (t.label || '').toLowerCase();
+        if (/(^|[^a-z])(back|rear|environment)([^a-z]|$)|背面|外側|リア/.test(label)) return 'environment';
+        if (/(^|[^a-z])(front|user|facetime)([^a-z]|$)|前面|内側|イン/.test(label)) return 'user';
+      }
+    } catch (e) { /* 取れないだけ。希望値へ落とす */ }
+    return requested;
+  }
+  /* いま鏡像にすべきか。**自分を映しているカメラ（前面）のときだけ鏡にする。**
+     背面カメラは自分を映していないので鏡にする理由が無く、
+     投影背景の文字も服のロゴも裏返ってしまう（オーナー実機指摘）。 */
+  function isMirrored() {
+    const f = state.activeFacing || (state.shotMode === 'full' ? 'environment' : 'user');
+    return f !== 'environment';
+  }
+  function applyMirror() {
+    document.body.dataset.mirror = isMirrored() ? 'on' : 'off';
+  }
+
   function applyShotMode() {
     const full = state.shotMode === 'full';
-    // 背面カメラでは鏡像にしない（投影背景の文字も服のロゴも裏返ってしまうため）
-    document.body.dataset.mirror = full ? 'off' : 'on';
+    // 鏡像は「いま実際に使っているカメラ」で決める（まだ開いていなければ希望値で仮置き）
+    applyMirror();
     document.querySelectorAll('.shotmode-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.shotmode === state.shotMode);
     });
@@ -2535,6 +2583,10 @@
     // 全身モードは三脚に固定して背面（アウト）カメラで撮る。バストアップは従来どおり前面。
     // （前面/背面の割り当ては現行仕様のまま。取れなかったときだけ下でフォールバックする）
     const facing = state.shotMode === 'full' ? 'environment' : 'user';
+    /* 前回のセッションで確定した向きを引きずらない。開き直すまでは「希望値で仮置き」に戻す
+       （もう一回あそぶ・えらび直す・もう一度ためす のどれで来ても同じ状態から始まる） */
+    state.activeFacing = null;
+    applyMirror();
     hideCamFail();
     showCamLoading(true);
     /* 「カメラ、じゅんび中ー！」は **待たされたときだけ** 鳴らす（2026-08-15）。
@@ -2550,6 +2602,13 @@
          これをしないと、勝った側の映像を映しながら負けた側のカメラも点きっぱなしになる */
       if (seq !== camStartSeq) { stream.getTracks().forEach(t => t.stop()); return; }
       state.stream = stream;
+      /* 🚨 ここが今回の修正の要（2026-08-28）。**取れたカメラの実際の向きで鏡像を決め直す。**
+         acquireCamera は背面が取れないと前面へフォールバックするので、
+         希望値のままだと「全身コースなのに実は前面カメラ・でも反転しない」になる。
+         ライブ映像（CSS）・撮影データ（captureFrame）・チラ見せ（showSnapPreview）は
+         すべて isMirrored() を見るので、この1行で3つとも実際の向きへ揃う。 */
+      state.activeFacing = facingOfStream(stream, facing);
+      applyMirror();
       video.srcObject = state.stream;
       detectTorch(state.stream); // LEDが使える端末か（Android Chromeの背面のみ。iOSは常に非対応）
       syncFlashUI();
@@ -2867,9 +2926,11 @@
     const c = document.createElement('canvas');
     c.width = SHOT_W; c.height = SHOT_H;
     const ctx = c.getContext('2d');
-    // 前面カメラのときだけ、鏡合わせのプレビューに合わせて左右反転して保存する。
-    // 背面カメラ（全身モード）は反転しない＝見たままが写る。
-    if (state.shotMode !== 'full') {
+    /* 鏡合わせのプレビューに合わせて左右反転して保存する。
+       🚨 2026-08-28: 判定を state.shotMode（希望）から **isMirrored()（実際の向き）** に変えた。
+       ここと body[data-mirror] が別々の根拠で決まっていると、
+       「画面では正しく見えていたのに、出来上がりだけ裏返る」が起きる。 */
+    if (isMirrored()) {
       ctx.translate(c.width, 0);
       ctx.scale(-1, 1);
     }
@@ -2903,16 +2964,20 @@
     roundRect(ctx, m - 12, m - 12, SHOT_W - (m - 12) * 2, SHOT_H - (m - 12) - (bottom - 24), 6);
     ctx.fill();
     ctx.shadowBlur = 0;
-    // 写真本体。前面カメラはCSS反転表示を相殺するため左右反転して描く（従来と同じ扱い）
+    /* 写真本体。鏡像表示のときはCSSの反転を相殺するため左右反転して描く。
+       🚨 2026-08-28: ここも isMirrored() に統一（判定の根拠を3箇所に分けない）。
+       この canvas は #preview-canvas なので body[data-mirror] のCSS反転が掛かる。
+       **同じ答えを見ていないと、チラ見せだけ鏡になる／ならない** が起きる。 */
     const px = m, py = m, pw = SHOT_W - m * 2, ph = SHOT_H - m - bottom;
     ctx.beginPath();
     ctx.rect(px, py, pw, ph);
     ctx.clip();
-    if (state.shotMode !== 'full') {
+    const mir = isMirrored();
+    if (mir) {
       ctx.translate(SHOT_W, 0);
       ctx.scale(-1, 1);
     }
-    drawCover(ctx, shot, state.shotMode !== 'full' ? SHOT_W - px - pw : px, py, pw, ph);
+    drawCover(ctx, shot, mir ? SHOT_W - px - pw : px, py, pw, ph);
     ctx.restore();
   }
 
@@ -8835,6 +8900,22 @@
        **テスト側でも項目を列挙しない**ので、state を足してもテストが自動で見張る */
     stateDiff: () => stateKeysDifferingFromDefaults(),
     rakurakuSafe: () => ({ ...rakurakuSafeCell() }),
+    refitRakuraku,
+    // 型を名前で名指しして載せる（回帰テストが「押して回す」に頼らず 型×分割 を総当たりできる）
+    },
+    /* 鏡像の検証用（2026-08-28）。**3つの根拠が同じ答えを出しているか**を外から測る。
+       bodyMirror（ライブ映像のCSS）・isMirrored（撮影データとチラ見せ）・activeFacing（実際の向き） */
+    mirrorState: () => ({
+      bodyMirror: document.body.dataset.mirror,
+      isMirrored: isMirrored(),
+      activeFacing: state.activeFacing,
+      shotMode: state.shotMode,
+    }),
+    facingOfStream,
+    captureFrame,   // 撮影データの向きを直接測る（ライブと食い違っていないか）
+    showSnapPreview,
+    // getUserMedia を偽物に差し替えて「背面が取れず前面へ落ちた」を再現する
+    fakeGUM: (fn) => { if (fn) { navigator.mediaDevices.getUserMedia = fn; } },
     // ペン種（2026-08-22）
     penTypes: () => (modeConf().penTypes || []).slice(),
     strokePolyline,
