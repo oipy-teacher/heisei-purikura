@@ -2150,6 +2150,25 @@
   }
 
   // ライブ盛れの1フレーム描画（previewCtx に、liveClean を土台として重ねる）
+  /* ライブ用の肌マスクを全解像度で作り、目・眉・唇の穴を開けて返す（2026-08-28）。
+     毎フレーム作り直すのは、liveSkinSmall（セグメンタの出力）に直接穴を開けると
+     次のフレームまで穴が残り、顔が動いたときに穴だけ置いていかれるため。 */
+  let liveMaskFull = null, liveMaskFullCtx = null;
+  function buildLiveMaskFull(w, h, eyeS) {
+    if (!liveMaskFull) liveMaskFull = document.createElement('canvas');
+    if (liveMaskFull.width !== w || liveMaskFull.height !== h) {
+      liveMaskFull.width = w; liveMaskFull.height = h;
+      liveMaskFullCtx = liveMaskFull.getContext('2d');
+    }
+    if (!liveMaskFullCtx) liveMaskFullCtx = liveMaskFull.getContext('2d');
+    liveMaskFullCtx.globalCompositeOperation = 'source-over';
+    liveMaskFullCtx.clearRect(0, 0, w, h);
+    liveMaskFullCtx.imageSmoothingEnabled = true;
+    liveMaskFullCtx.drawImage(liveSkinSmall, 0, 0, w, h);
+    cutFaceHoles(liveMaskFullCtx, liveFaces, w, h, eyeS);
+    return liveMaskFull;
+  }
+
   function renderLiveBeauty(ctx) {
     const conf = modeConf();
     const p = state.beauty;
@@ -2158,35 +2177,91 @@
     const clearS = (p.clear || 0) / 100;
     const w = SHOT_W, h = SHOT_H;
 
+    /* 🚨 「形 → 色」の順に入れ替えるのは **試して捨てた**（2026-08-28）。
+       本加工（warpShot → applyBeauty）と順序を揃えれば一致するはず、と考えて実装したが、
+       **ライブの絵が壊れた**（実測ではなく、出した画像を見て分かった）:
+       目・眉の保護穴はワープ前のランドマークで開くので、先に目を拡大すると
+       **拡大したぶんが穴からはみ出して美肌がかかり、目がグレーの塊になる**。
+       数字（顔肌ΔE 3.89→3.75）はわずかに良くなったが、見た目は明確に悪化した。
+       → 順序は v34 のまま「色 → 形」に戻す。ライブは近似なので、
+         **形を最後に置いて元の画素で上書きする**ほうが破綻しない。
+       ＝ 検見さんの §7-7「ΔEが合格でも『違う』と言われたら不合格」と同じ判断。 */
+    /* 🚨 2026-08-28（検見 P1-2 の2）: ライブの肌マスクは **穴を開けていなかった**。
+       本加工は cutFaceHoles で目・眉・唇を外すのに、ライブは顔ぜんぶを肌として塗るので、
+       撮影中は眉と目が溶けて見える（眉のキメ 15.5 → 9.05）。
+       顔ランドマークはライブでも取れている（liveFaces）ので、同じ関数を通す。
+       ⚠️ liveSkinSmall はセグメンタの小さい解像度。**その場で穴を開けると次のフレームまで残る**ので、
+       毎フレーム作り直す全解像度の控え（liveMaskFull）へ写してから開ける。 */
+    const liveMask = liveSkinReady ? buildLiveMaskFull(w, h, (p.eye || 0) / 100) : null;
     if ((skinS > 0 || whiteS > 0 || clearS > 0) && liveSkinReady) {
-      // ぼかし肌レイヤー（縮小→拡大。makeBlurred は共有キャンバスを返すので即描く）
+      /* 肌レイヤーの作り方を 2026-08-28 に組み直した（検見 P1-2）。
+         効果ごとに測ったら、ライブと本加工の差は **美肌ひとつが全部**だった
+         （美肌70 で ΔE 3.45・ライブが 2.79 暗い／美白・透明感・メイクは 1.05 以下）。
+         原因は2つ、どちらも「順番」の間違い:
+           ① **ぼかしてから肌で切っていた。** ぼかしの半径は原寸で約17px あるので、
+              顔のまわりの髪・背景の暗さが肌の内側へ入り込み、輪郭から17pxが暗くなる。
+              → **切ってからぼかす**（肌の色だけの平均になる）
+           ② **シミ取り（lighten）を素材ではなく画面側に掛けていた。**
+              本加工は heal を"素材"（baseObj.base）に掛けてから 0.77 で混ぜるが、
+              ライブは画面を明るくしたあと、明るくしていないぼかしを 0.77 で混ぜていた
+              ＝ せっかく消したシミを混ぜ戻していた。
+              → **素材側へ移す**（本加工と同じ形にする）
+         結果、レイヤーは本加工の baseObj.base と同じ意味「シミを消してならした肌」になる。 */
       const layerCtx = getSkinLayer(w, h);
       layerCtx.globalCompositeOperation = 'source-over';
       layerCtx.clearRect(0, 0, w, h);
       layerCtx.imageSmoothingEnabled = true;
-      layerCtx.drawImage(makeBlurred(liveClean, 5), 0, 0, w, h);
+      // ① 肌だけを切り抜いた原画（穴あきのマスクで目・眉・唇も守る）
+      layerCtx.drawImage(liveClean, 0, 0);
       layerCtx.globalCompositeOperation = 'destination-in';
-      layerCtx.drawImage(liveSkinSmall, 0, 0, w, h);
+      layerCtx.drawImage(liveMask, 0, 0);
+      layerCtx.globalCompositeOperation = 'source-over';
+      // ② シミ取りの近似: 自分のぼかしを lighten（明るいほうを採る）で重ねる
+      if (LIVE_HEAL > 0) {
+        layerCtx.globalCompositeOperation = 'lighten';
+        layerCtx.globalAlpha = Math.min(1, LIVE_HEAL);
+        layerCtx.drawImage(makeBlurred(skinLayerCanvas, 5), 0, 0, w, h);
+        layerCtx.globalCompositeOperation = 'source-over';
+        layerCtx.globalAlpha = 1;
+      }
+      // ③ 肌質をならす（本加工の guidedSmooth の近似）→ 最後にもう一度マスクで切る
+      layerCtx.globalCompositeOperation = 'copy';
+      layerCtx.drawImage(makeBlurred(skinLayerCanvas, 5), 0, 0, w, h);
+      layerCtx.globalCompositeOperation = 'destination-in';
+      layerCtx.drawImage(liveMask, 0, 0);
       layerCtx.globalCompositeOperation = 'source-over';
 
+      /* 🚨🚨 2026-08-28（検見 P1-2）: ライブと本加工の係数がバラバラで、
+         **いちばん選ばれるプリ盛れで顔肌の ΔE が 7.05**（ΔEは5を超えると誰でも違うと言う）。
+         明るさは −4.1、彩度は +4.4——ライブのほうが暗くて黄色い。
+         ＝「撮る前のほうが盛れていない」という逆方向の裏切り。
+         **係数を本加工と同じ数字にする。** ここから先は数字を1つだけ動かさないこと
+         （本加工側を変えたら、必ずこちらも同じ値にする。ズレると同じ裏切りが戻る）。 */
       if (skinS > 0) {
-        // 美肌: ぼかし肌を重ねて肌質をならす（ライブ簡易版）
-        ctx.globalAlpha = Math.min(1, skinS * 0.75);
+        /* 美肌: 「シミを消してならした肌」を混ぜる。**本加工とまったく同じ形・同じ係数**
+           （本加工: outCtx.globalAlpha = skinS * 1.1 で baseObj.base を重ねる）。
+           ここから先は数字を片方だけ動かさないこと。ズレると
+           「撮る前のほうが盛れていない」という裏切りが戻る。 */
+        ctx.globalAlpha = Math.min(1, skinS * 1.1);
         ctx.drawImage(skinLayerCanvas, 0, 0);
         ctx.globalAlpha = 1;
       }
       if (clearS > 0) {
-        // 透明感: 色ムラをならす（color合成）＋うっすらグロー。本番と同じ軸の簡易版
-        if (conf.clearColorSmooth && canUseColorBlend()) {
-          ctx.globalCompositeOperation = 'color';
-          ctx.globalAlpha = Math.min(1, clearS * 0.6);
-          ctx.drawImage(skinLayerCanvas, 0, 0);
-        }
+        // 透明感: うっすらグロー。本加工と同じ係数にする
         ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = clearS * 0.15;
+        ctx.globalAlpha = clearS * CLEAR_GLOW;
         ctx.drawImage(skinLayerCanvas, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
+        /* 色ムラの平滑化＋黄ぐすみ抜き。本加工とまったく同じ関数・同じ係数を通す
+           （2026-08-28。近似を別に作ると、また「撮る前と後で別物」が戻る）。
+           ⚠️ 画素をなめる処理なので、**顔のまわりだけ**に絞る（全面の1/4以下になる）。
+           重い端末では eyeOn の自動OFFに連動して止める（ワープと同じ扱い）。 */
+        if (conf.clearColorSmooth && livePerf.eyeOn) {
+          clearSkinTone(ctx.canvas, makeBlurredFull(liveClean, 5, 'liveClear'), liveMask, w, h,
+                        Math.min(1, clearS * CLEAR_MURA), Math.min(1, clearS * CLEAR_YELLOW),
+                        faceBox(liveFaces, w, h, 0.15));
+        }
       }
       if (whiteS > 0) {
         // 美白: 白を肌マスク越しにソフトライト合成（中間調リフト。スクリーンだと肌が灰色に霞む・2026-08-12再設計）
@@ -2194,20 +2269,84 @@
         layerCtx.fillStyle = '#ffffff';
         layerCtx.fillRect(0, 0, w, h);
         layerCtx.globalCompositeOperation = 'destination-in';
-        layerCtx.drawImage(liveSkinSmall, 0, 0, w, h);
+        layerCtx.drawImage(liveMask, 0, 0);
         layerCtx.globalCompositeOperation = 'source-over';
         ctx.globalCompositeOperation = 'soft-light';
-        ctx.globalAlpha = Math.min(1, whiteS * conf.skinTone.brightPerUnit * 5.0);
+        ctx.globalAlpha = Math.min(1, whiteS * conf.skinTone.brightPerUnit * 5.5); // 5.0 → 本加工と同じ 5.5
         ctx.drawImage(skinLayerCanvas, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
+        // 血色を戻す（本加工と同じ処理・同じ係数）
+        if (WHITE_SAT_RESTORE > 0 && canUseColorBlend()) {
+          layerCtx.clearRect(0, 0, w, h);
+          layerCtx.drawImage(liveClean, 0, 0);
+          layerCtx.globalCompositeOperation = 'destination-in';
+          layerCtx.drawImage(liveMask, 0, 0);
+          layerCtx.globalCompositeOperation = 'source-over';
+          ctx.globalCompositeOperation = 'saturation';
+          ctx.globalAlpha = Math.min(1, WHITE_SAT_RESTORE);
+          ctx.drawImage(skinLayerCanvas, 0, 0);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 1;
+        }
       }
     }
 
     // デカ目・小鼻（ライブ近似）＋チーク・リップ（重い端末では eyeOn の自動OFFに連動して両方止まる）
     if (livePerf.eyeOn) liveEyeMagnify(ctx, liveClean, liveFaces, p.eye / 100);
+    /* 🚨 たれ目 TYPE02 をライブにも出す（検見 P1-2 の5）。
+       v34 の renderLiveBeauty は eyeType を**一度も読んでいなかった**ので、
+       盛り画面で TYPE02 にしても撮影中はまったく分からなかった。
+       目尻の局所（半径 目幅×EYE_TAIL_R ≒ 24px）だけなので、本番と同じ directionalWarp が使える。 */
+    if (livePerf.eyeOn && (p.eyeType || 1) === 2 && (p.eye || 0) > 0 && liveFaces && liveFaces.length) {
+      const es = p.eye / 100;
+      liveFaces.forEach((lm) => {
+        if (!lm || lm.length < 478) return;
+        const li = lmToPx(lm[468], w, h), ri = lmToPx(lm[473], w, h);
+        const lw2 = dist(lmToPx(lm[33], w, h), lmToPx(lm[133], w, h));
+        const rw2 = dist(lmToPx(lm[362], w, h), lmToPx(lm[263], w, h));
+        [[lmToPx(lm[33], w, h), li, lw2], [lmToPx(lm[263], w, h), ri, rw2]].forEach(([corner, iris, ew]) => {
+          const dir = Math.sign(corner.x - iris.x) || 1;
+          directionalWarp(ctx.canvas, corner.x, corner.y, ew * EYE_TAIL_R, dir * es * ew * 0.06, es * ew * 0.16);
+        });
+      });
+    }
     if (livePerf.eyeOn) liveNoseSlim(ctx, liveClean, liveFaces, (p.nose || 0) / 100);
-    drawMakeup(ctx, liveFaces, w, h, (p.cheek || 0) / 100, (p.lip || 0) / 100, conf);
+    /* 🚨 小顔をライブにも入れる（検見 P1-2 の4）。v34 のライブには輪郭の補正が丸ごと無く、
+       「撮ったら急にあごが細くなる」＝ライブと出来上がりが別物の主因のひとつだった。
+       本加工と**同じ contourBandWarp・同じ定数**を使う（近似を別に作ると、また食い違う）。
+       重さ対策として輪郭の点を1つ飛ばしに間引く（帯の形はほぼ変わらない）。
+       重い端末では eyeOn の自動OFFに連動して止まる。 */
+    if (livePerf.eyeOn && (p.face || 0) > 0 && liveFaces && liveFaces.length) {
+      const fs = p.face / 100;
+      liveFaces.forEach((lm) => {
+        if (!lm || lm.length < 468) return;
+        const fw2 = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
+        const fc2 = faceCenterOf(lm, w, h);
+        const poly2 = [];
+        for (let i = FACE_LOWER_FROM; i <= FACE_LOWER_TO; i += 2) poly2.push(lmToPx(lm[FACE_OVAL[i]], w, h));
+        if (poly2[poly2.length - 1] !== lmToPx(lm[FACE_OVAL[FACE_LOWER_TO]], w, h)) poly2.push(lmToPx(lm[FACE_OVAL[FACE_LOWER_TO]], w, h));
+        const peak2 = fs * fw2 * FACE_PULL;
+        contourBandWarp(ctx.canvas, poly2, fc2.x, fc2.y, fw2 * FACE_BAND_R, (t) => {
+          const d = Math.abs(t - 0.5) * 2;
+          const fi = d * (FACE_WEIGHTS.length - 1);
+          const i0 = Math.floor(fi), i1 = Math.min(FACE_WEIGHTS.length - 1, i0 + 1);
+          return peak2 * (FACE_WEIGHTS[i0] + (FACE_WEIGHTS[i1] - FACE_WEIGHTS[i0]) * (fi - i0));
+        });
+        const liftAt2 = (inner, outer) => {
+          const a0 = lmToPx(lm[inner], w, h);
+          const a1 = lm[outer] ? lmToPx(lm[outer], w, h) : a0;
+          return { x: a0.x + (a1.x - a0.x) * FACE_LIFT_OUT, y: a0.y + (a1.y - a0.y) * FACE_LIFT_OUT + fw2 * 0.12 };
+        };
+        const l2 = liftAt2(205, 50), r2 = liftAt2(425, 280);
+        directionalWarp(ctx.canvas, l2.x, l2.y, fw2 * FACE_LIFT_R, fs * fw2 * FACE_LIFT_AMT * 0.45, -fs * fw2 * FACE_LIFT_AMT);
+        directionalWarp(ctx.canvas, r2.x, r2.y, fw2 * FACE_LIFT_R, -fs * fw2 * FACE_LIFT_AMT * 0.45, -fs * fw2 * FACE_LIFT_AMT);
+      });
+    }
+
+    // 涙袋（グラデーション1枚なので毎フレームでも軽い。v34 のライブには無かった）
+    if ((p.namida || 0) > 0) drawNamida(ctx, liveFaces, w, h, (p.namida || 0) / 100);
+    drawMakeup(ctx, liveFaces, w, h, (p.cheek || 0) / 100, (p.lip || 0) / 100, conf, liveMask);
 
     // 選択中フィルターもライブで反映（合成のみなので軽い）
     const selFilter = conf.filters.find(f => f.id === p.filter);
@@ -3291,14 +3430,96 @@
 
   /* ===================== 盛り加工エンジン ===================== */
 
+  /* 盛りの合成の重み（2026-08-28・検見の精度評価 P1-3 で調整）。
+     ここに集めてあるのは「1箇所を触ると別の判定が動く」係数だけ。
+     数字を変えたら data/work/mori-harness を必ず走らせ直すこと（judge.py で合否が出る）。 */
+  /* 🚨🚨 透明感を作り直した（2026-08-28・工藤。**指標のほうが間違っていた**回）
+
+     直前の版は検見さんの合格ラインを全部通っていたのに、出した画像を見ると
+     **透明感100 の顔が灰色**だった。原因は実装ではなく **判定基準**:
+       「透明感100 の ΔC（平均彩度の変化）が −6 以下＝効きの維持」
+     ——これは **彩度を削るほど高得点**という基準で、上限が無い。実際に測ると
+     v34 が −7.21、直前の版は **−13.12 で"より合格"**。灰色にするほど点が上がっていた。
+
+     そこで「灰色っぽい」が数字に出る指標を先に足した（ハーネス measure.js / tests2.js）:
+       ・彩度保持率・血色a*保持率 … 平均をどれだけ残したか
+       ・色ムラ（a*b*平面のばらつき）… **透明感が本来やるべき仕事**
+     足してから測り直した結果（透明感100・部品ごとに切り分け）:
+       全部入り   彩度71.2% 血色78.2% 色ムラ **−3.3%（悪化）**
+       淡ブルーだけ 彩度78.4% 血色84.4% 色ムラ +5.6%
+       平滑化だけ  彩度94.8% 血色97.1% 色ムラ **−9.7%（悪化）**
+     ＝ **「色ムラ平滑化」は色ムラを減らしていなかった**（むしろ増やしていた）し、
+       灰色化の主犯は淡ブルーの color 合成だった。
+       つまり v34 から今日まで、透明感は一度も本来の仕事をしていない。ただの退色だった。
+
+     なぜ color 合成では色ムラが減らないか:
+       color は SetLum(上の色, 下の輝度)。**結果の a*b* が下の輝度に依存して動く**ので、
+       ぼかした（＝一様な）色を重ねても、下のシミ・影の輝度差が色の差として復活する。
+       合成モードは「色だけを平均へ寄せる」道具ではない。
+
+     作り直しの中身（clearSkinTone）: 画素ごとに
+       ① 輝度 Y を固定したまま、色みベクトル (画素−Y) を **その場の平均の色みへ寄せる**
+          → 平均は動かない（＝灰色にならない）。ばらつきだけが減る（＝色ムラが減る）
+       ② 黄ぐすみだけを、輝度を保ったまま少し抜く（青を足したぶん赤緑を係数で戻す）
+     合成モードを使わないので `canUseColorBlend()` の分岐も要らなくなった。 */
+  const CLEAR_MURA = 0.85;        // 色ムラを「その場の平均の色」へ寄せる割合（透明感の主役）
+  const CLEAR_YELLOW = 0.12;      // 黄ぐすみを抜く割合。上げすぎると彩度保持率が落ちるので判定で縛る
+  const CLEAR_GLOW = 0.06;        // 透明感のグロー（screen）。v34 は 0.22 で美白と見分けがつかなかった
+  /* 変位がこの値（px）未満の画素は補間せず元画素をコピーする（検見 P2-4）。
+     0.35 は「見た目に効かないが、補間のローパスだけが効く」帯の上限として選んだ実測値。
+     上げすぎると弱い強度でワープが階段状になるので、判定は必ずハーネスで見ること。 */
+  const EYE_R_SPAN = 1.05;        // デカ目の作用半径＝目幅×これ（v34 は 1.5 で眉と額を動かしていた）
+  const EYE_STRENGTH = 0.41;      // 半径を絞ったぶん強度で補う（v34 は 0.28）
+  const EYE_KY = 1.6;             // デカ目の作用範囲を縦だけ狭める（1=真円。眉に届かせないため）
+  const EYE_TAIL_R = 0.45;        // TYPE02（たれ目）の作用半径＝目幅×これ（v34 は 0.9）
+  const WARP_COPY_PX = 0.35;
+  /* 小顔の作り直しの定数（2026-08-28・検見 P1-1）。
+     FACE_OVAL は [10,338,...,109] の36点。下半分＝index 8(454・右頬骨)〜28(234・左頬骨)、
+     18 が 152（あご先）。ここを1点ずつ内側へ寄せる。 */
+  const FACE_LOWER_FROM = 8, FACE_LOWER_TO = 28;
+  /* 🚨 円を並べる方式は捨てた（2026-08-28）。
+     間隔より狭い半径だと**円と円のあいだが効かず輪郭が櫛の歯になる**（実測 波打ち 4.47px）。
+     半径を間隔より広げると滑らかにはなるが、そのぶん口・鼻に届いて引きずる（口角 3.66px）。
+     点を並べるかぎりこの二律背反からは出られないので、**折れ線からの距離で1回だけ動かす**
+     帯ワープ（contourBandWarp）にした。1画素の再サンプルも1回だけで済む＝キメも守れる。 */
+  const FACE_BAND_R = 0.09;       // 輪郭からこの距離まで動かす（顔幅比。0.09 × 246 ≒ 22px。口角に届かない上限）
+  const FACE_PULL = 0.040;        // 顔幅に対する最大の寄せ量（あご角での値）
+  const FACE_LIFT_OUT = 0;       // リフトアップの中心を頬の外側へ寄せる割合。0 ＝ v34 と同じ位置
+  /* 🚨 外へ寄せる案（0.55）は捨てた: 中心が輪郭の帯に重なり、寄せと持ち上げが足し算になって
+     輪郭の移動が 8.6px → 15.1px、波打ちが 1.1px → 5.4px に暴れた（実測）。
+     持ち上げ量そのものを 0.040 → 0.006 に落とす方を採る。あご先が上へ寄る動きは
+     帯ワープ側（あご先は顔の中心＝上方向へ動く）が既に担っているので、二重に持ち上げる必要が無い。 */
+  const FACE_LIFT_R = 0.22;       // リフトアップの半径（顔幅比）。v34 は 0.40 で鼻と口に届いていた
+  const FACE_LIFT_AMT = 0.006;    // リフトアップの持ち上げ量（顔幅比）。v34 は 0.04 で口角を9.5px動かしていた
+  /* あご先(0)からの距離ごとの重み。山はあご角（0.5あたり）。
+     隣どうしの差が小さいほど輪郭は滑らかに縮む（波打ちの正体は重みの段差）。 */
+  const FACE_WEIGHTS = [0.72, 0.77, 0.83, 0.89, 0.94, 0.98, 1.00, 0.96, 0.88, 0.78, 0.68];
+  const CHEEK_CORE = 0.86;        // チークの芯（v34 は 0.38。MAXでもΔE 3.95＝薄すぎた）
+  const CHEEK_EDGE = 0.53;        // チークの外周（v34 は 0.24）
+  const CHEEK_GAMMA = 0.80;       // 効きの立ち上がり。1未満＝弱い側を持ち上げる
+  const CHEEK_OUTWARD = 0.30;     // 205/425 から頬の外側へ寄せる割合（0=v34と同じ位置）
+  const CHEEK_OVAL_INSET = 0.94;  // チークを落としてよい顔輪郭（1.0＝輪郭ちょうど）
+  const LIP_SHRINK = 0.88;        // 唇の色を塗る形の縮小率。ぼかした裾が元の唇の縁に来るように
+  const LIVE_HEAL = 1.0;          // ライブのシミ取り近似（肌レイヤーへの lighten の強さ）。0 で無効
+  const WHITE_SAT_RESTORE = 0.9;  // 美白のあとに血色（彩度）をどれだけ戻すか。0 で無効（0.7では a* が 9.3 までしか戻らず未達だった）
+
   // 放射状ワープ。strength > 0 で中心を拡大（デカ目）、< 0 で収縮（小顔）
-  function radialWarp(canvas, cx, cy, R, strength) {
+  /* ky（2026-08-28 追加・検見 P2-6）: **縦方向だけ作用範囲を狭める**係数。
+     1 なら従来どおりの真円。1より大きいと「横に広く・縦に狭い楕円」になる。
+
+     なぜ要るか: デカ目は虹彩の中心を軸に広げるが、**眉は目の 32px 上・目尻は 26px 横**にある。
+     真円では、目尻を広げるだけの半径をとると必ず眉も入る（実測で眉が6.1px持ち上がっていた）。
+     縦だけ縮めれば「横に広げて、上には効かせない」が両立する。
+     ついでにこれは検見さんの §6-1「目の拡大をたて／よこに分ける」の器にもなる。 */
+  function radialWarp(canvas, cx, cy, R, strength, ky) {
     if (Math.abs(strength) < 0.005 || R < 4) return;
+    ky = ky || 1;
+    const Ry = R / ky;
     const ctx = canvas.getContext('2d');
     const x0 = Math.max(0, Math.floor(cx - R));
-    const y0 = Math.max(0, Math.floor(cy - R));
+    const y0 = Math.max(0, Math.floor(cy - Ry));
     const x1 = Math.min(canvas.width, Math.ceil(cx + R));
-    const y1 = Math.min(canvas.height, Math.ceil(cy + R));
+    const y1 = Math.min(canvas.height, Math.ceil(cy + Ry));
     const bw = x1 - x0, bh = y1 - y0;
     if (bw <= 0 || bh <= 0) return;
     const src = ctx.getImageData(x0, y0, bw, bh);
@@ -3310,7 +3531,8 @@
       for (let x = 0; x < bw; x++) {
         const px = x + x0;
         const dx = px - cx, dy = py - cy;
-        const d2 = dx * dx + dy * dy;
+        const dye = dy * ky;                       // 縦だけ縮めた「楕円上の距離」
+        const d2 = dx * dx + dye * dye;
         const o = (y * bw + x) * 4;
         if (d2 >= R2) {
           const so = o;
@@ -3324,6 +3546,15 @@
         let sy = cy + dy * t - y0;
         if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
         if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
+        /* 🚨 動く量が小さい画素は **補間せずそのまま写す**（2026-08-28・検見 P2-4）。
+           バイリニア補間は「0.5px ずらす」ときにいちばん強いローパスになる（4画素の平均に近づく）。
+           そのため v34 は **弱い強度ほど肌が溶けていた**——小顔15（ナチュ盛れ相当）で
+           頬のキメが 33% まで落ち、小顔100（92%）より酷いという逆転が起きていた。
+           WARP_COPY_PX 未満の移動は、絵として見えない代わりにキメだけを削るので、コピーで済ませる。 */
+        if (Math.abs(sx - (px - x0)) < WARP_COPY_PX && Math.abs(sy - (py - y0)) < WARP_COPY_PX) {
+          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
+          continue;
+        }
         // バイリニア補間
         const ix = Math.floor(sx), iy = Math.floor(sy);
         const fx = sx - ix, fy = sy - iy;
@@ -3375,6 +3606,11 @@
         let sy = py - dyAmt * falloff - y0;
         if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
         if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
+        // 動く量が小さい画素はコピーで済ませる（radialWarp と同じ理由・検見 P2-4）
+        if (Math.abs(sx - (px - x0)) < WARP_COPY_PX && Math.abs(sy - (py - y0)) < WARP_COPY_PX) {
+          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
+          continue;
+        }
         const ix = Math.floor(sx), iy = Math.floor(sy);
         const fx = sx - ix, fy = sy - iy;
         const o00 = (iy * bw + ix) * 4;
@@ -3392,8 +3628,106 @@
     ctx.putImageData(dst, x0, y0);
   }
 
+  /* 輪郭に沿った「帯」で内側へ寄せるワープ（2026-08-28・検見 P1-1 の本命）。
+
+     円をいくつ並べても、**円と円のあいだが効かず輪郭が櫛の歯になる**（実測: 波打ち 1.5〜4.5px）。
+     間隔より広い半径にすれば滑らかにはなるが、そのぶん口や鼻に届く。
+     どちらも立てるには「点を並べる」のをやめて、**折れ線からの距離**で1回だけ動かすしかない。
+
+     ・poly … 輪郭の下半分の折れ線（ピクセル座標）
+     ・R    … 折れ線からこの距離までを動かす（顔幅の12%程度＝口や鼻に届かない）
+     ・amtAt(t) … 弧の位置 t(0〜1) での寄せ量（px）。あご先・あご角・頬骨で変える
+     ・cx,cy … 寄せる先（顔の中心）
+
+     1画素につき折れ線の全区間との距離を測るので O(画素 × 区間数)。
+     640×480 の顔まわり（約8万画素）× 20区間で、実測 iPad でも1枚あたり数十ms に収まる想定。
+     ⚠️ 実機の処理時間は必ず測ること（検見さんの §7-8）。 */
+  function contourBandWarp(canvas, poly, cx, cy, R, amtAt) {
+    if (!poly || poly.length < 2 || R < 4) return;
+    const ctx = canvas.getContext('2d');
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    poly.forEach(p => { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; });
+    const pad = Math.ceil(R) + 3;
+    const x0 = Math.max(0, Math.floor(minX - pad)), y0 = Math.max(0, Math.floor(minY - pad));
+    const x1 = Math.min(canvas.width, Math.ceil(maxX + pad)), y1 = Math.min(canvas.height, Math.ceil(maxY + pad));
+    const bw = x1 - x0, bh = y1 - y0;
+    if (bw <= 0 || bh <= 0) return;
+    // 折れ線の累積長（弧の位置 t を出すため）
+    const seg = [0];
+    for (let i = 1; i < poly.length; i++) seg.push(seg[i - 1] + dist(poly[i - 1], poly[i]));
+    const total = seg[seg.length - 1] || 1;
+    const src = ctx.getImageData(x0, y0, bw, bh);
+    const dst = ctx.createImageData(bw, bh);
+    const sd = src.data, dd = dst.data;
+    const R2 = R * R;
+    for (let y = 0; y < bh; y++) {
+      const py = y + y0;
+      for (let x = 0; x < bw; x++) {
+        const px = x + x0;
+        const o = (y * bw + x) * 4;
+        // 折れ線までの最短距離と、その足の弧の位置
+        let best = Infinity, bestT = 0;
+        for (let i = 1; i < poly.length; i++) {
+          const ax = poly[i - 1].x, ay = poly[i - 1].y;
+          const bx = poly[i].x, by = poly[i].y;
+          const vx = bx - ax, vy = by - ay;
+          const L2 = vx * vx + vy * vy;
+          let u = L2 > 0 ? ((px - ax) * vx + (py - ay) * vy) / L2 : 0;
+          if (u < 0) u = 0; else if (u > 1) u = 1;
+          const qx = ax + vx * u, qy = ay + vy * u;
+          const d2 = (px - qx) * (px - qx) + (py - qy) * (py - qy);
+          if (d2 < best) { best = d2; bestT = (seg[i - 1] + Math.sqrt(L2) * u) / total; }
+        }
+        if (best >= R2) { dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3]; continue; }
+        const f = 1 - best / R2;
+        const falloff = f * f;
+        const amt = amtAt(bestT) * falloff;
+        let vx2 = cx - px, vy2 = cy - py;
+        const len = Math.hypot(vx2, vy2) || 1;
+        let sx = px - (vx2 / len) * amt - x0;
+        let sy = py - (vy2 / len) * amt - y0;
+        if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
+        if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
+        if (Math.abs(sx - x) < WARP_COPY_PX && Math.abs(sy - y) < WARP_COPY_PX) {
+          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
+          continue;
+        }
+        const ix = Math.floor(sx), iy = Math.floor(sy);
+        const fx = sx - ix, fy = sy - iy;
+        const o00 = (iy * bw + ix) * 4, o10 = o00 + 4, o01 = o00 + bw * 4, o11 = o01 + 4;
+        for (let ch = 0; ch < 4; ch++) {
+          dd[o + ch] = sd[o00 + ch] * (1 - fx) * (1 - fy)
+                     + sd[o10 + ch] * fx * (1 - fy)
+                     + sd[o01 + ch] * (1 - fx) * fy
+                     + sd[o11 + ch] * fx * fy;
+        }
+      }
+    }
+    ctx.putImageData(dst, x0, y0);
+  }
+
   // ランドマーク（正規化座標）→ピクセル座標
   function lmToPx(lm, w, h) { return { x: lm.x * w, y: lm.y * h }; }
+
+  /* 顔ぜんぶを含む矩形（2026-08-28）。画素をなめる処理をここだけに絞るために使う。
+     顔が取れていなければ null を返す＝呼び先は全面を処理する（安全側）。
+     pad は顔幅に対する余白の割合（首や生え際を落とさないため）。 */
+  function faceBox(faces, w, h, pad) {
+    if (!faces || !faces.length) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, ok = false;
+    faces.forEach((lm) => {
+      if (!lm || lm.length < 468) return;
+      ok = true;
+      FACE_OVAL.forEach((i) => {
+        const px = lm[i].x * w, py = lm[i].y * h;
+        if (px < x0) x0 = px; if (px > x1) x1 = px;
+        if (py < y0) y0 = py; if (py > y1) y1 = py;
+      });
+    });
+    if (!ok) return null;
+    const m = (x1 - x0) * (pad || 0.15);
+    return { x0: x0 - m, y0: y0 - m, x1: x1 + m, y1: y1 + m + m };  // 下だけ広く（首）
+  }
 
   /* --- 以下の盛り処理はすべて iPad Safari 対応のため ctx.filter を使わず、
          ブレンドモード（globalCompositeOperation）と縮小→拡大ぼかしで実装している --- */
@@ -3417,8 +3751,13 @@
           const ri = lmToPx(lm[473], w, h);
           const lw = dist(lmToPx(lm[33], w, h), lmToPx(lm[133], w, h));
           const rw = dist(lmToPx(lm[362], w, h), lmToPx(lm[263], w, h));
-          radialWarp(work, li.x, li.y, lw * 1.5, eyeS * 0.28);
-          radialWarp(work, ri.x, ri.y, rw * 1.5, eyeS * 0.28);
+          /* 🚨 2026-08-28（検見 P2-6）: 半径が **目幅×1.5 = 79px ＝ 顔幅の32%** あり、
+             **眉の中央が 6.12px・額が 6.00px 持ち上がっていた**（眉の厚みは9px。眉が太くなる）。
+             左右の円は鼻筋の上で 47px ぶん重なり、そこが2回リサンプルされて
+             **鼻筋のキメがデカ目25 で 74% まで落ちて**いた。
+             半径を 目幅×1.05 に絞り、減る効きは強度 0.28 → 0.34 で補う。 */
+          radialWarp(work, li.x, li.y, lw * EYE_R_SPAN, eyeS * EYE_STRENGTH, EYE_KY);
+          radialWarp(work, ri.x, ri.y, rw * EYE_R_SPAN, eyeS * EYE_STRENGTH, EYE_KY);
           /* パーツTYPE 2択（2026-08-14・FLASH 2026の「パーツTYPE」の再現）:
              TYPE01=くっきり（従来の拡大のみ）／TYPE02=たれ目（目尻を下外へ流す）。
              目尻の外向きはランドマークの左右でなく「虹彩中心から見た向き」で決める
@@ -3426,24 +3765,57 @@
           if (eyeType === 2) {
             [[lmToPx(lm[33], w, h), li, lw], [lmToPx(lm[263], w, h), ri, rw]].forEach(([corner, iris, ew]) => {
               const dir = Math.sign(corner.x - iris.x) || 1;
-              directionalWarp(work, corner.x, corner.y, ew * 0.9, dir * eyeS * ew * 0.06, eyeS * ew * 0.16);
+              /* 🚨 半径 目幅×0.9 = 47px は目尻から上まぶたの中央まで届き、
+                 **せっかくの縦の拡大を打ち消していた**（上まぶたの拡大率 1.45 → 1.10）。
+                 画像で見ると「大きい目」ではなく「垂れただけの目」。目尻の局所だけに絞る。
+                 下げ量（ew*0.16 ＝ 目尻が8.4px下がる）は狙いどおりなので据え置き。 */
+              directionalWarp(work, corner.x, corner.y, ew * EYE_TAIL_R, dir * eyeS * ew * 0.06, eyeS * ew * 0.16);
             });
           }
         }
         if (faceS > 0) {
-          // 小顔：あご周辺3点を収縮して輪郭を内側へ
+          /* 🚨🚨 小顔（2026-08-28・検見 P1-1 で全面作り直し）
+
+             v34 は「あご周辺の3点を半径 fw*0.42（=103px）の円で収縮」だった。実測すると:
+               ・あご角は 10.1px 内側へ動くのに、**あご先(152)は 0.00px（原理的に動かない。
+                 radialWarp は中心点で dx=0）** → あご角だけがえぐれる
+               ・輪郭の隣接点の差が最大 3.61px ＝ **輪郭が波打つ**
+               ・R=103px の円が口と鼻を丸ごと含み、**口角9.5px・鼻先6.5px が引きずられる**
+             これは 2026-08-14 に小鼻で直したのと**まったく同じ型**の不具合
+             （作用半径が広すぎて隣のパーツを巻き込む）。小鼻だけ直して小顔に残っていた。
+
+             作り直しの方針は、小鼻で正解だったやり方の横展開:
+               ① 大きな円ではなく、**輪郭の点ごとに小さな directionalWarp を並べる**
+                  （半径＝隣の点までの距離の 0.6 倍。隣とだけ重なる）
+               ② 動かす向きは「顔の中心へ」。**あご先も同じ規則で動く**（1点だけ特別扱いしない）
+               ③ 動かす量を輪郭上の位置で重み付けし、**隣どうしの差が小さくなる**ようにする
+                  （あご角=1.0 → あご先=0.72 → 頬骨=0.35 のなめらかな山）
+             結果、作用範囲は輪郭からせいぜい 18px ほどに収まり、口・鼻・頬の中身は動かない。 */
           const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
-          const jl = lmToPx(lm[136], w, h);
-          const jr = lmToPx(lm[365], w, h);
-          const ch = lmToPx(lm[152], w, h);
-          radialWarp(work, jl.x, jl.y, fw * 0.42, -faceS * 0.14);
-          radialWarp(work, jr.x, jr.y, fw * 0.42, -faceS * 0.14);
-          radialWarp(work, ch.x, ch.y, fw * 0.36, -faceS * 0.10);
-          // リフトアップ（タルミ対策）：頬〜フェイスラインを斜め上・内側へ引き上げる
-          const cl = lmToPx(lm[205], w, h);
-          const cr = lmToPx(lm[425], w, h);
-          directionalWarp(work, cl.x, cl.y + fw * 0.12, fw * 0.4, faceS * fw * 0.018, -faceS * fw * 0.04);
-          directionalWarp(work, cr.x, cr.y + fw * 0.12, fw * 0.4, -faceS * fw * 0.018, -faceS * fw * 0.04);
+          const fc = faceCenterOf(lm, w, h);
+          const poly = [];
+          for (let i = FACE_LOWER_FROM; i <= FACE_LOWER_TO; i++) poly.push(lmToPx(lm[FACE_OVAL[i]], w, h));
+          const peak = faceS * fw * FACE_PULL;
+          contourBandWarp(work, poly, fc.x, fc.y, fw * FACE_BAND_R, (t) => {
+            const d = Math.abs(t - 0.5) * 2;                 // あご先からの距離（0〜1）
+            const fi = d * (FACE_WEIGHTS.length - 1);
+            const i0 = Math.floor(fi), i1 = Math.min(FACE_WEIGHTS.length - 1, i0 + 1);
+            return peak * (FACE_WEIGHTS[i0] + (FACE_WEIGHTS[i1] - FACE_WEIGHTS[i0]) * (fi - i0));
+          });
+          /* リフトアップ（タルミ対策）：頬〜フェイスラインを斜め上・内側へ引き上げる。
+             🚨 半径 fw*0.4（=98px）は鼻と口まで届いていた（検見 P1-1 の4）。fw*0.22 へ絞る。 */
+          /* 🚨 中心も外へ寄せる（2026-08-28）。205/425 は頬の**鼻寄り**なので、
+             半径をいくら絞っても口角が円の中に入る。頬の外側(50/280)との中点へ移すと、
+             同じ半径でも口から離れる＝持ち上げの量を残したまま口角を巻き込まない。 */
+          const liftAt = (inner, outer) => {
+            const a0 = lmToPx(lm[inner], w, h);
+            const a1 = lm[outer] ? lmToPx(lm[outer], w, h) : a0;
+            return { x: a0.x + (a1.x - a0.x) * FACE_LIFT_OUT, y: a0.y + (a1.y - a0.y) * FACE_LIFT_OUT + fw * 0.12 };
+          };
+          const cl = liftAt(205, 50);
+          const cr = liftAt(425, 280);
+          directionalWarp(work, cl.x, cl.y, fw * FACE_LIFT_R, faceS * fw * FACE_LIFT_AMT * 0.45, -faceS * fw * FACE_LIFT_AMT);
+          directionalWarp(work, cr.x, cr.y, fw * FACE_LIFT_R, -faceS * fw * FACE_LIFT_AMT * 0.45, -faceS * fw * FACE_LIFT_AMT);
         }
         if (noseS > 0) {
           /* 小鼻（2026-08-13 実機テスト要望）: 現行実機の「鼻筋・小鼻」補正の小鼻側。
@@ -3489,6 +3861,81 @@
     bCtx.clearRect(0, 0, sw2, sh2);
     bCtx.drawImage(blurTmpA, 0, 0, sw2, sh2);
     return blurTmpB;
+  }
+
+  /* ぼかした結果を「原寸の専用キャンバス」に写して返す（2026-08-28）。
+     makeBlurred は共有の小さいキャンバスを返すので、画素を読む用途には原寸の控えが要る。
+     用途ごとに別の面を持つ（同じ面を使い回すと、途中で上書きされて別のものを読む）。 */
+  const blurFullCanvas = {};
+  function makeBlurredFull(srcCanvas, radiusPx, key) {
+    const w = srcCanvas.width, h = srcCanvas.height;
+    let c = blurFullCanvas[key];
+    if (!c) { c = blurFullCanvas[key] = document.createElement('canvas'); }
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, w, h);
+    g.imageSmoothingEnabled = true;
+    g.drawImage(makeBlurred(srcCanvas, radiusPx), 0, 0, w, h);
+    return c;
+  }
+
+  /* 透明感の本体（2026-08-28 作り直し。理由は CLEAR_MURA の上のコメント）。
+
+     outCanvas … いま仕上げている絵（ここを直接書き換える）
+     blurCanvas … outCanvas と同じ寸法の「ぼかした肌」＝その場の平均の色
+     maskCanvas … 肌マスク（αが効きの重み）
+     mura   … 色みを平均へ寄せる割合（0〜1）
+     yellow … 黄ぐすみを抜く割合（0〜1）
+     box    … 処理する矩形（ライブでは顔まわりだけに絞って軽くする）
+
+     ⚠️ 輝度 Y は 1ミリも動かさない。動かしたくなったら、それは美白か美肌の仕事。
+     ⚠️ 平均彩度を落として「効いた」ことにしない（それが今回の失敗の正体）。 */
+  function clearSkinTone(outCanvas, blurCanvas, maskCanvas, w, h, mura, yellow, box) {
+    if (mura <= 0 && yellow <= 0) return;
+    const bx0 = Math.max(0, Math.floor(box ? box.x0 : 0));
+    const by0 = Math.max(0, Math.floor(box ? box.y0 : 0));
+    const bx1 = Math.min(w, Math.ceil(box ? box.x1 : w));
+    const by1 = Math.min(h, Math.ceil(box ? box.y1 : h));
+    const bw = bx1 - bx0, bh = by1 - by0;
+    if (bw <= 0 || bh <= 0) return;
+    const octx = outCanvas.getContext('2d', { willReadFrequently: true });
+    let od, bd, md;
+    try {
+      od = octx.getImageData(bx0, by0, bw, bh);
+      bd = blurCanvas.getContext('2d', { willReadFrequently: true }).getImageData(bx0, by0, bw, bh).data;
+      md = maskCanvas.getContext('2d', { willReadFrequently: true }).getImageData(bx0, by0, bw, bh).data;
+    } catch (e) { return; }   // 画素が読めない環境では黙って何もしない（従来の見え方に落ちる）
+    const d = od.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const a = md[i + 3];
+      if (!a) continue;
+      const wt = a / 255;
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const y = 0.299 * r + 0.587 * g + 0.114 * b;
+      let nr = r, ng = g, nb = b;
+      if (mura > 0) {
+        const k = wt * mura;
+        const br = bd[i], bg = bd[i + 1], bb = bd[i + 2];
+        const by = 0.299 * br + 0.587 * bg + 0.114 * bb;
+        // 「色みベクトル（画素−輝度）」だけを平均へ寄せる。輝度 y はそのまま残る
+        nr = r + k * ((br - by) - (r - y));
+        ng = g + k * ((bg - by) - (g - y));
+        nb = b + k * ((bb - by) - (b - y));
+      }
+      if (yellow > 0) {
+        const yv = (nr + ng) / 2 - nb;   // 黄み（青の反対）の量
+        if (yv > 0) {
+          const u = yv * yellow * wt;
+          // 青を u 足し、輝度が変わらないように赤緑を 0.114/0.886 だけ戻す
+          nb += u; nr -= u * 0.1287; ng -= u * 0.1287;
+        }
+      }
+      d[i] = nr < 0 ? 0 : nr > 255 ? 255 : nr;
+      d[i + 1] = ng < 0 ? 0 : ng > 255 ? 255 : ng;
+      d[i + 2] = nb < 0 ? 0 : nb > 255 ? 255 : nb;
+    }
+    octx.putImageData(od, bx0, by0);
   }
 
   // 色調エフェクトをブレンドモードで適用（Safari対応）
@@ -3567,8 +4014,8 @@
     };
   }
 
-  function drawLandmarkPolygon(ctx, lm, indices, w, h, expandCx, expandCy, expandScale) {
-    ctx.beginPath();
+  /* パスを引くだけ（塗らない）。clip したいときのために分けてある（2026-08-28） */
+  function drawLandmarkPolygonPath(ctx, lm, indices, w, h, expandCx, expandCy, expandScale) {
     indices.forEach((idx, i) => {
       let x = lm[idx].x * w, y = lm[idx].y * h;
       if (expandScale && expandScale !== 1) {
@@ -3578,14 +4025,31 @@
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.closePath();
+  }
+  function drawLandmarkPolygon(ctx, lm, indices, w, h, expandCx, expandCy, expandScale) {
+    ctx.beginPath();
+    drawLandmarkPolygonPath(ctx, lm, indices, w, h, expandCx, expandCy, expandScale);
     ctx.fill();
   }
 
   let maskFeatherA = null, maskFeatherB = null;
+  /* 🚨 2026-08-28（検見 P2-5）: 縮小率が **1/8 は肌マスクとしては広すぎた**。
+     640×480 → 80×60 に落として戻すので、ぼけ幅は約8px。
+     目の穴（約53×20px）は縮小後 6.6×2.5px しか残らず、輪郭も8px幅で溶ける。
+     実測: 目尻α102・唇の端α60・輪郭の外5pxにα61（0=保護 / 255=全がけ）。
+     その結果、美肌100 単独でも目が ΔE 5.57・唇 1.89・眉 最大21.5 動いていた。
+     1/3（ぼけ幅 約3px）に狭める。輪郭を馴染ませる目的には3pxで足りる。 */
+  const HOLE_DARK_V = 0.50;       // 暗さのしきい（0〜1）。これより暗く彩度も低ければ目・眉とみなす
+  const HOLE_DARK_S = 0.70;
+  const HOLE_LIP_RG = 38;         // R が G よりこれ以上大きければ唇の候補
+  const HOLE_LIP_S = 0.34;
+  const VICINITY_SCALE = 1.02;    // 色検出パスで肌とみなす範囲（顔輪郭の何倍まで）
+  const VICINITY_NECK_W = 0.75;   // 首の帯の幅（顔幅比）
+  const MASK_FEATHER_DIV = 3;
   function featherMask(maskCanvas) {
     const w = maskCanvas.width, h = maskCanvas.height;
     if (!maskFeatherA) { maskFeatherA = document.createElement('canvas'); maskFeatherB = document.createElement('canvas'); }
-    const sw = Math.max(16, Math.round(w / 8)), sh = Math.max(16, Math.round(h / 8));
+    const sw = Math.max(16, Math.round(w / MASK_FEATHER_DIV)), sh = Math.max(16, Math.round(h / MASK_FEATHER_DIV));
     maskFeatherA.width = sw; maskFeatherA.height = sh;
     const aCtx = maskFeatherA.getContext('2d');
     aCtx.imageSmoothingEnabled = true;
@@ -3600,6 +4064,33 @@
     mCtx.clearRect(0, 0, w, h);
     mCtx.drawImage(maskFeatherB, 0, 0);
     return maskCanvas;
+  }
+
+  /* 顔ランドマークが無いときに、**色だけ**で目・眉・唇の穴を開ける（2026-08-28・検見 P3-11）。
+     ランドマークほど正確ではないが、「白く曇る」よりはるかにまし。
+     ・暗くて彩度の低い画素 → 目・眉・まつ毛・鼻孔
+     ・赤みが強い画素      → 唇
+     しきい値は疑似顔での実測で決めた。**顔の肌そのものは落とさない**ことを
+     「顔なしのとき 顔肌ΔE が維持される」で確認している。 */
+  function cutHolesByColor(mCtx, srcCanvas, w, h) {
+    let sd = null, md = null;
+    try {
+      sd = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+      md = mCtx.getImageData(0, 0, w, h);
+    } catch (e) { return; } // 読めない環境では何もしない（従来どおりに落ちる）
+    const m = md.data;
+    for (let i = 0; i < m.length; i += 4) {
+      if (m[i + 3] === 0) continue;
+      const r = sd[i], g = sd[i + 1], b = sd[i + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const v = mx / 255;
+      const sat = mx === 0 ? 0 : (mx - mn) / mx;
+      // 目・眉・まつ毛・鼻孔（暗くて色が乗っていない）
+      if (v < HOLE_DARK_V && sat < HOLE_DARK_S) { m[i + 3] = 0; continue; }
+      // 唇（赤が緑より明確に強く、彩度もある）
+      if (r > g + HOLE_LIP_RG && sat > HOLE_LIP_S && v > 0.18) m[i + 3] = 0;
+    }
+    mCtx.putImageData(md, 0, 0);
   }
 
   // 目・眉・唇の除外穴をマスクへ開ける（くっきり残すべきパーツ）
@@ -3633,7 +4124,9 @@
       });
       // 唇
       const mc = lmToPx(lm[13], w, h);
-      drawLandmarkPolygon(mCtx, lm, LIPS_OUTER, w, h, mc.x, mc.y, 1.1);
+      /* 唇の穴の拡大率 1.1 → 1.25（2026-08-28 検見 P2-5）。
+         1.1 では口角のα が 60 残り、唇の端に美肌・美白が乗っていた */
+      drawLandmarkPolygon(mCtx, lm, LIPS_OUTER, w, h, mc.x, mc.y, 1.25);
     });
     mCtx.restore();
   }
@@ -3651,8 +4144,21 @@
       /* --- MLパス: selfie_multiclass の「顔の肌+体の肌」信頼度をそのまま使う ---
          髪・服・背景は分類レベルで除外済み。眉・目・唇だけ穴を開ければ完成。 */
       mCtx.drawImage(mlConf, 0, 0, w, h);
+      /* 🚨 2026-08-28（検見 P3-11）: **顔が取れないときは目と唇が白く曇っていた。**
+         MLマスクは目も唇も「顔の肌」として含むので、cutFaceHoles を呼べない回は丸ごと美肌・美白が乗る
+         （実測 目ΔE 28.2 / 唇ΔE 17.6）。しかも画面には
+         「美肌・美白・透明感・チーク・リップは きくよ！」と出ていて、**案内と実際が違う**。
+         文化祭では顔が取れない回が必ず出るので、ランドマークが無くても
+         **色で穴を開ける**（暗くて彩度の低いところ＝目・眉／赤いところ＝唇）。 */
+      if (!faces || !faces.length) cutHolesByColor(mCtx, srcCanvas, w, h);
+      /* 🚨 2026-08-28（検見 P2-5）: 順序を **「穴を開ける → 全体をぼかす」から
+         「ぼかす → 穴を開ける」へ入れ替えた**。
+         前の順序だと、輪郭を馴染ませるためのぼかしが**穴も一緒に潰していた**
+         （目尻α102・唇の端α60）。輪郭のフェザーは要るが、穴のフェザーは要らない。
+         穴の縁は cutFaceHoles 側が既に丸い塗りで数px馴染むので、これで十分。 */
+      featherMask(mask);
       cutFaceHoles(mCtx, faces, w, h, eyeS);
-      return featherMask(mask);
+      return mask;
     }
 
     /* --- フォールバック: 色検出 + 顔輪郭ポリゴン --- */
@@ -3709,12 +4215,44 @@
         if (!lm || lm.length < 468) return;
         drawLandmarkPolygon(mCtx, lm, FACE_OVAL, w, h);
       });
-      // 4) 目・眉・唇はくっきり残すため除外
-      cutFaceHoles(mCtx, faces, w, h, eyeS);
     }
 
-    // 5) 縁をぼかして自然に馴染ませる
-    return featherMask(mask);
+    /* 🚨 2026-08-28（検見 P3-12）: 色検出パスは **顔から遠い画素まで肌と判定していた**。
+       MLセグメンタが読めなかった回、実測で 髪ΔE 26.9・肌色の背景（木の壁）ΔE 18.8。
+       文化祭の会場は木の壁・段ボール・肌色の衣装が普通にある＝**背景が美白される**。
+       顔は同じように仕上がるのに、髪と背景だけが壊れる。
+       → 顔のまわりだけに限る。**下方向は広く**取る（首を残すため）。 */
+    if (faces && faces.length) limitToFaceVicinity(mCtx, faces, w, h);
+    /* 4) 縁をぼかして自然に馴染ませる → 5) そのあとで 目・眉・唇の穴を開ける
+       （2026-08-28 検見 P2-5。MLパスと同じ順序に揃える。
+         逆にすると、ぼかしが穴を潰して目と唇が白く曇る） */
+    featherMask(mask);
+    if (faces && faces.length) cutFaceHoles(mCtx, faces, w, h, eyeS);
+    else cutHolesByColor(mCtx, srcCanvas, w, h);
+    return mask;
+  }
+
+  /* マスクを「顔のまわり」だけに切る（2026-08-28・検見 P3-12）。
+     顔輪郭を中心から VICINITY 倍に広げた形 ＋ あごから下へ伸ばした首の帯、の合わせ技。
+     首を残すために下だけ広いのがポイント（顔だけ白くて首が地肌、では余計に目立つ）。 */
+  function limitToFaceVicinity(mCtx, faces, w, h) {
+    const lim = getSkinLayer(w, h);
+    lim.globalCompositeOperation = 'source-over';
+    lim.clearRect(0, 0, w, h);
+    lim.fillStyle = '#ffffff';
+    faces.forEach((lm) => {
+      if (!lm || lm.length < 468) return;
+      const fc = polyCenterOf(lm, FACE_OVAL, w, h);
+      drawLandmarkPolygon(lim, lm, FACE_OVAL, w, h, fc.x, fc.y, VICINITY_SCALE);
+      // 首（あご先から下へ。顔幅の VICINITY_NECK_W 倍の帯）
+      const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
+      const chin = lmToPx(lm[152], w, h);
+      lim.fillRect(chin.x - fw * VICINITY_NECK_W / 2, chin.y - fw * 0.05, fw * VICINITY_NECK_W, h - chin.y + fw * 0.05);
+    });
+    mCtx.save();
+    mCtx.globalCompositeOperation = 'destination-in';
+    mCtx.drawImage(skinLayerCanvas, 0, 0);
+    mCtx.restore();
   }
 
   // 肌マスクのキャッシュ（ショットと顔データが同じ間は再計算しない）
@@ -4001,10 +4539,12 @@
     const skinS = params.skin / 100;
     const whiteS = (params.white || 0) / 100;
     const clearS = (params.clear || 0) / 100;
+    let makeupMask = null; // チーク・リップを顔の中だけに落とすための控え（2026-08-28）
     if (skinS > 0 || whiteS > 0 || clearS > 0) {
       const tone = conf.skinTone;
       const mask = getSkinMask(shotIdx == null ? -1 : shotIdx, srcCanvas, faces, eyeS);
       const useMask = mask && !maskIsEmpty(mask);
+      if (useMask) makeupMask = mask;
 
       if (useMask) {
         /* --- 肌ピンポイント処理 v4 ---
@@ -4028,43 +4568,29 @@
              美肌＝輝度をならす／美白＝輝度を上げる／透明感＝色をならす、と軸を分けるための処理。
              ※ この処理を入れる前の clear は「ぼかした肌を明るくして screen 合成」だけで、
                 向きとしては美肌＋美白と同じ輝度方向に寄っていた（＝美肌の弱い版）。 */
-          if (conf.clearColorSmooth && canUseColorBlend()) {
-            const cCtx = getSkinLayer(w, h);
-            cCtx.globalCompositeOperation = 'source-over';
-            cCtx.clearRect(0, 0, w, h);
-            cCtx.imageSmoothingEnabled = true;
-            // makeBlurred は共有の作業用キャンバスを返すので、受け取ったら即座に描く
-            cCtx.drawImage(makeBlurred(baseObj.base, 7), 0, 0, w, h);
-            cCtx.globalCompositeOperation = 'destination-in';
-            cCtx.drawImage(mask, 0, 0);
-            cCtx.globalCompositeOperation = 'source-over';
-            outCtx.globalCompositeOperation = 'color';
-            outCtx.globalAlpha = Math.min(1, clearS * 0.85);
-            outCtx.drawImage(skinLayerCanvas, 0, 0);
-            outCtx.globalCompositeOperation = 'source-over';
-            outCtx.globalAlpha = 1;
+          if (conf.clearColorSmooth) {
+            /* 🚨 2026-08-28: ここは v34 から `color` 合成だったが、**色ムラを減らしていなかった**
+               （実測 −9.7%＝むしろ増えていた）。合成モードをやめて画素で寄せる。
+               canUseColorBlend() の分岐も要らなくなった＝端末による見え方の差も消える。 */
+            clearSkinTone(out, makeBlurredFull(baseObj.base, 7, 'clear'), mask, w, h,
+                          Math.min(1, clearS * CLEAR_MURA), Math.min(1, clearS * CLEAR_YELLOW));
           }
 
           /* グロー: 明るいぼかし肌をスクリーン合成 → 内側から光る透明感。
-             色の平滑化を入れた分、輝度方向へ寄せすぎないよう 0.42 → 0.22 に落とす
-             （0.42 のままだと美白と見分けがつかず、透明感スライダーの役割が重複するため）。 */
+             🚨 2026-08-28（検見 P1-3）: 0.22 でも **まだ輝度方向に寄りすぎていた**。
+             実測で 美白100 と透明感100 の (ΔL, ΔC) の向きの差が **わずか 5.6°**——
+             別の軸どころか、ほぼ同じ矢印。しかも透明感のほうが明るくもなるので、
+             **透明感が美白の上位互換**になり、美白スライダーが存在する理由を失っていた。
+             透明感の本体は「色ムラの平滑化」（上の color 合成）なので、
+             輝度方向は 0.22 → 0.06 まで落として"わずかな艶"に留める。 */
           outCtx.globalCompositeOperation = 'screen';
-          outCtx.globalAlpha = clearS * (conf.clearColorSmooth ? 0.22 : 0.42);
+          outCtx.globalAlpha = clearS * (conf.clearColorSmooth ? CLEAR_GLOW : 0.42);
           outCtx.drawImage(baseObj.glow, 0, 0);
-          // 黄ぐすみ除去: 淡ブルーをソフトライトで（肌マスク越し）
-          const layerCtx = getSkinLayer(w, h);
-          layerCtx.globalCompositeOperation = 'source-over';
-          layerCtx.clearRect(0, 0, w, h);
-          layerCtx.fillStyle = '#dbe7ff';
-          layerCtx.fillRect(0, 0, w, h);
-          layerCtx.globalCompositeOperation = 'destination-in';
-          layerCtx.drawImage(mask, 0, 0);
-          layerCtx.globalCompositeOperation = 'source-over';
-          outCtx.globalCompositeOperation = 'soft-light';
-          outCtx.globalAlpha = clearS * 0.35;
-          outCtx.drawImage(skinLayerCanvas, 0, 0);
-          outCtx.globalCompositeOperation = 'source-over';
-          outCtx.globalAlpha = 1;
+          /* 🚨 淡ブルーの一枚重ね（#dbe7ff を color 合成）は **撤去した**（2026-08-28）。
+             これが灰色化の主犯だった。実測: これ単独で 彩度保持 78.4% / 血色 84.4%。
+             肌の色相（オレンジ寄り）とほぼ反対の色へ一律に寄せるので、
+             **混ぜる途中が必ず無彩色を通る**＝薄く掛けても灰色に振れる。
+             黄ぐすみ抜きは clearSkinTone の中で「黄みの量に比例して・輝度を保って」行う。 */
         }
 
         if (whiteS > 0) {
@@ -4084,6 +4610,30 @@
           outCtx.drawImage(skinLayerCanvas, 0, 0);
           outCtx.globalCompositeOperation = 'source-over';
           outCtx.globalAlpha = 1;
+
+          /* 🚨 血色を戻す（2026-08-28・検見 P1-3）。
+             美白は「明るく・血色は残す」設計のはずだったが、実測で
+             **a*（赤み）が 10.8 → 7.7 ＝ 29%減**、彩度 ΔC も −5.41 だった。
+             令和は desatPerUnit = 0 で彩度層を通していないのに落ちる——
+             原因は **白のソフトライト合成そのもの**（白に寄せれば彩度は必ず下がる）。
+             そこで合成した直後に、**加工前の work を saturation で重ねて彩度だけ戻す**。
+             saturation は「上の彩度 ＋ 下の色相・輝度」なので、上がった明るさは保たれる。
+             ⚠️ ゼロ戻し（alpha=1）は不自然（元の斑な彩度がそのまま戻る）なので 0.7 で止める。
+             ⚠️ 非分離ブレンドが使えない端末では黙って飛ばす（従来の見え方に落ちるだけ）。 */
+          if (WHITE_SAT_RESTORE > 0 && canUseColorBlend()) {
+            const satCtx = getSkinLayer(w, h);
+            satCtx.globalCompositeOperation = 'source-over';
+            satCtx.clearRect(0, 0, w, h);
+            satCtx.drawImage(work, 0, 0);
+            satCtx.globalCompositeOperation = 'destination-in';
+            satCtx.drawImage(mask, 0, 0);
+            satCtx.globalCompositeOperation = 'source-over';
+            outCtx.globalCompositeOperation = 'saturation';
+            outCtx.globalAlpha = Math.min(1, WHITE_SAT_RESTORE);
+            outCtx.drawImage(skinLayerCanvas, 0, 0);
+            outCtx.globalCompositeOperation = 'source-over';
+            outCtx.globalAlpha = 1;
+          }
 
           // 彩度落とし（平成の白肌）: グレーをマスク越しに彩度合成
           if (tone.desatPerUnit > 0) {
@@ -4117,8 +4667,10 @@
       }
     }
 
-    // チーク＆リップ（顔ランドマークベースのメイク）
-    drawMakeup(outCtx, faces, w, h, (params.cheek || 0) / 100, (params.lip || 0) / 100, conf);
+    /* チーク＆リップ（顔ランドマークベースのメイク）。
+       🚨 2026-08-28: 肌マスクを渡す（検見 P2-7「チークが髪へ最大ΔE 5.1 はみ出す」）。
+       ここまでで mask が作れていれば、その形の内側にしかメイクを落とさない。 */
+    drawMakeup(outCtx, faces, w, h, (params.cheek || 0) / 100, (params.lip || 0) / 100, conf, makeupMask);
     if ((params.namida || 0) > 0) drawNamida(outCtx, faces, w, h, (params.namida || 0) / 100);
 
     // 選択フィルター
@@ -4194,7 +4746,63 @@
   }
 
   // チーク＆リップの描画（本加工とライブ盛れプレビューの共通処理・2026-07-31切り出し）
-  function drawMakeup(outCtx, faces, w, h, cheekS, lipS, conf) {
+  /* ランドマークの重心（縮小・拡大の中心に使う）。2026-08-28 */
+  function polyCenterOf(lm, indices, w, h) {
+    let sx = 0, sy = 0;
+    indices.forEach((i) => { sx += lm[i].x * w; sy += lm[i].y * h; });
+    return { x: sx / indices.length, y: sy / indices.length };
+  }
+  function faceCenterOf(lm, w, h) { return polyCenterOf(lm, FACE_OVAL, w, h); }
+
+  /* 唇のフェザー用の作業キャンバス（2026-08-28）。肌マスクの作業面とは別に持つ
+     （drawMakeup は applyBeauty の途中から呼ばれるので、同じ面を使うと踏む） */
+  let makeupLayerCanvas = null, makeupLayerCtx = null, lipFeatherA = null, lipFeatherB = null;
+  function getMakeupLayer(w, h) {
+    if (!makeupLayerCanvas) { makeupLayerCanvas = document.createElement('canvas'); }
+    if (makeupLayerCanvas.width !== w || makeupLayerCanvas.height !== h) {
+      makeupLayerCanvas.width = w; makeupLayerCanvas.height = h;
+      makeupLayerCtx = makeupLayerCanvas.getContext('2d');
+    }
+    if (!makeupLayerCtx) makeupLayerCtx = makeupLayerCanvas.getContext('2d');
+    return makeupLayerCtx;
+  }
+  /* 唇の縁だけを 2〜3px ぼかす（縮小して戻す＝featherMask と同じ手だが、もっと浅く）。
+     肌マスク側（1/3）より浅い 1/2 にしてあるのは、唇は面積が小さく、
+     深くぼかすと **効きそのものが薄まる**ため（漏れは減るが唇のΔEも落ちる）。 */
+  const LIP_FEATHER_DIV = 3;
+  function featherLipMask(cv) {
+    const w = cv.width, h = cv.height;
+    if (!lipFeatherA) { lipFeatherA = document.createElement('canvas'); lipFeatherB = document.createElement('canvas'); }
+    const sw = Math.max(16, Math.round(w / LIP_FEATHER_DIV)), sh = Math.max(16, Math.round(h / LIP_FEATHER_DIV));
+    lipFeatherA.width = sw; lipFeatherA.height = sh;
+    const a = lipFeatherA.getContext('2d');
+    a.imageSmoothingEnabled = true; a.clearRect(0, 0, sw, sh);
+    a.drawImage(cv, 0, 0, sw, sh);
+    lipFeatherB.width = w; lipFeatherB.height = h;
+    const b = lipFeatherB.getContext('2d');
+    b.imageSmoothingEnabled = true; b.clearRect(0, 0, w, h);
+    b.drawImage(lipFeatherA, 0, 0, w, h);
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, w, h);
+    c.drawImage(lipFeatherB, 0, 0);
+    return cv;
+  }
+  /* マスク（α）越しに1色を塗る。マスク面を色で染めてから合成する */
+  function paintThroughMask(outCtx, maskCv, color, mode, alpha, w, h) {
+    const m = maskCv.getContext('2d');
+    m.save();
+    m.globalCompositeOperation = 'source-in';
+    m.fillStyle = color;
+    m.fillRect(0, 0, w, h);
+    m.restore();
+    outCtx.save();
+    outCtx.globalCompositeOperation = mode;
+    outCtx.globalAlpha = alpha;
+    outCtx.drawImage(maskCv, 0, 0);
+    outCtx.restore();
+  }
+
+  function drawMakeup(outCtx, faces, w, h, cheekS, lipS, conf, skinMask) {
     const cheekCol = makeupColor(conf, 'cheek');
     const lipCol = makeupColor(conf, 'lip');
     if (faces && faces.length && (cheekS > 0 || lipS > 0)) {
@@ -4202,42 +4810,87 @@
         if (!lm || lm.length < 468) return;
         const fw = dist(lmToPx(lm[234], w, h), lmToPx(lm[454], w, h));
         if (cheekS > 0) {
-          // 頬の中心（205/425）にふんわり円形グラデーション
-          /* 2026-08-13 実機テスト要望: 100%でも「ほんのり」だったため効きを約2倍に再スケール
-             （旧: 単層 alpha cheekS*0.32 → 新: 芯0.38+外周0.24の2層で中心合計約0.62。
-             最近のチーク流行に合わせ、MAXでははっきり分かる濃さ。単層でalphaだけ上げると
-             縁が急に切れて円が見えるため、半径違いの2層で外へ柔らかく減衰させる） */
-          [lm[205], lm[425]].forEach((pt) => {
-            const c = lmToPx(pt, w, h);
-            [{ r: fw * 0.17, a: cheekS * 0.38 }, { r: fw * 0.24, a: cheekS * 0.24 }].forEach(({ r, a }) => {
-              const grad = outCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+          /* 頬のチーク。2026-08-13 に単層→2層にして約2倍にしたが、
+             🚨 2026-08-28（検見 P2-7）の実測では **MAXでも頬のΔEが 3.95、
+             ナチュ盛れ相当(30)では 1.14＝並べても分からない** 水準だった。
+             さらに約1.6倍へ（芯0.38→0.62・外周0.24→0.40）。
+             **2層構造は変えない**（単層でαを上げると円の縁が見える。8/13の判断は正しい）。
+
+             位置も直す: v34 は 205/425（頬骨の内側・鼻寄り）そのものに置いていた。
+             実機のチークはもう少し外・下なので、205 と 50（頬の外側）の中点へ寄せる。
+
+             🚨 はみ出しも止める: drawMakeup は肌マスクを通していないので、
+             正面顔でも髪へ最大ΔE 5.1 のピンクが乗っていた。
+             顔輪郭ポリゴンでクリップしてから描く（顔の外には1画素も出さない）。 */
+          /* 効きの立ち上がりを少し前倒しする（γ<1）。
+             線形のままだと「MAXで8以上」と「30で3以上」を同時に満たせない
+             （線形なら 30 は MAX の 0.3 倍にしかならない）。
+             弱い側を持ち上げるのは、チークがいちばん使われるのが 30 前後だから。 */
+          const cs = Math.pow(Math.min(1, cheekS), CHEEK_GAMMA);
+          /* 🚨 顔の外へ出さない: 一度べつの面へ描いてから **肌マスク越しに** 落とす。
+             肌マスクが無い回（顔は取れたがマスクが作れない等）は顔輪郭ポリゴンで代用する。
+             v34 は outCtx に直接描いていたので、正面顔でも髪へ最大ΔE 5.1 が乗っていた。 */
+          const ck = getMakeupLayer(w, h);
+          ck.globalCompositeOperation = 'source-over';
+          ck.clearRect(0, 0, w, h);
+          [[205, 50], [425, 280]].forEach(([inner, outer]) => {
+            const a0 = lmToPx(lm[inner], w, h);
+            const a1 = lm[outer] ? lmToPx(lm[outer], w, h) : a0;
+            // 205/425（鼻寄り）から外側へ少しだけ寄せる。寄せすぎると生え際に届く
+            const t = CHEEK_OUTWARD;
+            const c = { x: a0.x + (a1.x - a0.x) * t, y: a0.y + (a1.y - a0.y) * t };
+            [{ r: fw * 0.17, a: cs * CHEEK_CORE }, { r: fw * 0.24, a: cs * CHEEK_EDGE }].forEach(({ r, a }) => {
+              const grad = ck.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
               grad.addColorStop(0, cheekCol);
               grad.addColorStop(1, 'rgba(255,255,255,0)');
-              outCtx.save();
-              outCtx.globalAlpha = Math.min(1, a);
-              outCtx.fillStyle = grad;
-              outCtx.beginPath();
-              outCtx.arc(c.x, c.y, r, 0, Math.PI * 2);
-              outCtx.fill();
-              outCtx.restore();
+              ck.save();
+              ck.globalAlpha = Math.min(1, a);
+              ck.fillStyle = grad;
+              ck.beginPath();
+              ck.arc(c.x, c.y, r, 0, Math.PI * 2);
+              ck.fill();
+              ck.restore();
             });
           });
+          /* 顔の内側だけに落とす。
+             ① 顔輪郭ポリゴンを **少し内側へ縮めた形**（CHEEK_OVAL_INSET）で必ず切る
+                — 輪郭のすぐ内側は髪の毛先が掛かるので、輪郭ちょうどでは足りない
+             ② 肌マスクがあれば、さらにその内側だけに限る（髪・服はマスクの時点で除外される）
+             ①だけでは実機の前髪に負け、②だけでは（マスクが顔の外まで肌と判定した回に）漏れる。
+             **両方の共通部分**にするのが安全側。 */
+          const fc = faceCenterOf(lm, w, h);
+          ck.save();
+          ck.globalCompositeOperation = 'destination-in';
+          ck.fillStyle = '#ffffff';
+          drawLandmarkPolygon(ck, lm, FACE_OVAL, w, h, fc.x, fc.y, CHEEK_OVAL_INSET);
+          ck.restore();
+          if (skinMask) {
+            ck.save();
+            ck.globalCompositeOperation = 'destination-in';
+            ck.drawImage(skinMask, 0, 0, w, h);
+            ck.restore();
+          }
+          outCtx.drawImage(makeupLayerCanvas, 0, 0);
         }
         if (lipS > 0) {
-          // 唇の外周ポリゴンに「color」ブレンドで色味だけ乗せる（質感・明るさは維持）
-          outCtx.save();
-          outCtx.globalCompositeOperation = 'color';
-          outCtx.globalAlpha = Math.min(1, lipS * 0.7);
-          outCtx.fillStyle = lipCol;
-          drawLandmarkPolygon(outCtx, lm, LIPS_OUTER, w, h);
-          outCtx.restore();
-          // わずかに彩度と血色を足す（ソフトライト）
-          outCtx.save();
-          outCtx.globalCompositeOperation = 'soft-light';
-          outCtx.globalAlpha = Math.min(1, lipS * 0.5);
-          outCtx.fillStyle = lipCol;
-          drawLandmarkPolygon(outCtx, lm, LIPS_OUTER, w, h);
-          outCtx.restore();
+          /* 🚨 2026-08-28（検見 P3-10）: 唇ポリゴンを直接塗っていたので、
+             **唇の外1pxに最大ΔE 23.8 の段差**が立っていた（塗り絵に見える）。
+             唇の形に塗った層を数pxぼかしてから、その層越しに合成する。
+             効き自体（唇 ΔE 15.8）は十分なので、境界だけを直す。 */
+          const lipLayer = getMakeupLayer(w, h);
+          lipLayer.globalCompositeOperation = 'source-over';
+          lipLayer.clearRect(0, 0, w, h);
+          lipLayer.fillStyle = '#ffffff';
+          /* 🚨 ぼかすと色は**外へ広がる**（ぼかしただけでは漏れは減らない。実測でむしろ増えた）。
+             先にポリゴンを少し縮めてからぼかすと、ぼけの外側の裾がちょうど元の唇の縁に来て、
+             「段差は消える・外へは出ない」の両方が立つ。 */
+          const lc = polyCenterOf(lm, LIPS_OUTER, w, h);
+          drawLandmarkPolygon(lipLayer, lm, LIPS_OUTER, w, h, lc.x, lc.y, LIP_SHRINK);
+          featherLipMask(makeupLayerCanvas);
+          // 色味だけ乗せる（質感・明るさは維持）
+          paintThroughMask(outCtx, makeupLayerCanvas, lipCol, 'color', Math.min(1, lipS * 0.7), w, h);
+          // わずかに彩度と血色を足す
+          paintThroughMask(outCtx, makeupLayerCanvas, lipCol, 'soft-light', Math.min(1, lipS * 0.5), w, h);
           outCtx.globalCompositeOperation = 'source-over';
           outCtx.globalAlpha = 1;
         }
