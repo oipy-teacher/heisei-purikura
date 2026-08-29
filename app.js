@@ -3473,6 +3473,40 @@
   const EYE_KY = 1.6;             // デカ目の作用範囲を縦だけ狭める（1=真円。眉に届かせないため）
   const EYE_TAIL_R = 0.45;        // TYPE02（たれ目）の作用半径＝目幅×これ（v34 は 0.9）
   const WARP_COPY_PX = 0.35;
+  /* ワープの画素を1つ取ってくる（radialWarp / directionalWarp / contourBandWarp の共通処理）。
+
+     🚨🚨 2026-08-29（工藤・目視で見つけた。ハーネスは50/50合格していた）:
+     8/28 に入れた「動く量が WARP_COPY_PX 未満ならコピー」は **しきい値で切っていた**ため、
+     **動く量がちょうど 0.35px をまたぐ線に沿って、髪と顔の境目が階段状にギザついた**。
+     ぼかし（補間）がかかる画素とかからない画素が1pxで隣り合うので、
+     画像の中でいちばんコントラストの高い髪の縁に、その境界線がそのまま出る。
+     WARP_COPY_PX=0 にして撮り比べて原因を確定させた（/tmp/fix28/zoom-copytest.png）。
+
+     直し方は「しきい値をやめる」のではなく **切らずに混ぜる**こと。
+     動く量 0 → 完全コピー、WARP_COPY_PX → 完全補間、その間は t² でつなぐ。
+     つなぎ方は t² にした。線形（t）と t² の両方を実測して比べたが、
+     **キメの残り方は同じだった**（小顔15の頬キメ残存はどちらも96%・小顔100は112%）。
+     差が出ないので、動く量が小さいほどコピー寄りになる t² を選んだだけで、
+     「t² でないと溶ける」という根拠は無い（測る前はそう予想していたが、外れた）。
+
+     → 規約: **同じ問いに答える式が3箇所にあったら関数にする**（8/28 の自分の教訓）。
+     　しきい値の切り方を直す場所も、これで1つになった。 */
+  function warpSample(sd, dd, o, sx, sy, mvx, mvy, bw) {
+    const d = Math.abs(mvx) > Math.abs(mvy) ? Math.abs(mvx) : Math.abs(mvy);
+    if (d <= 0) { dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3]; return; }
+    const ix = Math.floor(sx), iy = Math.floor(sy);
+    const fx = sx - ix, fy = sy - iy;
+    const o00 = (iy * bw + ix) * 4, o10 = o00 + 4, o01 = o00 + bw * 4, o11 = o01 + 4;
+    let k = 1;
+    if (d < WARP_COPY_PX) { const t = d / WARP_COPY_PX; k = t * t; }
+    for (let ch = 0; ch < 4; ch++) {
+      const v = sd[o00 + ch] * (1 - fx) * (1 - fy)
+              + sd[o10 + ch] * fx * (1 - fy)
+              + sd[o01 + ch] * (1 - fx) * fy
+              + sd[o11 + ch] * fx * fy;
+      dd[o + ch] = k === 1 ? v : sd[o + ch] + (v - sd[o + ch]) * k;
+    }
+  }
   /* 小顔の作り直しの定数（2026-08-28・検見 P1-1）。
      FACE_OVAL は [10,338,...,109] の36点。下半分＝index 8(454・右頬骨)〜28(234・左頬骨)、
      18 が 152（あご先）。ここを1点ずつ内側へ寄せる。 */
@@ -3546,29 +3580,11 @@
         let sy = cy + dy * t - y0;
         if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
         if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
-        /* 🚨 動く量が小さい画素は **補間せずそのまま写す**（2026-08-28・検見 P2-4）。
+        /* 動く量が小さい画素は補間をほとんど混ぜない（2026-08-28・検見 P2-4／混ぜ方は 8/29 に修正）。
            バイリニア補間は「0.5px ずらす」ときにいちばん強いローパスになる（4画素の平均に近づく）。
            そのため v34 は **弱い強度ほど肌が溶けていた**——小顔15（ナチュ盛れ相当）で
-           頬のキメが 33% まで落ち、小顔100（92%）より酷いという逆転が起きていた。
-           WARP_COPY_PX 未満の移動は、絵として見えない代わりにキメだけを削るので、コピーで済ませる。 */
-        if (Math.abs(sx - (px - x0)) < WARP_COPY_PX && Math.abs(sy - (py - y0)) < WARP_COPY_PX) {
-          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
-          continue;
-        }
-        // バイリニア補間
-        const ix = Math.floor(sx), iy = Math.floor(sy);
-        const fx = sx - ix, fy = sy - iy;
-        const o00 = (iy * bw + ix) * 4;
-        const o10 = o00 + 4;
-        const o01 = o00 + bw * 4;
-        const o11 = o01 + 4;
-        for (let ch = 0; ch < 4; ch++) {
-          const v = sd[o00 + ch] * (1 - fx) * (1 - fy)
-                  + sd[o10 + ch] * fx * (1 - fy)
-                  + sd[o01 + ch] * (1 - fx) * fy
-                  + sd[o11 + ch] * fx * fy;
-          dd[o + ch] = v;
-        }
+           頬のキメが 33% まで落ち、小顔100（92%）より酷いという逆転が起きていた。 */
+        warpSample(sd, dd, o, sx, sy, sx - (px - x0), sy - (py - y0), bw);
       }
     }
     ctx.putImageData(dst, x0, y0);
@@ -3606,23 +3622,8 @@
         let sy = py - dyAmt * falloff - y0;
         if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
         if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
-        // 動く量が小さい画素はコピーで済ませる（radialWarp と同じ理由・検見 P2-4）
-        if (Math.abs(sx - (px - x0)) < WARP_COPY_PX && Math.abs(sy - (py - y0)) < WARP_COPY_PX) {
-          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
-          continue;
-        }
-        const ix = Math.floor(sx), iy = Math.floor(sy);
-        const fx = sx - ix, fy = sy - iy;
-        const o00 = (iy * bw + ix) * 4;
-        const o10 = o00 + 4;
-        const o01 = o00 + bw * 4;
-        const o11 = o01 + 4;
-        for (let ch = 0; ch < 4; ch++) {
-          dd[o + ch] = sd[o00 + ch] * (1 - fx) * (1 - fy)
-                     + sd[o10 + ch] * fx * (1 - fy)
-                     + sd[o01 + ch] * (1 - fx) * fy
-                     + sd[o11 + ch] * fx * fy;
-        }
+        // 取り方は radialWarp と共通（検見 P2-4）
+        warpSample(sd, dd, o, sx, sy, sx - (px - x0), sy - (py - y0), bw);
       }
     }
     ctx.putImageData(dst, x0, y0);
@@ -3688,19 +3689,8 @@
         let sy = py - (vy2 / len) * amt - y0;
         if (sx < 0) sx = 0; else if (sx > bw - 1.001) sx = bw - 1.001;
         if (sy < 0) sy = 0; else if (sy > bh - 1.001) sy = bh - 1.001;
-        if (Math.abs(sx - x) < WARP_COPY_PX && Math.abs(sy - y) < WARP_COPY_PX) {
-          dd[o] = sd[o]; dd[o + 1] = sd[o + 1]; dd[o + 2] = sd[o + 2]; dd[o + 3] = sd[o + 3];
-          continue;
-        }
-        const ix = Math.floor(sx), iy = Math.floor(sy);
-        const fx = sx - ix, fy = sy - iy;
-        const o00 = (iy * bw + ix) * 4, o10 = o00 + 4, o01 = o00 + bw * 4, o11 = o01 + 4;
-        for (let ch = 0; ch < 4; ch++) {
-          dd[o + ch] = sd[o00 + ch] * (1 - fx) * (1 - fy)
-                     + sd[o10 + ch] * fx * (1 - fy)
-                     + sd[o01 + ch] * (1 - fx) * fy
-                     + sd[o11 + ch] * fx * fy;
-        }
+        // 取り方は radialWarp と共通（検見 P2-4）
+        warpSample(sd, dd, o, sx, sy, sx - x, sy - y, bw);
       }
     }
     ctx.putImageData(dst, x0, y0);
@@ -4038,7 +4028,15 @@
      目の穴（約53×20px）は縮小後 6.6×2.5px しか残らず、輪郭も8px幅で溶ける。
      実測: 目尻α102・唇の端α60・輪郭の外5pxにα61（0=保護 / 255=全がけ）。
      その結果、美肌100 単独でも目が ΔE 5.57・唇 1.89・眉 最大21.5 動いていた。
-     1/3（ぼけ幅 約3px）に狭める。輪郭を馴染ませる目的には3pxで足りる。 */
+     1/3（ぼけ幅 約3px）に狭める。輪郭を馴染ませる目的には3pxで足りる。
+
+     🚨 2026-08-29（工藤・目視で見つけた）: 1/3 に狭めたら、**髪と顔の境目が階段状に
+     ギザついた**（数値は全部合格していた。出した絵を並べて初めて分かった）。
+     理由は縮小率ではなく **戻し方**: 1/3 → 原寸の一発拡大は双線形＝折れ線なので、
+     3pxごとに折れ目が立つ。8px幅のときは「ぼけ幅 ≫ 折れ目の間隔」で見えなかっただけ。
+     直し方は縮小率を戻す（＝輪郭の外へ漏れる）のではなく **2段階で戻す**こと。
+     双線形を2回通すと折れ線が2次曲線に近づき、折れ目が消える。
+     外へ広がる量はほとんど増えない（実測: 輪郭の外5px α 7 → 13。合格ラインは30以下）。 */
   const HOLE_DARK_V = 0.50;       // 暗さのしきい（0〜1）。これより暗く彩度も低ければ目・眉とみなす
   const HOLE_DARK_S = 0.70;
   const HOLE_LIP_RG = 38;         // R が G よりこれ以上大きければ唇の候補
@@ -4055,14 +4053,17 @@
     aCtx.imageSmoothingEnabled = true;
     aCtx.clearRect(0, 0, sw, sh);
     aCtx.drawImage(maskCanvas, 0, 0, sw, sh);
-    maskFeatherB.width = w; maskFeatherB.height = h;
+    // 中間サイズ（原寸の 1/1.5）へいったん戻す。ここを飛ばすと 3px ごとに折れ目が立つ
+    const mw = Math.max(sw, Math.round(w / 1.5)), mh = Math.max(sh, Math.round(h / 1.5));
+    maskFeatherB.width = mw; maskFeatherB.height = mh;
     const bCtx = maskFeatherB.getContext('2d');
     bCtx.imageSmoothingEnabled = true;
-    bCtx.clearRect(0, 0, w, h);
-    bCtx.drawImage(maskFeatherA, 0, 0, w, h);
+    bCtx.clearRect(0, 0, mw, mh);
+    bCtx.drawImage(maskFeatherA, 0, 0, mw, mh);
     const mCtx = maskCanvas.getContext('2d');
+    mCtx.imageSmoothingEnabled = true;
     mCtx.clearRect(0, 0, w, h);
-    mCtx.drawImage(maskFeatherB, 0, 0);
+    mCtx.drawImage(maskFeatherB, 0, 0, w, h);
     return maskCanvas;
   }
 
@@ -4093,11 +4094,44 @@
     mCtx.putImageData(md, 0, 0);
   }
 
+  /* 穴の縁だけを約2pxぼかすための作業面（2026-08-29・工藤。目視で見つけた）。
+     🚨 穴を destination-out で「くっきり」開けると、**穴のすぐ外に段差が立つ**。
+     肌加工がかかった画素とかかっていない画素が1pxで隣り合うので、
+     眉と目のまわりに **明るい縁取り**が出ていた（絵にすると輪郭線を描いたように見える）。
+     穴そのものは残したいので、マスク全体を再びぼかす（8/28に潰した手）のではなく、
+     **穴のレイヤーだけを浅くぼかしてから引く**。
+     こうすると穴の中心は α0 のまま（＝P2-5 の合格を維持）、縁だけが2pxで馴染む。 */
+  let holeLayer = null, holeFeatherA = null, holeFeatherB = null;
+  const HOLE_FEATHER_DIV = 2;    // 原寸の1/2へ落として戻す＝ぼけ幅 約2px
+  function featherHoleLayer(cv) {
+    const w = cv.width, h = cv.height;
+    if (!holeFeatherA) { holeFeatherA = document.createElement('canvas'); holeFeatherB = document.createElement('canvas'); }
+    const sw = Math.max(16, Math.round(w / HOLE_FEATHER_DIV)), sh = Math.max(16, Math.round(h / HOLE_FEATHER_DIV));
+    holeFeatherA.width = sw; holeFeatherA.height = sh;
+    const a = holeFeatherA.getContext('2d');
+    a.imageSmoothingEnabled = true; a.clearRect(0, 0, sw, sh);
+    a.drawImage(cv, 0, 0, sw, sh);
+    holeFeatherB.width = w; holeFeatherB.height = h;
+    const b = holeFeatherB.getContext('2d');
+    b.imageSmoothingEnabled = true; b.clearRect(0, 0, w, h);
+    b.drawImage(holeFeatherA, 0, 0, w, h);
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, w, h);
+    c.drawImage(holeFeatherB, 0, 0);
+    return cv;
+  }
+
   // 目・眉・唇の除外穴をマスクへ開ける（くっきり残すべきパーツ）
   function cutFaceHoles(mCtx, faces, w, h, eyeS) {
     if (!faces || !faces.length) return;
+    if (!holeLayer) holeLayer = document.createElement('canvas');
+    if (holeLayer.width !== w || holeLayer.height !== h) { holeLayer.width = w; holeLayer.height = h; }
+    const hCtx = holeLayer.getContext('2d');
+    hCtx.clearRect(0, 0, w, h);
+    const target = mCtx;      // 最後に destination-out で引く相手
+    mCtx = hCtx;              // 以下の描画はいったん穴レイヤーへ（形の作り方は変えない）
     mCtx.save();
-    mCtx.globalCompositeOperation = 'destination-out';
+    mCtx.globalCompositeOperation = 'source-over';
     mCtx.fillStyle = '#ffffff';
     mCtx.strokeStyle = '#ffffff';
     mCtx.lineJoin = 'round';
@@ -4129,6 +4163,12 @@
       drawLandmarkPolygon(mCtx, lm, LIPS_OUTER, w, h, mc.x, mc.y, 1.25);
     });
     mCtx.restore();
+    // 縁だけ2pxぼかしてから、まとめてマスクから引く
+    featherHoleLayer(holeLayer);
+    target.save();
+    target.globalCompositeOperation = 'destination-out';
+    target.drawImage(holeLayer, 0, 0);
+    target.restore();
   }
 
   // 肌マスクを生成（白=肌）。
