@@ -2053,15 +2053,39 @@
     }
     const md = liveSkinSmallCtx.createImageData(mw, mh);
     const d = md.data;
+    /* 肌がある範囲（小さいマスク上の外接矩形）もこの周回のついでに取っておく。
+       🚨 2026-08-29（工藤・実測で分かった）: ライブの透明感（clearSkinTone）は
+       画素を1つずつなめる処理で、**顔が取れているときだけ顔のまわりに絞られていた**。
+       顔が見つからないフレームでは絞る箱が無く、640×480 の全面を毎フレーム走っていた
+       （実測 15.6ms/フレーム＝ renderLiveBeauty 全体 28.5ms の 55%）。
+       顔が無いときこそ効果は薄いのに、いちばん重いという逆転。
+       肌マスクはこの周回で作っているので、外接矩形もここで取れば追加コストはほぼ0。 */
+    let bx0 = mw, by0 = mh, bx1 = -1, by1 = -1;
     for (let i = 0; i < len; i++) {
       const conf = Math.min(1, faceSkin[i] + bodySkin[i] * 0.65);
       const ema = liveSkinEMA[i] = liveSkinEMA[i] * 0.4 + conf * 0.6;
       const o = i * 4;
       d[o] = 255; d[o + 1] = 255; d[o + 2] = 255;
-      d[o + 3] = (smoothstep(0.35, 0.7, ema) * 255) | 0;
+      const a = (smoothstep(0.35, 0.7, ema) * 255) | 0;
+      d[o + 3] = a;
+      if (a > 8) {
+        const x = i % mw, y = (i / mw) | 0;
+        if (x < bx0) bx0 = x; if (x > bx1) bx1 = x;
+        if (y < by0) by0 = y; if (y > by1) by1 = y;
+      }
     }
+    liveSkinBoxSmall = bx1 < 0 ? null : { x0: bx0 / mw, y0: by0 / mh, x1: (bx1 + 1) / mw, y1: (by1 + 1) / mh };
     liveSkinSmallCtx.putImageData(md, 0, 0);
     liveSkinReady = true;
+  }
+
+  /* 肌マスクの外接矩形を原寸の座標で返す（顔が取れないときの clearSkinTone の作用範囲）。
+     顔が取れているときは faceBox（顔のまわり）のほうが狭いので、そちらを優先する。 */
+  let liveSkinBoxSmall = null;
+  function liveSkinBox(w, h) {
+    const b = liveSkinBoxSmall;
+    if (!b) return null;
+    return { x0: b.x0 * w, y0: b.y0 * h, x1: b.x1 * w, y1: b.y1 * h };
   }
 
   // デカ目のライブ版: 本番の radialWarp は重いので、フェザー付き拡大コピーで近似する
@@ -2260,7 +2284,7 @@
         if (conf.clearColorSmooth && livePerf.eyeOn) {
           clearSkinTone(ctx.canvas, makeBlurredFull(liveClean, 5, 'liveClear'), liveMask, w, h,
                         Math.min(1, clearS * CLEAR_MURA), Math.min(1, clearS * CLEAR_YELLOW),
-                        faceBox(liveFaces, w, h, 0.15));
+                        faceBox(liveFaces, w, h, 0.15) || liveSkinBox(w, h));
         }
       }
       if (whiteS > 0) {
