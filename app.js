@@ -4212,9 +4212,15 @@
     let cb0 = 105, cr0 = 152; // 一般的な肌のCbCr
     if (imgData && faces && faces.length) {
       let sumCb = 0, sumCr = 0, cnt = 0;
+      /* 🚨 2026-08-29（工藤・実アプリのe2eで踏んだ。v36から在る穴）:
+         ここだけ `if (!lm)` しか見ておらず、**点数が足りない顔データが来ると
+         `lm[pi].x` で落ちて盛り加工そのものが死ぬ**。
+         同じファイルの cutFaceHoles / drawMakeup は `lm.length < 468` で弾いているので、
+         判定をそちらに揃える。落ちる代わりに一般的な肌色（cb0/cr0 の初期値）で続行する。 */
       faces.forEach((lm) => {
-        if (!lm) return;
+        if (!lm || lm.length < 468) return;
         SKIN_SAMPLE_POINTS.forEach((pi) => {
+          if (!lm[pi]) return;
           const px = Math.round(lm[pi].x * w), py = Math.round(lm[pi].y * h);
           if (px < 0 || py < 0 || px >= w || py >= h) return;
           const o = (py * w + px) * 4;
