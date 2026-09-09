@@ -376,7 +376,10 @@ body.theme-reiwa .tl-icon {
   gap: 6px;
 }
 .layout-item.selected { border-color: #ff2fa0; transform: scale(1.05); }
-.layout-item svg { width: 52px; height: 68px; display: block; }
+/* 2026-09-09: app.js の layoutIconSVG() が実物の layoutCells() を縮めて描くようになり、
+   viewBox が 68×51.4（台紙 900×680・比1.324）のよこ長になった。52×68 のたて長のままだと
+   アイコンが非等方に潰れ、客が焼き上がりと違う形を見て分割を選ぶことになる */
+.layout-item svg { width: 68px; height: 51px; display: block; }
 .layout-item .layout-label { font-size: 11px; font-weight: 800; color: #a03cae; }
 body[data-mode="reiwa"] .layout-item { background: #f7f2ea; }
 body[data-mode="reiwa"] .layout-item.selected { border-color: #b39b8a; }
@@ -623,7 +626,10 @@ body.theme-reiwa .pp-item.on .pp-num { background: var(--r-accent); }
 .photo-pick-left { flex: 1 1 auto; min-width: 0; }
 .photo-pick-right { flex: 0 0 auto; }
 .photo-pick-preview {
-  width: 102px; height: 135px; display: block;
+  /* 2026-09-09: 台紙が 900×680（よこ長・比1.324）になったのに合わせて見本もよこ長にする。
+     index.html の canvas 属性が 270×204 になったので、たて長のまま(102×135)だと
+     非等方に潰れて見える（令和の「シールにのせる写真えらび」） */
+  width: 135px; height: 102px; display: block;
   background: rgba(0,0,0,.06); border: 2px solid rgba(0,0,0,.12);
 }
 body.theme-reiwa .photo-pick-preview { border-color: rgba(168,145,125,.5); }
@@ -943,8 +949,18 @@ input[type="range"]#stamp-size, input[type="range"]#pen-size {
 .pen-type-row, .size-row { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
 .pen-type-btn, .size-btn {
   flex: 1;
-  min-width: 52px;
-  padding: 7px 4px;
+  /* 🚨 2026-09-09（工藤）: 平成のペン種が3→5に増え、スマホ縦(390px)で1個57pxになった結果、
+     「キラキラ」だけが「キラキ／ラ」と2行に折り返して読めなくなっていた（令和の横持ちでは
+     「キラキラ」「マーカー」「クレヨン」の3つが折り返していた）。
+     教訓「収まった と 読める は別の検収項目」（engineer/growth-log 2026-08-14）に従い、
+     **4文字（12px×4＝48px）が1行で入る幅を下限として保証する**:
+       min-width 56px − 左右padding 2+2 − 枠 2+2 = 中身48px
+     `white-space: nowrap` は「入らなければ折り返す」を禁じるためではなく、
+     入る幅を上の min-width で保証したうえで、行の割り付け誤差で折れないようにする念押し。
+     min-width を触るときは必ず「4文字が1行に入るか」を実測すること。 */
+  min-width: 56px;
+  white-space: nowrap;
+  padding: 7px 2px;
   border-radius: 10px;
   border: 2px solid #d9c2ee;
   background: #fff;
@@ -1306,12 +1322,26 @@ body[data-mode="reiwa"] .deco-countdown { color: rgba(168,145,125,.6); }
 }
 .printer-slot {
   background: #fff;
+  /* 🚨 2026-09-09（工藤）: 素の block のままだと `.print-stage` いっぱいに広がる。
+     `.print-stage` の幅は「いちばん広い子の max-content」＝ 保存ボタン2つ（実測556px）で
+     決まっていたので、プリンタの箱が紙よりずっと広くなり、平成では
+     `.print-sheet-wrap` の黒地（#2a0b24）が**紙の左右に真っ黒な空洞**として出ていた
+     （実測・片側: 令和スマホ縦28px / 令和iPad横47px / 平成iPad横32.5px）。
+     ＝「シールが、出てくるスリットより極端に細い」の正体。
+     2026-08-13 に平成のスマホ縦だけ `width: fit-content` の対症療法が入っていたが、
+     `(max-width:480px) and (orientation:portrait)` にしか掛かっておらず、
+     これが「縦の時と横の時でずれる」の一因でもあった。ここで全条件に効かせる。
+     ＝ 箱を紙に合わせる（機械の顔＝虹帯・ネジ・とりだしぐち・マステの寸法は変わらない）。 */
+  width: fit-content;
+  margin-inline: auto;
   padding: 16px;
   border-radius: 12px;
   box-shadow: 0 12px 30px rgba(0,0,0,.4);
 }
 /* 排出口: シールが上からゆっくり出てくる（プリンタの吐き出し待ちの演出） */
-.print-sheet-wrap { overflow: hidden; border-radius: 6px; }
+/* 窓のほうも紙幅に合わせる（上の fit-content が効かない組み方に変わっても
+   黒い空洞が復活しないための二重の守り・2026-09-09） */
+.print-sheet-wrap { overflow: hidden; border-radius: 6px; width: fit-content; margin-inline: auto; }
 #final-canvas { max-width: 78vw; max-height: 52vh; display: block; border-radius: 6px; }
 .print-stage.printing #final-canvas { animation: sheetEject 4.6s cubic-bezier(.3,.6,.4,1) forwards; }
 @keyframes sheetEject {
@@ -1787,6 +1817,12 @@ body[data-mode="reiwa"] .print-caption { color: #8a7568; }
   .deco-toolbar .rakuraku-btn small { font-size: 9px; }
   .deco-toolbar .tool-btn { font-size: 11px; padding: 6px 4px; }
   .deco-toolbar .tool-btn small { font-size: 9px; }
+  /* 横持ちの道具箱は幅170〜230pxしかなく、ペン種の行は実測158〜180px。
+     12pxのままだと4文字(48px)が入る個数が減って行が増えるので、
+     道具ボタンと同じ11pxに揃える（4文字＝44px・中身は56−3−3−2−2＝46pxで入る）。
+     2026-09-09（工藤・ペン種が5種/7種に増えた対応） */
+  .deco-toolbar .pen-type-btn,
+  .deco-toolbar .size-btn { font-size: 11px; padding: 6px 3px; }
   .deco-toolbar .tool-group { gap: 6px; }
   /* 写真の左右に出す送りボタン（横持ちのみ・タップでも切り替えられるように）。
      .shot-nav の既定(display:none)はこの後ろで定義されるため、
@@ -3095,8 +3131,29 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 .timer-label { white-space: nowrap; }
 
 /* プリント画面: 縦が足りない端末では縮めず縦スクロールで全部に届くようにする */
-#screen-print { overflow-y: auto; }
-.print-stage { margin: auto; padding: 10px 0 16px; }
+/* 🚨 2026-09-09（工藤・排出演出の「シールの上が切れる」不具合の正体）
+   `.print-stage { margin: auto }` による中央寄せは、中身が画面より高いとき
+   **上下に均等にはみ出す**。scrollTop は 0 より小さくできないので、上側の
+   はみ出しはスクロールしても永久に届かない（実測: スマホ縦の平成で -46.1px、
+   令和で -50.7px、iPad横で -23.1px ＝ 台紙の上端「★太子祭プリ★」の帯と
+   「プリント中…」が画面外に出たまま戻せない）。客からは「シールの上が切れている
+   ＝サイズがおかしい」に見えていた。
+   直し方: 自動マージンによる縦中央寄せをやめ、フレックスの **safe center** に任せる。
+   safe は「収まるときだけ中央・はみ出すときは先頭（上端）寄せ」に自動で切り替わるので、
+   スクロールで必ず上端に戻れる。横方向（align-items）も同じ理由で safe にする
+   （平成の台紙は rotate(-3deg) のぶん横に広く、狭い端末で左が切れると
+   overflow-x:hidden のせいで拾えないため）。
+   直前の行に safe なしの `center` を残してあるのは保険（safe 未対応の古い実装では
+   宣言ごと捨てられ、従来どおりの中央寄せに戻るだけで、今より悪くはならない）。 */
+#screen-print {
+  overflow-y: auto;
+  justify-content: center;
+  justify-content: safe center;
+  align-items: center;
+  align-items: safe center;
+}
+/* margin は左右の中央寄せだけに使う（縦の auto は上のはみ出しを生むので使わない） */
+.print-stage { margin: 0 auto; padding: 10px 0 16px; }
 /* 排出中はシールが縦いっぱいになり、上の「プリント中…」が画面の外へ押し出されていた
    （v23では丸ごと見えなくなっていた）。演出中だけ上に逃げ場を作る（2026-08-15・P-4） */
 .print-stage.printing { padding-top: 52px; }
@@ -3142,13 +3199,21 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 @media (max-width: 480px) and (orientation: portrait) {
   #final-canvas { max-height: 88vw; }
   /* スロットは中身（シート）に幅を合わせる。ブロックのままだと画面幅いっぱいに広がり、
-     暗い窓の左右にもシートより41pxずつ広い空洞ができていた */
+     暗い窓の左右にもシートより41pxずつ広い空洞ができていた
+     → 2026-09-09（工藤）: この fit-content は `.printer-slot` の素の指定へ移し、
+       全条件に効かせた。ここに残すのは「狭い画面だけ左右の余白を詰める」ぶんだけ。 */
   body.theme-heisei .printer-slot {
-    width: fit-content;
-    margin-left: auto;
-    margin-right: auto;
-    padding: 30px 18px 12px;
+    /* 🚨 上は 40px から減らさない。平成の機械パーツはこの上パディングの中に
+       絶対配置されている（.printer-label が top:20px・.print-rainbow が top:6px）。
+       30px にすると「▼ とりだしぐち ▼」の下端(43px)が窓の上端(34px)より下に来て、
+       ラベルがシールの上に乗る（実測9pxの重なり・2026-09-09に発見）。 */
+    padding: 40px 18px 12px;
   }
+  /* ネジは箱の左右 -34px の外。台紙が紙幅(348px)になった狭い縦画面では
+     左のネジが画面から9.4pxはみ出して欠けて見える（旧版から出ていた）。
+     食い込ませて全部見せる（2026-09-09・工藤） */
+  body.theme-heisei .printer-screw.left { left: -22px; }
+  body.theme-heisei .printer-screw.right { right: -22px; }
 }
 
 /* ===== 2026-08-13 実機テスト対応の追加UI（文字スタンプ色/角度・見本の写真タップ貼り） ===== */
@@ -3466,6 +3531,11 @@ body.theme-reiwa .save-alt { background: var(--r-accent, #c9a227); color: #fff; 
   /* 狭い画面ではトグルの文字を1段落として、見出しの折り返し位置を確保する（2026-08-15） */
   .chroma-toggle { min-width: 92px; font-size: 13px; padding: 10px 12px; }
   .chroma-title { font-size: 14px; }
+  /* ペン種の「キラキラ」等（4文字）の余裕を作る（2026-09-09・工藤）。
+     390px幅では1個57px＝中身49pxで、12pxの4文字(48px)だと余裕が1pxしかない。
+     フォントが少しでも広い端末（Hiragino が無い環境の代替書体）で溢れるので、
+     道具箱の他のボタンと同じ11pxに落として5pxの余裕を作る。 */
+  .pen-type-btn, .size-btn { font-size: 11px; }
 }
 
 /* 保存画面の横持ち2段組（2026-08-15・独立した高さ条件）
@@ -3479,16 +3549,33 @@ body.theme-reiwa .save-alt { background: var(--r-accent, #c9a227); color: #fff; 
   #screen-print .print-stage {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    /* 🚨 2026-09-09（工藤）: center だと、背の高い右列（案内＋保存ボタン＋1まいずつ保存の
+       サムネ4枚＝実測401px）に合わせてシールの列まで下へ押し下げられ、
+       台紙の下端が初期表示から21px出ていた（＝シールの下が切れて見える）。
+       flex-start にすると台紙は上端から始まり、横持ちでもシール全体が最初から見える。 */
+    align-items: flex-start;
     justify-content: center;
     gap: 4px 20px;
     padding: 4px 0 8px;
   }
   #screen-print .print-progress { flex-basis: 100%; margin: 0 0 4px; font-size: 15px; }
-  #screen-print .printer-slot { padding: 8px; }
-  #screen-print #final-canvas { max-height: 62vh; max-width: 38vw; }
+  /* ここでは台紙はフレックスの子。auto マージンは余白を全部吸って2列の中央寄せを壊すので戻す */
+  #screen-print .printer-slot { padding: 8px; margin-inline: 0; }
+  /* 🚨 平成だけは上パディングを削れない（2026-09-09・詳細度の負けの修正）。
+     `#screen-print .printer-slot`（詳細度 1,1,0）が `body.theme-heisei .printer-slot`（0,2,1）に
+     勝っていたため、横持ちでは上パディングが 40px→8px になり、その中に絶対配置されている
+     機械の顔が全部ずれていた（「▼ とりだしぐち ▼」が窓の31px上まで下がってシールに乗り、
+     虹帯とラベルが重なる）。左右と下だけ詰め、上の予約帯は残す。 */
+  body.theme-heisei #screen-print .printer-slot { padding: 40px 10px 8px; }
+  /* ネジは箱の左右 -34px の外に置かれている。横持ちでは台紙の左端が画面端まで来るので
+     はみ出して切れる。低い画面では飾りとして省く（平成の扉の年代票と同じ扱い） */
+  body.theme-heisei #screen-print .printer-screw { display: none; }
+  #screen-print #final-canvas { max-height: 68vh; max-width: 38vw; }
   #screen-print .print-caption { margin-top: 4px; font-size: 12px; }
-  #screen-print .print-after { flex: 0 1 auto; max-width: 56vw; }
+  /* 🚨 56vw だと 台紙(344)+すき間(20)+右列(473)=837 で 844px の画面に7pxしか余らず、
+     平成の rotate(-3deg) のぶん（片側7.7px）台紙の左が画面の外へ出ていた（実測3.8px）。
+     右列を53vwに詰めて、回転が収まる余白を左右に確保する（2026-09-09） */
+  #screen-print .print-after { flex: 0 1 auto; max-width: 53vw; }
   #screen-print .print-instruction { margin-top: 0; font-size: 14px; line-height: 1.5; }
   #screen-print .print-actions { margin-top: 10px; gap: 10px; }
   #screen-print .print-extra { margin-top: 8px; }
