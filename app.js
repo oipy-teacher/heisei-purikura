@@ -64,16 +64,22 @@
          当時「色を選ぶ」道具はペンで、ペン色切替は実機に確実にあった（花鳥風月2003はツール2000種以上）。
          文字スタンプの色パレット撤去の代わりに、当時のポスカ/カラーペン文化に寄せたビビッド系で8→12色 */
       penColors: ['#ff2fa0', '#ff8fc7', '#ff3b30', '#ff8a2a', '#ffef5c', '#5cff8f', '#00b389', '#5cc8ff', '#2a5bff', '#a06bff', '#ffffff', '#000000'],
-      /* 2026-08-22 追加（柄本仕様書 C-2・モニター要望「筆の種類も増やした方が楽しい」への回答）:
-         「筆の種類」（マーカー/クレヨン/にじみ）は1999〜2003年の裏が取れなかったので**足さない**
+      /* 2026-09-04 更新（柄本の再検証 S-10・`data/work/heisei-jikki-sai-kensho-20260828.md`）:
+         2002年11月20日発売 メイクソフトウェア「パールフラッシュ」の当時商品ページ
+         （Wayback 2002-12-16 保存）に原文が見つかった（確度=強）:
+           「ふちどりペン（2重ふちどり・3重ふちどり）・キラキラペン・がらペン（…）で
+             落書きがさらに楽しくなります。」
+         これは 2026-08-22 の「ネオン／白フチ／キラキラは平成に入れない」という判断の**訂正**。
+         描画側に既にある fuchi / kira を平成の道具箱へ結線する
+         （どちらも strokePolyline に実装済み。令和で使っているものと同じ）。
+         「がらペン」は相当機能がアプリに無いので今回は見送り（柄本の推奨どおり）。
+         marker / crayon / nijimi は依然として1999〜2003年の根拠が無いため足さない
          （そちらは令和側で満たす＝平成と令和の対比を守る）。
-         代わりに、裏の取れた金・銀だけを足す:
+         あわせて、従来から裏の取れている金・銀も維持する:
            キララ（メイクソフトウェア・1999年11月）「業界初の金色銀色落書き」
            キララ2（2000年7月）「"キララ"にメタリックカラーが二色、豊富なスタンプも追加された」
-         当時は「色」として売られたが、金銀はベタ塗りでは出ない（箔の質感が要る）ので、
-         実装上は penType 側に置く。これで pen-type-row が平成でも初めて立ち上がる。
-         ネオン／白フチ／キラキラは引き続き平成には入れない（8/17の判断を維持）。 */
-      penTypes: ['normal', 'kin', 'gin'],
+         当時は「色」として売られたが、金銀はベタ塗りでは出ない（箔の質感が要る）ため penType 側に置く。 */
+      penTypes: ['normal', 'fuchi', 'kira', 'kin', 'gin'],
       /* フラッシュ（2026-08-22 モニター要望①）。
          **柄本の考証で true に確定**（仕様書 heisei-flash-pen-spec-20260822.md A節）。
          1999〜2003年の実機はプロ用ストロボを積んでいた。メイクソフトウェアの当時サイトに
@@ -288,57 +294,134 @@
      実測して調整すること。 */
   const PREP_SECONDS = 18;
 
-  const SHEET_W = 680;
-  const SHEET_H = 900;
+  /* 🚨🚨 2026-09-09（オーナー実機指摘①「横撮りして、縦にすると縦横比の関係で横が切れてしまう。
+     横撮りしたら印刷や画像も横のままにしないとダメだな」）— **台紙をよこ長にした。**
+
+     まず事実の訂正: この機械は **端末をどう持っても写真は必ず 640×480 のよこ長**になる
+     （captureFrame が liveClean をそのまま焼く）。だから「横撮りしたときだけ切れる」ではなく、
+     **4分割（平成の既定）では常に横幅の 35.3%＝左右113pxずつが切り落とされていた**。
+     縦持ちで撮った客は、撮影の時点で既に上下44%を捨てている（video→640×480 の cover）。
+
+     切り落としが起きる仕組み: 台紙が 680×900 のたて長 → layoutCells がスロットを機械分割
+     → 4分割セルが 301×349 の**たて長** → そこへ drawShotFit の cover（Math.max）が掛かる。
+     セルの形が写真の形と違うぶんが、そのまま切り取り量になる。
+
+     実測（layoutCells の定義から機械計算・見本PNGでも確認済み）:
+       4分割 301×349 → 横35.3%消失 ／ 16分割 155×179 → 横35.1%消失
+       2枚ワイド 628×349 → 縦25.9%消失 ／ **6分割 313×235 → 損失ゼロ**（偶然 4:3 だった）
+       まる4・まるMIX → 横23〜35%消失＋円で更に
+
+     直し方は2案あった。**オーナー裁定（2026-09-09）で案Cを採用**:
+       案B: 台紙はたて長のまま、セルを写真比に内接させる（変更は layoutCells 1関数で済むが、
+            台紙内側の使用率が 80%→52% に落ち、上下に大きな余白が出る）
+       案C: **台紙そのものをよこ長にする**（900×680）。オーナーの「印刷も横のまま」に忠実で、
+            使用率も約81%を保てる。代わりに排出演出のCSS・保存経路・証明プリ・16分割シール風まで
+            見直しが要る。
+     ＝ 縦680×776の内側に 4:3 を4枚入れる最大は 301×226 で、**たて長台紙では切らない限り
+        必ず半分近くが余る**。これが案Bの構造的な限界で、案Cを採る理由。
+
+     ⚠️ この2つの数値を入れ替えるだけでは足りない。**layoutCells 側でセルを写真比に
+        内接させる**のが対（下の layoutCells を参照）。よこ長にしただけでは
+        4分割セルが 411×239（比1.72）になり、今度は**上下**が切れる。 */
+  const SHEET_W = 900;
+  const SHEET_H = 680;
   const MARGIN = 26;
   const HEADER_H = 84;
   const FOOTER_H = 40;
 
   const SHOT_W = 640, SHOT_H = 480;
 
-  // シートレイアウト（分割）。16分割は平成プリの定番！まる系は保護者リクエスト
+  /* シートレイアウト（分割）。16分割は平成プリの定番！まる系は保護者リクエスト
+
+     🚨 2026-09-09: **台紙をよこ長にしたので、並べ方も横向きに組み直した。**
+     たて長台紙のときの並びのまま横台紙に載せると、スロットが極端な横長になって
+     セル（写真比4:3）が痩せる。台紙内側 900×556 に対する使用率の実測:
+       2枚ワイド 1列×2段 → 848×239 のスロット → セル 319×239 ＝ **使用率30%**
+                 2列×1段 → 411×504 のスロット → セル 411×308 ＝ **使用率51%**
+       6分割     2列×3段 → 431×160 のスロット → セル 215×161 ＝ **使用率42%**
+                 3列×2段 → 276×251 のスロット → セル 276×207 ＝ **使用率69%**
+     4分割(2×2)・16分割(4×4)は正方の並びなので、そのままで最良（61% / 66%）。
+     ⚠️ 枚数は変えていない（2枚は2枚・6枚は6枚）。変えたのは「縦に積むか横に並べるか」だけ。 */
   const LAYOUTS = [
     { id: 'quad',    label: '4分割',     cols: 2, rows: 2, gap: 26, radius: 10 },
-    { id: 'wide2',   label: '2枚ワイド', cols: 1, rows: 2, gap: 26, radius: 12 },
-    { id: 'six',     label: '6分割',     cols: 2, rows: 3, gap: 18, radius: 8 },
+    { id: 'wide2',   label: '2枚ワイド', cols: 2, rows: 1, gap: 26, radius: 12 },
+    { id: 'six',     label: '6分割',     cols: 3, rows: 2, gap: 18, radius: 8 },
     { id: 'sixteen', label: '16分割',    cols: 4, rows: 4, gap: 12, radius: 6 },
     { id: 'circle4', label: 'まる4',     cols: 2, rows: 2, gap: 26, radius: 0, shape: 'circle' },
     { id: 'circleMix', label: 'まるMIX', gap: 20, radius: 0, shape: 'circle',
-      // 大きさ指定の丸型ミックス（大1+中1+小2）。ヘッダー下の描画領域に対する比率
+      /* 大きさ指定の丸型ミックス（大1+中1+小2）。ヘッダー下の描画領域に対する比率。
+         🚨 2026-09-09: たて長(680×776)用に決めた比率をよこ長(900×556)へそのまま当てると、
+            大セルが 504×267 の極端な横長スロットになり、円が小さくなるうえに散らばりが崩れた。
+            よこ長の紙面に合わせて置き直した（円の直径のねらい: 大300 / 中230 / 小180・190px）。 */
       cellsNorm: [
-        { x: 0.06, y: 0.02, w: 0.56, h: 0.48 },
-        { x: 0.62, y: 0.30, w: 0.36, h: 0.30 },
-        { x: 0.10, y: 0.56, w: 0.38, h: 0.32 },
-        { x: 0.52, y: 0.64, w: 0.44, h: 0.36 },
+        { x: 0.035, y: 0.115, w: 0.3334, h: 0.5400 }, // 大 φ300 … 左・上下の中ほど
+        { x: 0.385, y: 0.020, w: 0.2667, h: 0.4317 }, // 中 φ240 … 中央・上
+        { x: 0.400, y: 0.580, w: 0.2167, h: 0.3507 }, // 小 φ195 … 中央・下
+        { x: 0.700, y: 0.300, w: 0.2334, h: 0.3777 }, // 小 φ210 … 右・中ほど
       ] },
   ];
+
+  /* スロット（機械分割で得た矩形）の中に、狙いの比の最大の矩形を内接させて中央に置く
+     （2026-09-09 新設）。四角セルは写真比 4:3、丸セルは正方形（1:1）を狙う。
+     ここを1つの関数にしておくと、分割を足しても「セルの形が写真と合わない」が再発しない。 */
+  function fitCellInSlot(x, y, w, h, aspect) {
+    const k = Math.min(w / aspect, h);        // 高さを1としたときの倍率
+    const fw = aspect * k, fh = k;
+    return { x: x + (w - fw) / 2, y: y + (h - fh) / 2, w: fw, h: fh };
+  }
 
   function layoutCells(layout) {
     const cells = [];
     const innerY = HEADER_H;
     const innerH = SHEET_H - HEADER_H - FOOTER_H;
+    /* 狙いのセル比。四角セルは写真と同じ 4:3、丸セルは正円が入る正方形
+       （丸セルを正方形にしないと、よこ長台紙では 504×267 のような極端な横長スロットになり、
+         円が小さくなるうえに飾り枠が円から大きく離れる。2026-09-09） */
+    const cellAspect = layout.shape === 'circle' ? 1 : (SHOT_W / SHOT_H);
     if (layout.cellsNorm) {
       // 比率指定のカスタムセル（まるMIX等）
       layout.cellsNorm.forEach(c => {
-        cells.push({
-          x: c.x * SHEET_W,
-          y: innerY + c.y * innerH,
-          w: c.w * SHEET_W,
-          h: c.h * innerH,
-        });
+        cells.push(fitCellInSlot(
+          c.x * SHEET_W,
+          innerY + c.y * innerH,
+          c.w * SHEET_W,
+          c.h * innerH,
+          cellAspect,
+        ));
       });
       return cells;
     }
     const availW = SHEET_W - layout.gap * (layout.cols + 1);
     const availH = innerH - layout.gap * (layout.rows + 1);
     const cw = availW / layout.cols, ch = availH / layout.rows;
+    /* 🚨🚨 2026-09-09（オーナー実機指摘①の本体）— **セルを写真と同じ比に内接させる。**
+
+       旧版はスロットを機械分割した矩形をそのままセルにしていた（写真の形を一度も見ていない）。
+       そこへ drawShotFit の cover が掛かるので、**セルの形と写真の形の差が、そのまま
+       切り取り量になっていた**（4分割で横35.3%）。
+
+       ここでスロットの中に「写真と同じ比の最大の矩形」を内接させ、スロット内で中央に置く。
+       これで **セル比＝写真比**になり、cover は何も切らなくなる（scale が縦横で等しくなるため）。
+
+       この1箇所を直すと、下流が全部ついてくる（このコードは「写真と落書きは必ず
+       同じ関数・同じ引数を通す」で貫かれていて、合流点が layoutCells と drawShotFit の2つしか無い）:
+         ・drawCellDecor … 受け取るセル矩形＝写真矩形になるので、枠とモチーフが写真に張り付く
+         ・composeDoodleOntoSheet … 同じ layoutCells を見るので落書きが自動で一致
+         ・rakurakuSafeCellFor … セル定義から安全域を導くので、**四角セルの安全域が写真全面になる**
+           ＝ どの分割でも同じ安全域＝**分割を選び直しても らくらくの型の幅が変わらなくなる**
+           （2026-09-09 オーナー実機指摘③「保存すると幅が修正されている」がこれで閉じる）
+         ・drawPhotoPickPreview / refitRakuraku も追随
+
+       ⚠️ 丸セルだけは**正方形**を狙う（上の cellAspect）。円に内接する正方形しか残らないので、
+          まる系は横写真が必ず切れる。これはオーナー裁定（2026-09-09）で
+          「焼かれる範囲のガイド枠を落書き画面に出す」で手当てする＝隠さずに見せる。 */
     for (let r = 0; r < layout.rows; r++) {
       for (let c = 0; c < layout.cols; c++) {
-        cells.push({
-          x: layout.gap + c * (cw + layout.gap),
-          y: innerY + layout.gap + r * (ch + layout.gap),
-          w: cw, h: ch,
-        });
+        cells.push(fitCellInSlot(
+          layout.gap + c * (cw + layout.gap),
+          innerY + layout.gap + r * (ch + layout.gap),
+          cw, ch, cellAspect,
+        ));
       }
     }
     return cells;
@@ -1496,37 +1579,28 @@
     });
   }
 
-  // レイアウトのミニプレビューSVGを生成
+  /* レイアウトのミニプレビューSVGを生成。
+     🚨 2026-09-09: 旧版は 52×68 の**たて長**の箱に、layoutCells とは**別の計算**でセルを並べていた。
+        台紙をよこ長(900×680)にしたので、見本だけ縦のままだと客は違う形を見て分割を選ぶことになる。
+        しかも「並べ方の計算が2箇所にある」ので、片方だけ直すとまた食い違う。
+        → **実物の layoutCells() を縮めて描く**。台紙の比・セルの形・内接のしかたが
+          自動で見本に反映され、二度と食い違わない（このコードの「同じ関数を通す」規約と同じ）。 */
   function layoutIconSVG(layout) {
-    const W = 52, H = 68, pad = 3;
-    let shapes = '';
+    const S = 68 / Math.max(SHEET_W, SHEET_H);      // 長辺を68pxに収める
+    const W = +(SHEET_W * S).toFixed(1), H = +(SHEET_H * S).toFixed(1);
     const isCircle = layout.shape === 'circle';
-    if (layout.cellsNorm) {
-      layout.cellsNorm.forEach(c => {
-        const x = c.x * W, y = c.y * H, cw = c.w * W, ch = c.h * H;
-        if (isCircle) {
-          const r = Math.min(cw, ch) / 2;
-          shapes += `<circle cx="${(x + cw / 2).toFixed(1)}" cy="${(y + ch / 2).toFixed(1)}" r="${r.toFixed(1)}" fill="#e3a8c9"/>`;
-        } else {
-          shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#e3a8c9"/>`;
-        }
-      });
-    } else {
-      const availW = W - pad * (layout.cols + 1);
-      const availH = H - pad * (layout.rows + 1);
-      const cw = availW / layout.cols, ch = availH / layout.rows;
-      for (let r = 0; r < layout.rows; r++) {
-        for (let c = 0; c < layout.cols; c++) {
-          const x = pad + c * (cw + pad), y = pad + r * (ch + pad);
-          if (isCircle) {
-            const rr = Math.min(cw, ch) / 2;
-            shapes += `<circle cx="${(x + cw / 2).toFixed(1)}" cy="${(y + ch / 2).toFixed(1)}" r="${rr.toFixed(1)}" fill="#e3a8c9"/>`;
-          } else {
-            shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#e3a8c9"/>`;
-          }
-        }
+    let shapes = '';
+    let cells = [];
+    try { cells = layoutCells(layout) || []; } catch (e) { cells = []; }
+    cells.forEach((c) => {
+      const x = c.x * S, y = c.y * S, cw = c.w * S, ch = c.h * S;
+      if (isCircle) {
+        const r = Math.min(cw, ch) / 2;
+        shapes += `<circle cx="${(x + cw / 2).toFixed(1)}" cy="${(y + ch / 2).toFixed(1)}" r="${r.toFixed(1)}" fill="#e3a8c9"/>`;
+      } else {
+        shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="1.5" fill="#e3a8c9"/>`;
       }
-    }
+    });
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${W}" height="${H}" rx="4" fill="#fff" stroke="#e8cede"/>${shapes}</svg>`;
   }
 
@@ -5865,12 +5939,62 @@
   decoFrameCanvas.width = SHOT_W;
   decoFrameCanvas.height = SHOT_H;
   const decoFrameCtx = decoFrameCanvas.getContext('2d');
+  /* ---------- 焼かれる範囲のガイド枠（2026-09-09 オーナー裁定・新設） ----------
+     2026-09-09 に台紙をよこ長にし、セルを写真比に内接させたので、
+     **四角の分割（4分割・2枚ワイド・6分割・16分割）では写真は1pxも切れなくなった**。
+     切り取りが残るのは **まる4・まるMIX だけ**（円に内接する正方形しか残らないので横25%が消える）。
+
+     平成は「撮影 → 落書き → 分割えらび → 排出」の順（2026-08-13 オーナー裁定）なので、
+     落書き中は分割が決まっていない＝**まるを選ぶ可能性がある**。
+     そこで落書き画面に「まるにすると、この中だけがシールになる」を見える形で出す。
+     オーナーの言葉（2026-09-09）:「焼かれる範囲のガイド枠を落書き画面に出す」。
+
+     出し方は2段階にする（うるさくしないため）:
+       ・いま まる系が選ばれている（令和は落書き前に分割を選ぶ）… **外側を暗くして**はっきり示す
+       ・平成で分割が未決 … 破線の円だけを薄く置く（暗幕は敷かない。まだ切れると決まっていない）
+     四角の分割が選ばれているときは **何も描かない**（切れないので枠は嘘になる）。 */
+  function burnGuide() {
+    const L = state.layout;
+    const isCircle = !!(L && L.shape === 'circle');
+    // 平成の落書き中は分割が未決（enterMode が LAYOUTS[0] に固定しているだけ）
+    const undecided = state.mode === 'heisei';
+    if (!isCircle && !undecided) return null;
+    const side = Math.min(SHOT_W, SHOT_H);
+    return { cx: SHOT_W / 2, cy: SHOT_H / 2, r: side / 2, firm: isCircle };
+  }
+
+  function drawBurnGuide(ctx) {
+    const g = burnGuide();
+    if (!g) return;
+    ctx.save();
+    if (g.firm) {
+      // 円の外は焼かれない。暗幕を敷いて「ここは出ない」を一目で分かるようにする
+      ctx.fillStyle = 'rgba(0,0,0,.34)';
+      ctx.beginPath();
+      ctx.rect(0, 0, SHOT_W, SHOT_H);
+      ctx.arc(g.cx, g.cy, g.r, 0, Math.PI * 2, true); // 逆回りで円を抜く（even-oddに頼らない）
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(g.cx, g.cy, g.r, 0, Math.PI * 2);
+    ctx.setLineDash([12, 9]);
+    ctx.lineWidth = g.firm ? 4 : 3;
+    // 白の下敷き＋濃い破線。写真の明暗どちらの上でも見えるようにする
+    ctx.strokeStyle = g.firm ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.75)';
+    ctx.stroke();
+    ctx.lineDashOffset = 10;
+    ctx.strokeStyle = g.firm ? 'rgba(255,47,160,.95)' : 'rgba(255,47,160,.55)';
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function renderDecoFramePreview() {
     decoFrameCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     if (!state.frame || !state.curtain) return;
     drawCellDecor(decoFrameCtx, { x: 0, y: 0, w: SHOT_W, h: SHOT_H }, {
       emoji: state.frame.emoji, isCircle: false, radius: 10,
     });
+    drawBurnGuide(decoFrameCtx);
   }
 
   let shotDeco = [];      // 写真ごとの落書き { objects: [], undo: [] }（インデックス＝撮影順）
@@ -9263,13 +9387,24 @@
     const shots = state.processedShots.length ? state.processedShots : state.shots;
     if (shots.length) {
       const margin = 26, gap = 10, cols = 4, rows = 4;
-      const cw = (SHEET_W - margin * 2 - gap * (cols - 1)) / cols;
-      const chh = cw * 17 / 24; // 初代のシール比率 横24:縦17
+      /* 🚨 2026-09-09: 旧版は **幅からしかセルの大きさを決めていなかった**。
+         台紙がよこ長(900×680)になった途端、16枚ぶんの高さが 609px 必要になり、
+         使える 564px を 45px はみ出して見出し・日付に重なった
+         （たて長(680×900)では幅が狭く高さが余っていたので、たまたま起きていなかった）。
+         **幅と高さの両方で決める**（どちらか厳しい方に従う）ようにして、
+         今後どんな台紙比になっても破綻しない形にする。 */
+      const availW = SHEET_W - margin * 2 - gap * (cols - 1);
+      const availH = (SHEET_H - 70 - 46) - gap * (rows - 1);
+      const RETRO_R = 24 / 17;                 // 初代のシール比率 横24:縦17
+      const cw = Math.min(availW / cols, (availH / rows) * RETRO_R);
+      const chh = cw / RETRO_R;
+      const gridW = cols * cw + (cols - 1) * gap;
       const gridH = rows * chh + (rows - 1) * gap;
+      const xLeft = (SHEET_W - gridW) / 2;
       const yTop = 70 + ((SHEET_H - 70 - 46) - gridH) / 2;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const x = margin + c * (cw + gap);
+          const x = xLeft + c * (cw + gap);
           const y = yTop + r * (chh + gap);
           const si = (r * cols + c) % shots.length;
           const shot = shots[si];
@@ -9426,31 +9561,42 @@
       { label: 'めんきょしょう風（3cm×2.4cm）', w: 24, h: 30, n: 3 },
       { label: 'パスポート（4.5cm×3.5cm）', w: 35, h: 45, n: 2 },
     ];
-    const SCALE = 4.6; // mm→px（台紙内で切って使う遊び用の縮尺）
-    let y = 86;
-    SIZES.forEach((sz) => {
+    /* 🚨 2026-09-09: 旧版は3つの寸法を**縦に積んで**いた。台紙がよこ長(900×680)になると
+       積み上げに 789px 必要で、使える 640px を 149px はみ出して日付・断り書きに重なった
+       （たて長(680×900)では収まっていた）。
+       よこ長の紙面では**3つの寸法を横に並べ、各列の中で写真を縦に積む**方が素直で、
+       しかも写真を小さくせずに済む（実測: 列並びなら縮尺5.2まで置ける。従来の4.6を維持できる）。
+       縮尺は幅・高さの両方から決めるので、今後どんな台紙比でもはみ出さない。 */
+    const COL_GAP = 30, SIDE = 40, LABEL_H = 24, PAD = 5, PH_GAP = 16;
+    const colW = (SHEET_W - SIDE * 2 - COL_GAP * (SIZES.length - 1)) / SIZES.length;
+    const topY = 86, botY = SHEET_H - 44;
+    // 縮尺 mm→px: 列の幅と、いちばん背の高くなる列の高さの、厳しい方に合わせる
+    const scaleByW = Math.min(...SIZES.map(sz => (colW - PAD * 2) / sz.w));
+    const scaleByH = Math.min(...SIZES.map(sz =>
+      ((botY - topY - LABEL_H) - (sz.n * PAD * 2 + (sz.n - 1) * PH_GAP)) / (sz.n * sz.h)));
+    const SCALE = Math.min(4.6, scaleByW, scaleByH); // 4.6 は従来の見た目（これ以上は大きくしない）
+    SIZES.forEach((sz, ci) => {
       const pw = sz.w * SCALE, ph = sz.h * SCALE;
+      const colX = SIDE + ci * (colW + COL_GAP);
       ctx.font = '500 15px "Hiragino Kaku Gothic ProN", sans-serif';
-      ctx.textAlign = 'left';
+      ctx.textAlign = 'center';
       ctx.fillStyle = '#8a7568';
-      ctx.fillText(sz.label, 40, y + 14);
-      const gap = 22;
-      const total = sz.n * pw + (sz.n - 1) * gap;
-      const x0 = (SHEET_W - total) / 2;
+      ctx.fillText(sz.label, colX + colW / 2, topY + 14);
+      const stackH = sz.n * (ph + PAD * 2) + (sz.n - 1) * PH_GAP;
+      let py = topY + LABEL_H + ((botY - topY - LABEL_H) - stackH) / 2 + PAD;
+      const x = colX + (colW - pw) / 2;
       const r = faceRect(pw / ph);
       for (let i = 0; i < sz.n; i++) {
-        const x = x0 + i * (pw + gap);
-        const py = y + 24;
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x - 5, py - 5, pw + 10, ph + 10);
+        ctx.fillRect(x - PAD, py - PAD, pw + PAD * 2, ph + PAD * 2);
         ctx.drawImage(shot, r.x, r.y, r.w, r.h, x, py, pw, ph);
         ctx.save();
         ctx.strokeStyle = '#c9b8a6';
         ctx.setLineDash([5, 4]);
-        ctx.strokeRect(x - 5.5, py - 5.5, pw + 11, ph + 11);
+        ctx.strokeRect(x - PAD - 0.5, py - PAD - 0.5, pw + PAD * 2 + 1, ph + PAD * 2 + 1);
         ctx.restore();
+        py += ph + PAD * 2 + PH_GAP;
       }
-      y += 24 + ph + 34;
     });
     const d = new Date();
     ctx.textAlign = 'center';
@@ -9948,6 +10094,13 @@
       return true;
     },
     drawObject,      // 型の見本を検証用に別キャンバスへ焼くため（2026-08-28）
+    /* 追加出力を外から焼けるようにする（2026-09-09）。台紙をよこ長にしたとき、
+       この2つは layoutCells を通らない**独自のグリッド**なので、別に測らないと崩れに気づけない
+       （実際 16分割シール風は縦に45pxはみ出し、証明プリは149pxはみ出していた）。 */
+    composeSixteenRetro, composeIdPhoto, composeStoryCollage,
+    layoutIconSVG,   // 分割えらびの見本が実物と食い違っていないかを外から確かめる
+    burnGuide,       // 焼かれる範囲のガイド枠（2026-09-09 オーナー裁定）
+    sheetSize: () => ({ w: SHEET_W, h: SHEET_H, 比: +(SHEET_W / SHEET_H).toFixed(3) }),
     rakurakuPlacedOn: (i) => ((shotDeco[i] && shotDeco[i].objects) || []).filter(o => o && o[RK_MARK]).map(o => JSON.parse(JSON.stringify(o))),
     /* 鏡像の検証用（2026-08-28）。**3つの根拠が同じ答えを出しているか**を外から測る。
        bodyMirror（ライブ映像のCSS）・isMirrored（撮影データとチラ見せ）・activeFacing（実際の向き） */
