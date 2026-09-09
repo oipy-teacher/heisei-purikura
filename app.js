@@ -5968,7 +5968,9 @@
        ・「ぜんぶ 入れる」… contain なので写真全体が枠に収まり、写真座標での半径は 320 になる。
          暗幕を敷いた場所が実際には焼かれる。
      ＝ **客に嘘の枠を見せるのは、枠が無いより悪い。** 焼く側（drawShotFit）と同じ分岐・同じ
-        shotFocus を通して求める。おさまりを変えたら描き直す経路も要る（下の syncBurnGuide）。 */
+        shotFocus を通して求める。おさまりを変えたら描き直す経路も要る
+        （描き直しの窓口は renderDecoFramePreview。写真の切り替え・おさまりの変更・
+          写真えらび画面を閉じたとき の3か所から呼んでいる）。 */
   function burnGuide(shotIdx) {
     const L = state.layout;
     const isCircle = !!(L && L.shape === 'circle');
@@ -7789,7 +7791,11 @@
   function rakurakuObjects(design) {
     const cell = rakurakuSafeCell();
     const objs = rakurakuClampInto(sampleCellObjects(design.items, cell), cell);
-    objs.forEach(o => { o[RK_MARK] = 1; });
+    /* 印に加えて「型の中での通し番号」も持たせる（2026-09-09）。
+       sampleCellObjects は design.items を順に処理するだけなので、**どの安全域で作っても
+       並びも個数も同じ**。この番号があると、置き直し（refitRakuraku）のときに
+       「客が消したのはどれか」を突き合わせられる＝消したものを復活させずに済む。 */
+    objs.forEach((o, k) => { o[RK_MARK] = 1; o.rkIdx = k; });
     return objs;
   }
 
@@ -7809,6 +7815,9 @@
        決まった瞬間に **同じ型で置き直す**（refitRakuraku）ためにこれが要る。
        覚えるのは「型そのもの」ではなく label（＝名前）。型の定義を書き換えても壊れない */
     shotDeco[i].rkLabel = design.label;
+    /* 置いたときの安全域も覚えておく（2026-09-09）。refitRakuraku が
+       「本当に大きさが変わるときだけ」動くようにするため。下の refitRakuraku を参照。 */
+    shotDeco[i].rkSafe = { ...rakurakuSafeCell() };
     shotDeco[i].undo.push({ op: 'rakuraku', removed, count: objs.length });
     if (shotDeco[i].undo.length > 60) shotDeco[i].undo.shift();
   }
@@ -7825,22 +7834,55 @@
 
      ⚠️ undo は積み直さない（積むと「もどす」1回の意味が変わる）。
         この置き直しが走るのは分割ゲートで分割を選んだ瞬間＝そのまま排出へ進む地点で、
-        以降「もどす」に戻る導線が無いことを確認したうえでの判断。 */
+        以降「もどす」に戻る導線が無いことを確認したうえでの判断。
+
+     🚨🚨 2026-09-09（Codexの最終検品で発覚。**2026-08-28 から在った穴**）
+        この関数は「印の付いたものを全部消して、型を丸ごと作り直す」ので、
+        **客が消しゴムで一部だけ消した飾りが、分割を選んだ瞬間に復活する**。
+        実測: 「ズッ友」9個 → 一部を消して8個 → 4分割を選ぶと **9個に戻る**。
+        客からは「消したはずのものがシールに出ている」に見える。
+
+        → 大きさが**本当に変わるときだけ**動かす。置いたときの安全域を覚えておき
+          （applyRakurakuTo の rkSafe）、新しい分割の安全域と同じなら**何もしない**。
+          2026-09-09 にセルを写真比へ内接させたので、**四角の分割どうしは安全域が
+          常に同一（630×473）＝この経路は空振りする**。四角を選ぶ限り復活しない。
+
+        まる4・まるMIX は安全域が本当に変わる（630×473 → 334×334）ので作り直しが要る。
+        そこは **型の中での通し番号（rkIdx）で突き合わせ**、作り直したあと
+        「客が消した番号」を落とす。これでどの分割を選んでも復活しない。 */
   function refitRakuraku() {
     let changed = 0;
+    const nowSafe = rakurakuSafeCell();
     for (let i = 0; i < shotDeco.length; i++) {
       const sd = shotDeco[i];
       if (!sd || !sd.rkLabel) continue;
+      /* 大きさが変わらないなら触らない（＝客が消した分を復活させない）。
+         0.5px の許容は、レイアウト定義から機械計算した値どうしの丸め差を吸収するため。 */
+      const was = sd.rkSafe;
+      if (was
+        && Math.abs(was.x - nowSafe.x) < 0.5 && Math.abs(was.y - nowSafe.y) < 0.5
+        && Math.abs(was.w - nowSafe.w) < 0.5 && Math.abs(was.h - nowSafe.h) < 0.5) continue;
       const design = RAKURAKU_HEISEI.find(d => d.label === sd.rkLabel);
       if (!design) continue;
       const arr = sd.objects;
       let hadIndex = -1;
+      const alive = new Set(); // 客が消さずに残している「型の中での通し番号」
       for (let k = arr.length - 1; k >= 0; k--) {
-        if (arr[k] && arr[k][RK_MARK]) { hadIndex = k; arr.splice(k, 1); }
+        if (arr[k] && arr[k][RK_MARK]) {
+          hadIndex = k;
+          if (arr[k].rkIdx != null) alive.add(arr[k].rkIdx);
+          arr.splice(k, 1);
+        }
       }
       if (hadIndex < 0) continue; // 客が「ぜんぶ消す」等で外していたら、勝手に復活させない
-      const objs = rakurakuObjects(design);
+      /* 作り直したうえで、**客が消した番号を落とす**（2026-09-09）。
+         これをやらないと「消したはずの飾りがシールに出ている」になる。
+         rkIdx を持たない古い一時保存から復帰した場合は突き合わせられないので、
+         従来どおり全部載せる（消えるより出るほうが害が小さい）。 */
+      let objs = rakurakuObjects(design);
+      if (alive.size && objs.some(o => o.rkIdx != null)) objs = objs.filter(o => alive.has(o.rkIdx));
       arr.splice(hadIndex, 0, ...objs); // 元の重ね順（客の落書きとの前後関係）を保つ
+      sd.rkSafe = { ...nowSafe }; // 次に呼ばれたときの比較の基準を更新する
       changed++;
     }
     return changed;
@@ -8789,8 +8831,9 @@
     $('#deco-start-gate').classList.add('hidden');
     if (state.remaining > 0 && !decoFinished) drawCanvas.style.pointerEvents = 'auto';
     stopVoice();
-    /* 🚨 2026-09-09（Codexの検品指摘 P2）: この画面の中で「おさまり」も分割も変えられるので、
-       閉じた時点でガイド枠を取り直す。ここを塞がないと、変更前の枠を見ながら描くことになる。 */
+    /* 🚨 2026-09-09（Codexの検品指摘 P2）: この画面の中で「おさまり」と「のせる写真」を
+       変えられる（分割はここでは変えない）。閉じた時点でガイド枠を取り直しておかないと、
+       変更前の枠を見ながら描くことになる。 */
     renderDecoFramePreview();
   });
 
@@ -8981,8 +9024,12 @@
            縮めて防ぐのではなく、決まってから合わせ直す。客の手描きスタンプ・線には触らない。
 
            📌 2026-09-09 以降、ここは **四角の分割では何もしない**（＝空振りする）。
-              セルを写真比に内接させたので、四角の分割の安全域は全部 630×473 で同一になり、
-              置き直しても結果が1pxも変わらないため。実際に動くのは まる4・まるMIX を選んだときだけ。
+              セルを写真比に内接させたので四角の分割の安全域は全部 630×473 で同一になり、
+              refitRakuraku 自身が「安全域が変わっていなければ触らない」で早期に抜けるため
+              （初版のコメントはここを「結果が同じだから実質空振り」と書いていたが、
+                実装は毎回作り直していた＝客が消した飾りが復活していた。Codexの検品で発覚し、
+                refitRakuraku 側を本当に空振りするよう直した）。
+              実際に動くのは まる4・まるMIX を選んだときだけ。
               ＝ オーナー実機指摘③「保存すると幅が修正されている」が、四角の分割では起きなくなった。
               **消してはいけない。** まる系のために必要で、かつ将来セル比の違う分割を足したときの保険。 */
         refitRakuraku();
@@ -10154,6 +10201,17 @@
     composeSixteenRetro, composeIdPhoto, composeStoryCollage,
     layoutIconSVG,   // 分割えらびの見本が実物と食い違っていないかを外から確かめる
     burnGuide,       // 焼かれる範囲のガイド枠（2026-09-09 オーナー裁定）
+    /* 「客が消しゴムで らくらくの飾りを一部だけ消した」状態を作る窓口（2026-09-09）。
+       消した分が分割えらびで復活しないこと（Codexの最終検品で見つかった穴）を
+       機械で見張るために要る。n個だけ取り除いて、実際に取り除いた数を返す。 */
+    rkEraseTest: (i, n) => {
+      const arr = (shotDeco[i] && shotDeco[i].objects) || [];
+      let done = 0;
+      for (let k = arr.length - 1; k >= 0 && done < n; k--) {
+        if (arr[k] && arr[k][RK_MARK]) { arr.splice(k, 1); done++; }
+      }
+      return done;
+    },
     sheetSize: () => ({ w: SHEET_W, h: SHEET_H, 比: +(SHEET_W / SHEET_H).toFixed(3) }),
     rakurakuPlacedOn: (i) => ((shotDeco[i] && shotDeco[i].objects) || []).filter(o => o && o[RK_MARK]).map(o => JSON.parse(JSON.stringify(o))),
     /* 鏡像の検証用（2026-08-28）。**3つの根拠が同じ答えを出しているか**を外から測る。

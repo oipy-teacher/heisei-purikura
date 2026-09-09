@@ -377,8 +377,12 @@ body.theme-reiwa .tl-icon {
 }
 .layout-item.selected { border-color: #ff2fa0; transform: scale(1.05); }
 /* 2026-09-09: app.js の layoutIconSVG() が実物の layoutCells() を縮めて描くようになり、
-   viewBox が 68×51.4（台紙 900×680・比1.324）のよこ長になった。52×68 のたて長のままだと
-   アイコンが非等方に潰れ、客が焼き上がりと違う形を見て分割を選ぶことになる */
+   viewBox が 68×51.4（台紙 900×680・比1.3235）のよこ長になった。
+   52×68 のたて長の箱に入れても、SVGは既定の preserveAspectRatio で**等比縮小される**ので
+   絵は潰れない。潰れないかわりに、たて長の箱の中で **68×51 ぶんに縮んで上下に大きな余白**が
+   でき、アイコンが小さく読みにくくなる（＝客が焼き上がりの形を判断しにくい）。
+   だから箱のほうを絵に合わせる。
+   （初版のコメントは「非等方に潰れる」と書いていたが不正確。Codexの最終検品で訂正） */
 .layout-item svg { width: 68px; height: 51px; display: block; }
 .layout-item .layout-label { font-size: 11px; font-weight: 800; color: #a03cae; }
 body[data-mode="reiwa"] .layout-item { background: #f7f2ea; }
@@ -626,10 +630,13 @@ body.theme-reiwa .pp-item.on .pp-num { background: var(--r-accent); }
 .photo-pick-left { flex: 1 1 auto; min-width: 0; }
 .photo-pick-right { flex: 0 0 auto; }
 .photo-pick-preview {
-  /* 2026-09-09: 台紙が 900×680（よこ長・比1.324）になったのに合わせて見本もよこ長にする。
+  /* 2026-09-09: 台紙が 900×680（よこ長・比1.3235）になったのに合わせて見本もよこ長にする。
      index.html の canvas 属性が 270×204 になったので、たて長のまま(102×135)だと
-     非等方に潰れて見える（令和の「シールにのせる写真えらび」） */
-  width: 135px; height: 102px; display: block;
+     非等方に潰れて見える（令和の「シールにのせる写真えらび」）。
+     🚨 このプロジェクトは全要素 border-box なので、**枠の2px×2を引いた中身**で比が決まる。
+        135×102 だと中身は 131×98 ＝ 比1.3367 で、台紙の1.3235に対して約1%横に伸びていた
+        （Codexの最終検品で指摘）。中身を 131×99（比1.3232）にするため高さを103pxにする。 */
+  width: 135px; height: 103px; display: block;
   background: rgba(0,0,0,.06); border: 2px solid rgba(0,0,0,.12);
 }
 body.theme-reiwa .photo-pick-preview { border-color: rgba(168,145,125,.5); }
@@ -3132,9 +3139,15 @@ body.theme-reiwa .print-actions.escape-row { border-top: none; padding-top: 0; }
 
 /* プリント画面: 縦が足りない端末では縮めず縦スクロールで全部に届くようにする */
 /* 🚨 2026-09-09（工藤・排出演出の「シールの上が切れる」不具合の正体）
-   `.print-stage { margin: auto }` による中央寄せは、中身が画面より高いとき
-   **上下に均等にはみ出す**。scrollTop は 0 より小さくできないので、上側の
-   はみ出しはスクロールしても永久に届かない（実測: スマホ縦の平成で -46.1px、
+   中身が画面より高いとき、中央寄せは **上下に均等にはみ出す**。
+   scrollTop は 0 より小さくできないので、上側のはみ出しはスクロールしても永久に届かない。
+   犯人は2つが直列につながっている（Codexの最終検品で言い分けを訂正）:
+     ① `.print-stage { margin: auto }` … ただし自動マージンは**はみ出すと0に潰れる**ので、
+        これ単独では中央寄せをやめさせても足りない
+     ② その後に効く `#screen-print` の中央寄せ（`.screen.active` の flex ＋ 中央寄せ）
+        … こちらが負のはみ出しを作る本体
+   だから margin を横だけにし、かつ中央寄せを safe に変える（両方やる）。
+   実測: スマホ縦の平成で -46.1px、
    令和で -50.7px、iPad横で -23.1px ＝ 台紙の上端「★太子祭プリ★」の帯と
    「プリント中…」が画面外に出たまま戻せない）。客からは「シールの上が切れている
    ＝サイズがおかしい」に見えていた。
