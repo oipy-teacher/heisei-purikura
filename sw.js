@@ -1,7 +1,7 @@
 /* プリクラ機 Service Worker
    - 同一オリジン: ネットワーク優先（更新をすぐ反映）、オフライン時はキャッシュ
    - CDN/モデルファイル: キャッシュ優先（一度読めばオフラインでも動く。会場のWi-Fi不安定対策） */
-const CACHE_NAME = 'purikura-v38'; // 2026-09-09 縦横のズレ3件（横撮りの切れ・排出演出のシールサイズ・らくらくの幅）の修正を配信する
+const CACHE_NAME = 'purikura-v39'; // 2026-09-16 L判300dpi台紙・2組目のらくがきスタート不能の修正ほかを配信する
 
 const PRECACHE = [
   '.',
@@ -117,7 +117,8 @@ const PRECACHE = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(async (c) => {
-      const results = await Promise.allSettled(PRECACHE.map((u) => c.add(u)));
+      /* 2026-09-16（レビュー⑦）: cache:'reload' でHTTPキャッシュを素通りし、配信直後でも古い app.js を焼き付けない */
+      const results = await Promise.allSettled(PRECACHE.map((u) => c.add(new Request(u, { cache: 'reload' }))));
       const failed = results
         .map((r, i) => (r.status === 'rejected' ? PRECACHE[i] : null))
         .filter(Boolean);
@@ -179,7 +180,8 @@ self.addEventListener('fetch', (e) => {
        res.ok / opaqueredirect の判定も残す（明らかな失敗を焼き付けない） */
     e.respondWith(
       fetch(e.request).then((res) => {
-        if (res && res.ok && res.type !== 'opaqueredirect' && isCacheableResponse(e.request, res)) {
+        // status 200 のみ put する（206 Range 応答は Cache API が受け付けず、エラーを大量に吐いていた・2026-09-16 検見【軽微5】）
+        if (res && res.status === 200 && res.type !== 'opaqueredirect' && isCacheableResponse(e.request, res)) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
         }
