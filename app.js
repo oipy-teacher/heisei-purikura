@@ -327,6 +327,22 @@
         内接させる**のが対（下の layoutCells を参照）。よこ長にしただけでは
         4分割セルが 411×239（比1.72）になり、今度は**上下**が切れる。 */
   const SHOT_W = 640, SHOT_H = 480;
+  /* 📷 2026-09-16（オーナー指示「300dpi? いや、可能な限り高画質にして欲しい。カメラの最高画素数で良き」）
+     ＝ **写真の保持を 640×480 から解放した（二重解像度）。**
+       ・作業用（ライブ・盛りスライダー・落書き・サムネイル・一時保存）は従来どおり SHOT_W×SHOT_H
+       ・撮影時に「同じフレームのフル解像度の 4:3 コピー」を state.hiShots に控え（captureHiRes）、
+         確定（finishBeauty / finishHeiseiProcessing）で一度だけフル解像度で本加工 → state.hiProcessedShots
+         （runHiResPass。1枚ずつ setTimeout で刻んで「しあげちゅう… n/4」を出す）
+       ・台紙・1まい保存・16分割・たて長・証明プリは sheetShots()（hi があれば hi、無ければ 640）を使う
+     HI_MAX_LONG は控える絵の長辺の上限。これより大きければここまで縮めてから控える。
+     🚨 これは画質の妥協ではなく**メモリの安全弁**（2026-09-16 実測ベースの試算）:
+        本加工中のピークは 1920×1440 で約375MB（作業面158MB＋ガイデッドフィルタ配列169MB＋台紙48MB）、
+        12MP（4032×3024）がそのまま来ると約1.5GB ＝ iPhone/iPad の Safari が落ちて客の写真が全部消える。
+        2048（2048×1536 ≒ 420MB）が「落ちずに持てる最大」。iPad の前面カメラ（1920×1440）には
+        **効かない**（そのまま全画素を保持する）。効くのは全身モードの背面4K（2880×2160→2048×1536）だけで、
+        それでも旧640×480の10倍の画素・L判のどの分割でも印刷機の解像限界を超える。
+        実機で余裕が確認できたら 2560 へ上げてよい（この1定数だけ）。iPad 用に落とす分岐は作らない。 */
+  const HI_MAX_LONG = 2048;
 
   /* 🖨 2026-09-16（オーナー指示「L判の写真印刷に最適なサイズに・縦横は自動」）— **台紙をL判300dpiにした。**
      L判 = 89×127mm。300dpi では 127mm → 1500px・89mm → 1051px（89/25.4×300 = 1051.2）。
@@ -337,10 +353,14 @@
 
      向きは写真（SHOT_W×SHOT_H）の向きから決める＝**写真がよこ長なら台紙もよこ長**
      （2026-09-09 オーナー裁定「横撮りしたら印刷や画像も横のまま」）。この機械の写真は
-     常に 640×480 のよこ長なので、いまは必ず 1500×1051 になる。将来たて撮り（480×640）に
+     常に 640×480 のよこ長なので、いまは必ず SHEET_L.long×SHEET_L.short（600dpi: 3000×2102）になる。将来たて撮り（480×640）に
      したときは何も直さずに 1051×1500 へ切り替わる。名前 SHEET_W/SHEET_H は据え置き
      （約60箇所の参照がそのまま生きる）。 */
-  const SHEET_L = { long: 1500, short: 1051 };
+  /* 2026-09-16 二重解像度化に合わせて 300dpi → **600dpi**（3000×2102。89/25.4×600 = 2102.4）。
+     写真がフル解像度（1440×1080〜）で載るので、300dpi の台紙では写真側が縮められて損をする。
+     pHYs も SHEET_DPI を書く（pngWithPrintDpi）。 */
+  const SHEET_DPI = 600;
+  const SHEET_L = { long: Math.round(127 / 25.4 * SHEET_DPI), short: Math.round(89 / 25.4 * SHEET_DPI) };
   const SHEET_W = SHOT_W >= SHOT_H ? SHEET_L.long : SHEET_L.short;
   const SHEET_H = SHOT_W >= SHOT_H ? SHEET_L.short : SHEET_L.long;
   /* 台紙の上に絶対px で描いているもの（見出しの文字サイズ・帯の高さ・枠の太さ・セルの隙間・
@@ -496,6 +516,8 @@
     stream: null,
     shots: [],           // 撮影した生の4枚
     processedShots: [],  // 盛り加工後の4枚
+    hiShots: [],         // 撮影時のフル解像度コピー（640 と同じフレーム・同じ鏡像。本加工が済んだら即 null・2026-09-16）
+    hiProcessedShots: [], // フル解像度の本加工結果（台紙・1まい保存が使う。無い添字は 640 へ落ちる）
     photoPick: null,     // シールに載せる写真の並び（shotsのインデックス列・2026-08-13新設）。nullなら撮影順
     photoFit: 'face',    // セルへのおさまり方（令和のみ選択可・2026-08-17）。face | center | contain
     faceData: [],        // 各ショットの顔ランドマーク（検出できなければ null）
@@ -2066,20 +2088,22 @@
   }
 
   // デジタル背景（ベタ塗りではなく、スタジオ照明風のグラデーション）
-  function drawCurtainBg(ctx) {
+  // w/h を渡すとその寸法で描く（フル解像度の撮影コピー用・2026-09-16）。省略時は従来どおり SHOT_W×SHOT_H
+  function drawCurtainBg(ctx, w, h) {
+    w = w || SHOT_W; h = h || SHOT_H;
     const c = state.curtain.color;
-    const grad = ctx.createLinearGradient(0, 0, 0, SHOT_H);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, shadeColor(c, 30));
     grad.addColorStop(0.55, c);
     grad.addColorStop(1, shadeColor(c, -18));
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
+    ctx.fillRect(0, 0, w, h);
     // 中央上にやわらかいライト
-    const light = ctx.createRadialGradient(SHOT_W / 2, SHOT_H * 0.3, 0, SHOT_W / 2, SHOT_H * 0.3, SHOT_W * 0.65);
+    const light = ctx.createRadialGradient(w / 2, h * 0.3, 0, w / 2, h * 0.3, w * 0.65);
     light.addColorStop(0, 'rgba(255,255,255,.22)');
     light.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = light;
-    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
+    ctx.fillRect(0, 0, w, h);
   }
 
   /* ===================== ライブ盛れプレビュー（2026-07-31 新設） =====================
@@ -2097,6 +2121,9 @@
   const liveClean = document.createElement('canvas');
   liveClean.width = SHOT_W; liveClean.height = SHOT_H;
   const liveCleanCtx = liveClean.getContext('2d');
+  /* 直近のフレームで liveClean の合成に使った人物マスク（null＝くり抜き無し）。
+     フル解像度の撮影コピー（captureHiRes）が **640 と同じ切り抜き** を再現するために見る（2026-09-16） */
+  let lastPersonMask = null;
 
   // ライブ用の肌マスク（推論解像度のまま持ち、描画時にバイリニア拡大＝フェザー）
   const liveSkinSmall = document.createElement('canvas');
@@ -2547,6 +2574,7 @@
     }
 
     // --- 無加工の合成フレーム（撮影データはここから取る） ---
+    lastPersonMask = maskCv;
     liveCleanCtx.clearRect(0, 0, SHOT_W, SHOT_H);
     if (maskCv) {
       if (!personWorkCanvas) { personWorkCanvas = document.createElement('canvas'); personWorkCtx = personWorkCanvas.getContext('2d'); }
@@ -2696,6 +2724,7 @@
       // 撮影解像度へスムーズ拡大（バイリニア拡大がそのまま縁のフェザーになる）
       const full = document.createElement('canvas');
       full.width = srcCanvas.width; full.height = srcCanvas.height;
+      full.confSmall = small; // モデル解像度の原本。フル解像度の本加工はここから直接拡大する（2026-09-16）
       const fctx = full.getContext('2d');
       fctx.imageSmoothingEnabled = true;
       fctx.drawImage(small, 0, 0, full.width, full.height);
@@ -2797,11 +2826,15 @@
     camError.textContent = '';
     state.shots = [];
     state.processedShots = [];
+    abandonHiResPass(); // 走っている本加工があれば捨てる（2026-09-16 レビュー⑥）
+    releaseCanvases(state.hiShots); state.hiShots = [];               // フル解像度の控えは撮り直しで即返す（2026-09-16）
+    releaseCanvases(state.hiProcessedShots); state.hiProcessedShots = [];
     state.faceData = [];
     state.photoPick = null; // シール写真えらびは撮り直しのたびに白紙へ（2026-08-13）
     state.skinConf = [];
     skinMaskCache.clear();
     segEMA = null; // 前回セッションのマスク残像を消す
+    lastPersonMask = null; // フル解像度撮影が前セッションのマスクを使わないように（2026-09-16）
     buildShotIndicator();
     $('#shots-left').textContent = NUM_SHOTS;
     shootingInProgress = false;
@@ -2934,6 +2967,9 @@
     }
     const other = facing === 'environment' ? 'user' : 'environment';
     const plans = [
+      /* 最大画素を頼む（2026-09-16 オーナー指示「カメラの最高画素数で」）。ideal なので失敗はせず、
+         ブラウザが出せる中でいちばん近い（＝いちばん大きい）解像度を選ぶ。届いた寸法は __puriDebug.videoSize() */
+      { video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 3072 } }, audio: false },
       { video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false },
       { video: { facingMode: { ideal: facing } }, audio: false },
       { video: { facingMode: { ideal: other } }, audio: false },
@@ -3196,10 +3232,70 @@
     }
   }
 
+  /* フル解像度の撮影コピー（2026-09-16・二重解像度。理由は HI_MAX_LONG の上のコメント）。
+     liveClean と **同じ cover 切り出し・同じ鏡像・同じ人物くり抜き・同じ bright 0.16** を、
+     video の生の画素（videoWidth×videoHeight）から作る。
+     16:9 のカメラ（1920×1080）なら 4:3 に切って 1440×1080、4:3 のカメラならそのまま。
+     どこかで失敗したら null を返す（640 の道は従来どおり生きる。撮影は絶対に止めない）。 */
+  function captureHiRes() {
+    try {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw || !vh || video.readyState < 2) return null;
+      let hw = Math.min(vw, Math.round(vh * SHOT_W / SHOT_H));
+      let hh = Math.round(hw * SHOT_H / SHOT_W);
+      if (hh > vh) { hh = vh; hw = Math.round(vh * SHOT_W / SHOT_H); }
+      const long = Math.max(hw, hh);
+      if (long > HI_MAX_LONG) { const r = HI_MAX_LONG / long; hw = Math.round(hw * r); hh = Math.round(hh * r); }
+      if (hw <= SHOT_W || hh <= SHOT_H) return null; // 640×480 以下なら控える意味が無い
+      const c = document.createElement('canvas');
+      c.width = hw; c.height = hh;
+      const ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      if (isMirrored()) { ctx.translate(hw, 0); ctx.scale(-1, 1); }
+      if (lastPersonMask) {
+        // くり抜きON: 人物（video の cover ∩ 人物マスク）をカーテン背景の上へ。liveClean と同じ手順
+        // ⚠️ マスクは直前に描き終えたフレームのもの（最大1〜2フレーム古い）。動きの速い決めポーズでは輪郭が僅かにズレうる
+        const person = document.createElement('canvas');
+        person.width = hw; person.height = hh;
+        const pctx = person.getContext('2d');
+        pctx.imageSmoothingEnabled = true;
+        pctx.imageSmoothingQuality = 'high';
+        drawCover(pctx, video, 0, 0, hw, hh);
+        pctx.globalCompositeOperation = 'destination-in';
+        pctx.drawImage(lastPersonMask, 0, 0, hw, hh); // 小さいマスクの拡大バイリニアがフェザーになる（640 と同じ）
+        pctx.globalCompositeOperation = 'source-over';
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); drawCurtainBg(ctx, hw, hh); ctx.restore();
+        ctx.drawImage(person, 0, 0);
+        person.width = person.height = 0;
+      } else {
+        drawCover(ctx, video, 0, 0, hw, hh);
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      applyToneFx(ctx, hw, hh, { bright: 0.16 }); // 撮影中のライト効果も 640 と同じに焼き込む
+      return c;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function captureFrame() {
     const c = document.createElement('canvas');
     c.width = SHOT_W; c.height = SHOT_H;
     const ctx = c.getContext('2d');
+    /* フル解像度のコピーが取れたら、640 は **その縮小** にする（2026-09-16）。
+       顔検出は 640 で行い、その正規化座標をそのまま hi に使う。2枚が別のフレームだと
+       （liveClean は最大1フレーム古い）動いた分だけワープと落書きが hi 上でズレるので、
+       同じ画素から両方を作る。取れなかったときは従来どおり liveClean から。 */
+    const hi = captureHiRes();
+    if (hi) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(hi, 0, 0, SHOT_W, SHOT_H);
+      c.hi = hi; // 撮影ループが state.hiShots へ移す（この canvas 自体には残さない）
+      return c;
+    }
     /* 鏡合わせのプレビューに合わせて左右反転して保存する。
        🚨 2026-08-28: 判定を state.shotMode（希望）から **isMirrored()（実際の向き）** に変えた。
        ここと body[data-mirror] が別々の根拠で決まっていると、
@@ -3470,6 +3566,8 @@
       showSnapPreview(shot);
       setPoseGuide('📸 とれた〜！');
       state.shots.push(shot);
+      state.hiShots[state.shots.length - 1] = shot.hi || null; // フル解像度の控え（無ければ null）
+      delete shot.hi;
       shotIndicator.children[i].classList.add('done');
       $('#shots-left').textContent = Math.max(0, NUM_SHOTS - state.shots.length);
       await sleep(SNAP_PREVIEW_MS); // 撮れた静止画をはっきり見せる間
@@ -3557,11 +3655,34 @@
         return shot;
       }
     });
+    // フル解像度の本加工（2026-09-16）。暗室の幕はそのまま、文言に進み具合を足す
+    const dText = $('#darkroom .darkroom-text');
+    const heiseiConf = state.shots.map((_, i) => state.skinConf[i] || null);
+    const ok = await runHiResPass(() => params, y2k, (n, total) => {
+      if (dText) { const t = `げんぞうちゅう… ${n}/${total}`; dText.textContent = t; dText.dataset.text = t; }
+    }, () => null, (i) => heiseiConf[i]);
+    if (dText) { dText.textContent = 'げんぞうちゅう…'; dText.dataset.text = 'げんぞうちゅう…'; }
+    if (ok === false) return; // 途中で捨てられた組（レビュー⑥）
     composeSheet();
     startDecoScreen();
   }
 
   /* ===================== 盛り加工エンジン ===================== */
+
+  /* ---------- 解像度の物差し（2026-09-16・二重解像度化） ----------
+     このエンジンの半径・ぼかし幅・線の太さのうち、**ランドマーク間の距離から導かれるもの**
+     （目幅×1.05・顔幅×0.09・唇の縮小率…）は canvas の寸法に自動で追随する。
+     追随しないのは **px で直書きされた定数** だけ:
+       makeBlurred の縮小率上限（10）/ featherMask・featherHoleLayer・featherLipMask の縮小率 /
+       cutFaceHoles の眉ストロークの下限 3px / healSkinFull の 6px・18px / guidedSmooth の 9px・2px /
+       maskIsEmpty の「20画素」しきい値
+     これらを canvas.width / SHOT_W 倍する。仕組みは **モジュール変数 BEAUTY_PX_SCALE**:
+     applyBeauty は同期なので、フル解像度で呼ぶ直前に k を入れ、finally で 1 に戻す
+     （引数で配り歩くより差分が小さく、640 の道は1文字も変わらない＝ハーネスの基準値が保てる）。
+     🚨 WARP_COPY_PX（0.35px）は倍しない。あれは「サブピクセルの移動に補間ぼけを混ぜない」ための
+        画素単位の判断で、解像度が上がっても1画素の意味は変わらない。
+     検証: data/work/mori-harness を 640 と 2× で走らせ、正規化した値が一致すること（README）。 */
+  let BEAUTY_PX_SCALE = 1;
 
   /* 盛りの合成の重み（2026-08-28・検見の精度評価 P1-3 で調整）。
      ここに集めてあるのは「1箇所を触ると別の判定が動く」係数だけ。
@@ -3968,7 +4089,8 @@
   let blurTmpA = null, blurTmpB = null;
   function makeBlurred(srcCanvas, radiusPx) {
     const w = srcCanvas.width, h = srcCanvas.height;
-    const scale = Math.max(3, Math.min(10, Math.round(radiusPx * 2)));
+    const k = BEAUTY_PX_SCALE; // 半径も上下限も同じ倍率で伸ばす（640: 7px → 10 に張り付く / 2×: 20）
+    const scale = Math.max(3 * k, Math.min(10 * k, Math.round(radiusPx * k * 2)));
     if (!blurTmpA) { blurTmpA = document.createElement('canvas'); blurTmpB = document.createElement('canvas'); }
     const sw = Math.max(8, Math.round(w / scale)), sh = Math.max(8, Math.round(h / scale));
     blurTmpA.width = sw; blurTmpA.height = sh;
@@ -4179,15 +4301,16 @@
   const MASK_FEATHER_DIV = 3;
   function featherMask(maskCanvas) {
     const w = maskCanvas.width, h = maskCanvas.height;
+    const k = BEAUTY_PX_SCALE; // ぼけ幅を px で揃える（フル解像度でも約3px×k ＝ 同じ見え方）
     if (!maskFeatherA) { maskFeatherA = document.createElement('canvas'); maskFeatherB = document.createElement('canvas'); }
-    const sw = Math.max(16, Math.round(w / MASK_FEATHER_DIV)), sh = Math.max(16, Math.round(h / MASK_FEATHER_DIV));
+    const sw = Math.max(16, Math.round(w / (MASK_FEATHER_DIV * k))), sh = Math.max(16, Math.round(h / (MASK_FEATHER_DIV * k)));
     maskFeatherA.width = sw; maskFeatherA.height = sh;
     const aCtx = maskFeatherA.getContext('2d');
     aCtx.imageSmoothingEnabled = true;
     aCtx.clearRect(0, 0, sw, sh);
     aCtx.drawImage(maskCanvas, 0, 0, sw, sh);
     // 中間サイズ（原寸の 1/1.5）へいったん戻す。ここを飛ばすと 3px ごとに折れ目が立つ
-    const mw = Math.max(sw, Math.round(w / 1.5)), mh = Math.max(sh, Math.round(h / 1.5));
+    const mw = Math.max(sw, Math.round(w / (1.5 * k))), mh = Math.max(sh, Math.round(h / (1.5 * k)));
     maskFeatherB.width = mw; maskFeatherB.height = mh;
     const bCtx = maskFeatherB.getContext('2d');
     bCtx.imageSmoothingEnabled = true;
@@ -4239,7 +4362,7 @@
   function featherHoleLayer(cv) {
     const w = cv.width, h = cv.height;
     if (!holeFeatherA) { holeFeatherA = document.createElement('canvas'); holeFeatherB = document.createElement('canvas'); }
-    const sw = Math.max(16, Math.round(w / HOLE_FEATHER_DIV)), sh = Math.max(16, Math.round(h / HOLE_FEATHER_DIV));
+    const sw = Math.max(16, Math.round(w / (HOLE_FEATHER_DIV * BEAUTY_PX_SCALE))), sh = Math.max(16, Math.round(h / (HOLE_FEATHER_DIV * BEAUTY_PX_SCALE)));
     holeFeatherA.width = sw; holeFeatherA.height = sh;
     const a = holeFeatherA.getContext('2d');
     a.imageSmoothingEnabled = true; a.clearRect(0, 0, sw, sh);
@@ -4278,7 +4401,7 @@
       drawLandmarkPolygon(mCtx, lm, LEFT_EYE_RING, w, h, le.x, le.y, holeScale);
       drawLandmarkPolygon(mCtx, lm, RIGHT_EYE_RING, w, h, re.x, re.y, holeScale);
       // 眉（ポリゴン+太いストロークで確実にカバー）
-      mCtx.lineWidth = Math.max(3, fw * 0.035);
+      mCtx.lineWidth = Math.max(3 * BEAUTY_PX_SCALE, fw * 0.035);
       [LEFT_BROW, RIGHT_BROW].forEach((ring) => {
         drawLandmarkPolygon(mCtx, lm, ring, w, h);
         mCtx.beginPath();
@@ -4316,7 +4439,10 @@
     if (mlConf) {
       /* --- MLパス: selfie_multiclass の「顔の肌+体の肌」信頼度をそのまま使う ---
          髪・服・背景は分類レベルで除外済み。眉・目・唇だけ穴を開ければ完成。 */
-      mCtx.drawImage(mlConf, 0, 0, w, h);
+      /* 2026-09-16: 対象キャンバスの寸法へ再サンプルする（640 決め打ちにしない）。
+         モデル解像度の原本（confSmall）があればそこから直接拡大する。640 では 256→640 の
+         1回拡大で従来と同一、フル解像度では 256→640→hi の二重補間を避けられる */
+      mCtx.drawImage(mlConf.confSmall || mlConf, 0, 0, w, h);
       /* 🚨 2026-08-28（検見 P3-11）: **顔が取れないときは目と唇が白く曇っていた。**
          MLマスクは目も唇も「顔の肌」として含むので、cutFaceHoles を呼べない回は丸ごと美肌・美白が乗る
          （実測 目ΔE 28.2 / 唇ΔE 17.6）。しかも画面には
@@ -4439,7 +4565,9 @@
   function getSkinMask(idx, srcCanvas, faces, eyeS) {
     const eyeKey = Math.round((eyeS || 0) * 10);
     const hit = skinMaskCache.get(idx);
-    if (hit && hit.facesRef === faces && hit.eyeKey === eyeKey) return hit.canvas;
+    // 寸法も一致するときだけ再利用する（640 のマスクをフル解像度の絵に使い回さない・2026-09-16）
+    if (hit && hit.facesRef === faces && hit.eyeKey === eyeKey
+        && hit.canvas.width === srcCanvas.width && hit.canvas.height === srcCanvas.height) return hit.canvas;
     const mlConf = (idx >= 0 && state.skinConf && state.skinConf[idx]) || null;
     const canvas = buildSkinMask(srcCanvas, faces, eyeS, mlConf);
     skinMaskCache.set(idx, { facesRef: faces, eyeKey, canvas });
@@ -4455,7 +4583,8 @@
     for (let i = 3; i < d.length; i += 4 * step) {
       if (d[i] > 60) hits++;
     }
-    return hits < 20;
+    // 「20画素」は 640×480 での値。画素数に比例させないと、フル解像度では小さすぎるマスクを肌と誤認する
+    return hits < 20 * (mask.width * mask.height) / (SHOT_W * SHOT_H);
   }
 
   /* ---------- ヒーリングエンジン（シミ・シワ・ほうれい線・クマ・日焼けムラ除去） ----------
@@ -4515,12 +4644,13 @@
     const tmp = new Float32Array(n);
     const m1R = new Float32Array(n), m1G = new Float32Array(n), m1B = new Float32Array(n);
     const m2R = new Float32Array(n), m2G = new Float32Array(n), m2B = new Float32Array(n);
-    boxBlurChannel(chR, m1R, tmp, w, h, 6);
-    boxBlurChannel(chG, m1G, tmp, w, h, 6);
-    boxBlurChannel(chB, m1B, tmp, w, h, 6);
-    boxBlurChannel(chR, m2R, tmp, w, h, 18);
-    boxBlurChannel(chG, m2G, tmp, w, h, 18);
-    boxBlurChannel(chB, m2B, tmp, w, h, 18);
+    const r1 = Math.round(6 * BEAUTY_PX_SCALE), r2 = Math.round(18 * BEAUTY_PX_SCALE); // 半径は解像度に比例
+    boxBlurChannel(chR, m1R, tmp, w, h, r1);
+    boxBlurChannel(chG, m1G, tmp, w, h, r1);
+    boxBlurChannel(chB, m1B, tmp, w, h, r1);
+    boxBlurChannel(chR, m2R, tmp, w, h, r2);
+    boxBlurChannel(chG, m2G, tmp, w, h, r2);
+    boxBlurChannel(chB, m2B, tmp, w, h, r2);
 
     for (let i = 0, p = 0; i < n; i++, p += 4) {
       const a = md[p + 3] / 255;
@@ -4575,7 +4705,7 @@
   function guidedSmooth(canvas, mask) {
     const w = canvas.width, h = canvas.height;
     const n = w * h;
-    const r = 9;        // 平滑化の半径
+    const r = Math.round(9 * BEAUTY_PX_SCALE);        // 平滑化の半径（解像度に比例・2026-09-16）
     /* エッジ判定のしきい値（輝度分散）。小さいほどエッジを残す。
        110→55（2026-08-14 モニター指摘「各パーツの輪郭がクリアだった気がする」）:
        肌のムラは今までどおりならすが、鼻筋・小鼻の際・唇の稜線といった
@@ -4603,7 +4733,7 @@
 
     const A = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
     const B = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
-    const work1 = new Float32Array(n), work2 = new Float32Array(n);
+    const work1 = new Float32Array(n), work2 = II; // II は meanII を出したら用済み → 作業配列として使い回す（メモリ節約・2026-09-16）
     for (let c = 0; c < 3; c++) {
       const Pc = P[c];
       boxBlurChannel(Pc, work1, tmp, w, h, r);            // meanP
@@ -4625,23 +4755,20 @@
     // 微細テクスチャの再注入（周波数分離のプロ仕上げ）:
     // ヒーリング済み画像の細かいキメ（半径2pxの高周波成分）を平滑化後に35%戻す。
     // → ツルツルのプラスチック肌ではなく「キメの整った素肌」に見える
-    const fineR = new Float32Array(n);
-    boxBlurChannel(P[0], fineR, tmp, w, h, 2);
-    const fineG = new Float32Array(n);
-    boxBlurChannel(P[1], fineG, tmp, w, h, 2);
-    const fineB = new Float32Array(n);
-    boxBlurChannel(P[2], fineB, tmp, w, h, 2);
+    /* チャンネルごとに順に仕上げる（2026-09-16）。計算は前と1ビットも変わらない
+       （各チャンネルは A[c]・B[c]・I・自分の高周波だけで決まる）が、fine 配列が 3本→1本になる。
+       フル解像度（1920×1440 で n=2.8M）では 1本 11MB なので、ここは効く */
+    const fine = new Float32Array(n);
+    const fineRad = Math.round(2 * BEAUTY_PX_SCALE);
     const TEXTURE = 0.35;
-
-    for (let i = 0, p = 0; i < n; i++, p += 4) {
-      const a = md[p + 3] / 255;
-      if (a < 0.04) continue;
-      const detR = (P[0][i] - fineR[i]) * TEXTURE;
-      const detG = (P[1][i] - fineG[i]) * TEXTURE;
-      const detB = (P[2][i] - fineB[i]) * TEXTURE;
-      for (let c = 0; c < 3; c++) {
-        const det = c === 0 ? detR : c === 1 ? detG : detB;
-        const q = A[c][i] * I[i] + B[c][i] + det;
+    for (let c = 0; c < 3; c++) {
+      boxBlurChannel(P[c], fine, tmp, w, h, fineRad);
+      const Ac = A[c], Bc = B[c], Pc = P[c];
+      for (let i = 0, p = 0; i < n; i++, p += 4) {
+        const a = md[p + 3] / 255;
+        if (a < 0.04) continue;
+        const det = (Pc[i] - fine[i]) * TEXTURE;
+        const q = Ac[i] * I[i] + Bc[i] + det;
         const v = d[p + c] + (q - d[p + c]) * a;
         d[p + c] = v < 0 ? 0 : v > 255 ? 255 : v;
       }
@@ -4952,7 +5079,7 @@
   function featherLipMask(cv) {
     const w = cv.width, h = cv.height;
     if (!lipFeatherA) { lipFeatherA = document.createElement('canvas'); lipFeatherB = document.createElement('canvas'); }
-    const sw = Math.max(16, Math.round(w / LIP_FEATHER_DIV)), sh = Math.max(16, Math.round(h / LIP_FEATHER_DIV));
+    const sw = Math.max(16, Math.round(w / (LIP_FEATHER_DIV * BEAUTY_PX_SCALE))), sh = Math.max(16, Math.round(h / (LIP_FEATHER_DIV * BEAUTY_PX_SCALE)));
     lipFeatherA.width = sw; lipFeatherA.height = sh;
     const a = lipFeatherA.getContext('2d');
     a.imageSmoothingEnabled = true; a.clearRect(0, 0, sw, sh);
@@ -5525,6 +5652,7 @@
   }
 
   function startBeautyScreen() {
+    beautyFinished = false; // 前の組の例外で true が残っていても「これでOK」が効くように（2026-09-16）
     showScreen('screen-beauty');
     announceByMode('beauty'); // 案内は1本チャンネル経由（前画面の案内が残っていても止まる）
     // 令和は続けて「盛れ感レベルは三だんかい」（2026-08-15。平成に盛り画面は無い）
@@ -5606,19 +5734,129 @@
     } catch (e) { /* プライベートブラウズ等で保存できない場合は何もしない */ }
     // 各ショットに「その1枚の」パラメータを適用（2026-08-12: 1枚ごとの盛り設定に対応）
     // 2026-09-16（レビュー⑥）: 1枚の加工が例外で落ちても、その1枚だけ無加工で先へ進める
-    state.processedShots = state.shots.map((shot, i) => {
-      try {
-        return applyBeauty(shot, state.faceData[i], (state.beautyShots && state.beautyShots[i]) || state.beauty, null, i);
-      } catch (err) {
-        return shot;
-      }
-    });
-    composeSheet();
-    startDecoScreen();
-    beautyFinished = false;
+    /* パラメータは今この瞬間の値を写し取る（フル解像度の本加工は非同期で数秒かかるので、
+       その間に触られても 640 と同じ値で仕上げる） */
+    const paramsSnap = state.shots.map((_, i) => ({ ...((state.beautyShots && state.beautyShots[i]) || state.beauty) }));
+    // 顔検出・肌マスクも写し取る（640 と hi が同じ faceData を見るため・2026-09-16 レビュー①）
+    const facesSnap = state.shots.map((_, i) => state.faceData[i] || null);
+    const confSnap = state.shots.map((_, i) => state.skinConf[i] || null);
+    /* 幕を先に出してから重い仕事に入る（レビュー⑦: 640 の本加工 1〜2 秒の間も無反応に見せない）。
+       rAF→setTimeout で1回描画を挟む。navigator.share はこの経路に無いので非同期化してよい */
+    showFinishing('しあげちゅう…');
+    requestAnimationFrame(() => setTimeout(() => {
+      state.processedShots = state.shots.map((shot, i) => {
+        try {
+          state.skinConf[i] = confSnap[i];
+          return applyBeauty(shot, facesSnap[i], paramsSnap[i], null, i);
+        } catch (err) {
+          return shot;
+        }
+      });
+      /* フル解像度の本加工（2026-09-16）。終わるまで落書き画面には進まない。1枚ずつ刻む */
+      runHiResPass((i) => paramsSnap[i], false, (n, total) => showFinishing(`しあげちゅう… ${n}/${total}`),
+                   (i) => facesSnap[i], (i) => confSnap[i])
+        .then((ok) => {
+          hideFinishing();
+          if (ok === false) return; // 途中で「もう一回あそぶ」等が入った＝この組はもう居ない
+          composeSheet();
+          startDecoScreen();
+        })
+        .catch((err) => { hideFinishing(); console.warn('finishBeauty failed', err); })
+        .finally(() => { beautyFinished = false; }); // 例外でも「これでOK」を死なせない（レビュー②）
+    }, 0));
   }
 
   $('#btn-beauty-done').addEventListener('click', finishBeauty);
+
+  /* ===================== フル解像度の本加工（2026-09-16・二重解像度） =====================
+     640 の processedShots（落書き画面・サムネイル・一時保存が使う）を作ったあと、
+     state.hiShots[i]（撮影時のフル解像度コピー）に **同じパラメータ・同じ faceData** で
+     applyBeauty を掛け、state.hiProcessedShots[i] に置く。台紙と1まい保存はこちらを使う。
+
+     ・1枚ずつ rAF → setTimeout(0) で刻む（同期で4枚回すと画面が固まって見える）。
+       進み具合は onProgress(n, total) で呼び元が表示する（「しあげちゅう… n/4」）
+     ・落書き画面へは **この Promise が解決してから** 進む（保存が常に完成した絵になるように）
+     ・1枚の加工が例外で落ちたら、その添字だけ null（台紙は 640 へ落ちる。客の写真は消えない）
+     ・hiShots[i] は加工が済み次第すぐ返す（width=height=0）。フル解像度の生データを持ち続けない
+     ・BEAUTY_PX_SCALE はここでだけ 1 以外になる（applyBeauty は同期なので finally で必ず戻る） */
+  const hiTimings = []; // { i, w, h, ms } 実測（__puriDebug.hiTimings() で回収）
+  /* 世代札（2026-09-16 レビュー⑥）: 「もう一回あそぶ」「撮り直し」でパスが置き去りになったら、
+     残りの枚を捨てて Promise を false で解決する（呼び手は false なら落書き画面へ進めない） */
+  let hiPassGen = 0;
+  function abandonHiResPass() { hiPassGen++; }
+  /* facesFor / confFor（2026-09-16 レビュー①）: 640 の本加工と同じ faceData / skinConf を使う。
+     detectFacesForShots は await されず「これでOK」の後にも書き込むので、その場の state を読むと
+     640（顔なし加工）と hi（デカ目つき）が食い違う。呼び手が写し取った値を渡す */
+  function runHiResPass(paramsFor, y2k, onProgress, facesFor, confFor) {
+    const total = state.shots.length;
+    state.hiProcessedShots = state.shots.map(() => null);
+    hiTimings.length = 0;
+    const gen = ++hiPassGen;
+    let gaveUp = false; // メモリ系の例外が出たら残りの枚も諦める（同じ確保を繰り返さない・レビュー⑤）
+    return new Promise((resolve) => {
+      let i = 0;
+      const step = () => {
+        if (gen !== hiPassGen) { releaseBeautyScratch(); resolve(false); return; }
+        if (i >= total) { releaseBeautyScratch(); resolve(true); return; }
+        if (onProgress) { try { onProgress(i + 1, total); } catch (e) { /* 表示は本筋ではない */ } }
+        requestAnimationFrame(() => setTimeout(() => {
+          if (gen !== hiPassGen) { releaseBeautyScratch(); resolve(false); return; }
+          const hi = state.hiShots[i];
+          if (hi && hi.width > 0 && !gaveUp) {
+            const t0 = performance.now();
+            try {
+              if (confFor) state.skinConf[i] = confFor(i); // getSkinMask は state.skinConf を直読みする
+              BEAUTY_PX_SCALE = hi.width / SHOT_W;
+              const out = applyBeauty(hi, facesFor ? facesFor(i) : state.faceData[i], paramsFor(i), null, i);
+              if (y2k) applyHeiseiY2kTone(out);
+              state.hiProcessedShots[i] = out;
+            } catch (err) {
+              state.hiProcessedShots[i] = null;
+              releaseBeautyScratch();
+              if (err && (err.name === 'RangeError' || /memory|alloc/i.test(String(err.message || '')))) gaveUp = true;
+              console.warn('hi-res beauty failed; falling back to 640 for shot', i, err);
+            } finally {
+              BEAUTY_PX_SCALE = 1;
+            }
+            hiTimings.push({ i, w: hi.width, h: hi.height, ms: Math.round(performance.now() - t0) });
+            skinMaskCache.delete(i); // フル解像度のマスク（数MB）を持ち越さない
+          }
+          releaseCanvas(hi);
+          state.hiShots[i] = null;
+          i++;
+          step();
+        }, 0));
+      };
+      step();
+    });
+  }
+  function releaseCanvas(c) {
+    if (c && c.width !== undefined) { try { c.width = 0; c.height = 0; } catch (e) { /* 既に解放済み */ } }
+  }
+  function releaseCanvases(arr) { (arr || []).forEach(releaseCanvas); }
+  /* エンジンが使い回す作業面をフル解像度のまま持ち越さない。
+     どれも使う直前に寸法を確かめて張り直すので、1×1 に縮めておいて害は無い */
+  function releaseBeautyScratch() {
+    [skinLayerCanvas, makeupLayerCanvas, holeLayer, maskFeatherA, maskFeatherB, holeFeatherA, holeFeatherB,
+     lipFeatherA, lipFeatherB, blurTmpA, blurTmpB, y2kTmp].concat(Object.values(blurFullCanvas))
+      .forEach((c) => { if (c) { c.width = 1; c.height = 1; } });
+  }
+  /* 令和の「しあげちゅう…」の幕（平成は暗室の #darkroom がそのまま幕になる）。
+     DOM を増やしたくないので JS で1枚だけ作る。触れないように全面に敷く */
+  let finishingEl = null;
+  function showFinishing(text) {
+    if (!finishingEl) {
+      finishingEl = document.createElement('div');
+      finishingEl.id = 'hi-finishing';
+      finishingEl.setAttribute('role', 'status');
+      finishingEl.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;'
+        + 'background:rgba(24,16,22,.82);color:#fff;font-size:clamp(24px,4.5vw,44px);font-weight:900;letter-spacing:.06em;text-align:center;';
+      document.body.appendChild(finishingEl);
+    }
+    finishingEl.textContent = text;
+    finishingEl.style.display = 'flex';
+  }
+  function hideFinishing() { if (finishingEl) finishingEl.style.display = 'none'; }
 
   /* ===================== シート合成（モード別デザイン） ===================== */
   const sheetCanvas = $('#sheet-canvas');
@@ -5835,7 +6073,7 @@
     ctx.restore();
 
     // 写真をレイアウトに合わせて配置（盛り加工済みを優先。セル数が写真より多い場合は繰り返し=16分割の再現）
-    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    const shots = sheetShots(); // フル解像度があればそれ（2026-09-16）
     /* シールに載せる写真の並び（2026-08-13 実機テスト指摘対応）:
        2枚ワイド等でどの写真が載るか選べるよう、photoPick（選んだ順のインデックス列）を
        優先する。未選択なら従来どおり撮影順 */
@@ -6085,6 +6323,14 @@
 
   function decoShots() {
     return state.processedShots.length ? state.processedShots : state.shots;
+  }
+  /* 台紙・保存用の写真（2026-09-16・二重解像度）: フル解像度の本加工があればそれ、無ければ 640。
+     落書き画面（decoPhotoCtx・サムネイル・1まい保存の見本・一時保存）は decoShots() の 640 のまま。
+     セルに描く側（drawShotFit / drawImage の宛先寸法）は img.width を見るので、混在しても崩れない */
+  function sheetShots() {
+    const base = decoShots();
+    const hi = state.hiProcessedShots || [];
+    return base.map((c, i) => (hi[i] && hi[i].width > 0) ? hi[i] : c);
   }
 
   /* ---------- シールに「実際に載る」写真を1か所で決める（2026-08-25 障害①） ----------
@@ -6372,7 +6618,7 @@
       ctx.strokeStyle = '#fff6c8';
       ctx.lineCap = 'round';
       ctx.shadowColor = 'rgba(255,240,160,.9)';
-      ctx.shadowBlur = s * 0.25;
+      ctx.shadowBlur = s * 0.25 * shadowScaleOf(ctx);
       ctx.lineWidth = Math.max(1.5, s * 0.09);
       ctx.beginPath();
       ctx.moveTo(0, -s * 0.55); ctx.lineTo(0, s * 0.55);
@@ -6392,7 +6638,7 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(255,122,26,.9)';
-      ctx.shadowBlur = s * 0.12;
+      ctx.shadowBlur = s * 0.12 * shadowScaleOf(ctx);
       ctx.fillStyle = '#ff8a2a';
       ctx.fillText(txt, 0, 0);
       ctx.fillText(txt, 0, 0);
@@ -6460,7 +6706,7 @@
       // ネオン発光（プリ機の定番フレーズ用）
       ctx.font = `700 ${fs}px "Hiragino Maru Gothic ProN", sans-serif`;
       ctx.shadowColor = o.glow || '#ff7ad9';
-      ctx.shadowBlur = fs * 0.9;
+      ctx.shadowBlur = fs * 0.9 * shadowScaleOf(ctx); // 影はデバイス座標（2026-09-16）
       ctx.fillStyle = 'rgba(255,255,255,.96)';
       ctx.fillText(o.t, 0, 0);
       ctx.fillText(o.t, 0, 0);
@@ -6557,10 +6803,11 @@
         ctx.fillStyle = '#ffffff';
         ctx.beginPath(); ctx.arc(p.x, p.y, (size + 6) / 2, 0, Math.PI * 2); ctx.fill();
       }
-      if (type === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = size * 1.6; }
+      const ss = shadowScaleOf(ctx); // 影は変換の外（デバイス座標）なので倍率を掛け直す
+      if (type === 'neon') { ctx.shadowColor = color; ctx.shadowBlur = size * 1.6 * ss; }
       if (type === 'marker') ctx.globalAlpha = 0.45;
       if (type === 'crayon') ctx.globalAlpha = 0.75;
-      if (type === 'nijimi') { ctx.shadowColor = color; ctx.shadowBlur = size * 0.9; ctx.globalAlpha = 0.7; }
+      if (type === 'nijimi') { ctx.shadowColor = color; ctx.shadowBlur = size * 0.9 * ss; ctx.globalAlpha = 0.7; }
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
@@ -6574,6 +6821,7 @@
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    const ss = shadowScaleOf(ctx); // 影は変換の外（デバイス座標）なので倍率を掛け直す（2026-09-16）
     if (type === 'fuchi') {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = size + 7;
@@ -6583,7 +6831,7 @@
       path(); ctx.stroke();
     } else if (type === 'neon') {
       ctx.shadowColor = color;
-      ctx.shadowBlur = Math.max(8, size * 1.8);
+      ctx.shadowBlur = Math.max(8, size * 1.8) * ss;
       ctx.strokeStyle = color;
       ctx.lineWidth = size;
       path(); ctx.stroke();
@@ -6662,7 +6910,7 @@
       [{ w: 2.4, a: 0.10, b: size * 1.1 }, { w: 1.55, a: 0.20, b: size * 0.5 }, { w: 1.0, a: 0.85, b: 0 }]
         .forEach(({ w, a, b }) => {
           ctx.globalAlpha = a;
-          ctx.shadowBlur = b;
+          ctx.shadowBlur = b * ss;
           ctx.lineWidth = size * w;
           path(); ctx.stroke();
         });
@@ -6767,13 +7015,27 @@
     scheduleSessionSave(); // 見ている写真も一時保存に含める（復帰したとき同じ写真から続けられる）
   }
 
-  // 写真iの落書きだけを SHOT_W×SHOT_H の透明キャンバスに描き出す（合成・サムネイル共用）
-  function renderShotDoodle(i) {
+  /* 写真iの落書きだけを透明キャンバスに描き出す（合成・サムネイル共用）。
+     k（2026-09-16）: 描き出す倍率。SHOT_W*k × SHOT_H*k の面に ctx.scale(k,k) で描くので、
+     ペンの太さ・スタンプの大きさ・文字はベクターのまま鮮明に大きくなる（座標系は 640×480 のまま）。
+     台紙（600dpi）のセルは 640 の約2〜3倍あるので、1 のままだと落書きだけがぼやけて載る。
+     省略時 1＝従来どおり。ラスター素材（絵文字スタンプはフォント描画なのでベクター）は無い */
+  function renderShotDoodle(i, k) {
+    k = Math.max(1, Math.min(4, Math.round(k || 1)));
     const c = document.createElement('canvas');
-    c.width = SHOT_W; c.height = SHOT_H;
+    c.width = SHOT_W * k; c.height = SHOT_H * k;
     const ctx = c.getContext('2d');
+    if (k !== 1) ctx.scale(k, k);
     ((shotDeco[i] && shotDeco[i].objects) || []).forEach(o => drawObject(ctx, o));
     return c;
+  }
+  // セル幅から落書きレイヤーの倍率を決める（1〜4）。640 のまま足りるなら 1
+  function doodleScaleFor(cellW) { return Math.max(1, Math.min(4, Math.ceil(cellW / SHOT_W))); }
+  /* shadowBlur / shadowOffset は Canvas 仕様で **変換行列の影響を受けない**（デバイス座標）。
+     ctx.scale(k,k) の面に描くとき、ネオン・にじみの光だけが k 分の1に細ってしまうので、
+     光の幅を掛け直すための係数。等倍なら 1 ＝ 従来どおり */
+  function shadowScaleOf(ctx) {
+    try { const m = ctx.getTransform(); return Math.hypot(m.a, m.b) || 1; } catch (e) { return 1; }
   }
 
   function buildDecoThumbs() {
@@ -9120,12 +9382,14 @@
     const cells = layoutCells(state.layout);
     const radius = state.layout.radius;
     const isCircle = state.layout.shape === 'circle';
-    const rendered = {}; // 写真indexごとの落書きレイヤー（同じ写真が複数セルでも1回だけ描く）
+    const rendered = {}; // 「写真index:倍率」ごとの落書きレイヤー（同じ写真が複数セルでも1回だけ描く）
     cells.forEach((cell, i) => {
       const di = order[i % order.length];
       if (!shotDeco[di] || !shotDeco[di].objects.length) return;
-      if (!rendered[di]) rendered[di] = renderShotDoodle(di);
       const { x, y, w, h } = cell;
+      const k = doodleScaleFor(w);            // セルの幅に合わせて鮮明に描き出す（2026-09-16）
+      const key = di + ':' + k;
+      if (!rendered[key]) rendered[key] = renderShotDoodle(di, k);
       const cx = x + w / 2, cy = y + h / 2;
       const rad = Math.min(w, h) / 2;
       ctx.save();
@@ -9138,9 +9402,9 @@
       ctx.clip();
       // 写真と同じ「おさまり」で載せる。ここがずれると落書きだけが写真から浮く
       if (isCircle) {
-        drawShotFit(ctx, rendered[di], cx - rad, cy - rad, rad * 2, rad * 2, di);
+        drawShotFit(ctx, rendered[key], cx - rad, cy - rad, rad * 2, rad * 2, di);
       } else {
-        drawShotFit(ctx, rendered[di], x, y, w, h, di);
+        drawShotFit(ctx, rendered[key], x, y, w, h, di);
       }
       ctx.restore();
     });
@@ -9153,7 +9417,7 @@
        落書き＝顔寄せ切り出し」で落書きだけ写真からズレた。完成の直前に台紙を組み直して
        **写真と落書きが必ず同じ faceData を見る**ようにする（processedShots は触らない）。
        写真えらびの見本（drawPhotoPickPreview）はタップ側が直前に composeSheet 済みなので
-       reuseSheet で二重合成を避ける（1500×1051 の再合成はスマホで体感できる重さ） */
+       reuseSheet で二重合成を避ける（3000×2102 の再合成はスマホで体感できる重さ） */
     if (!(opts && opts.reuseSheet)) composeSheet();
     const ctx = finalCanvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;      // 落書きレイヤー（640×480）をセルへ拡大するため（2026-09-16）
@@ -9202,11 +9466,18 @@
      canvas.toDataURL が吐く PNG には解像度の情報（pHYs チャンク）が無い。無いと Mac/Windows の
      印刷ダイアログや画像ソフトが 72dpi 扱いにして、L判に収めるときに拡大縮小をかけ直す。
      IHDR の直後に pHYs（11811 px/m ≒ 300dpi・単位=メートル）を差し込むと、
-     1500×1051 が「127×89mm＝L判ぴったり」として扱われる。
+     台紙（600dpi: 3000×2102）が「127×89mm＝L判ぴったり」として扱われる（dpi は printDpiFor が canvas ごとに決める）。
      iOS の写真アプリはこの情報を見ない（比率で紙に合わせる）が、あっても害は無い。
      🚨 ここは navigator.share の直前に走るので**同期のまま**にする（await 禁止・上の説明のとおり）。
         何かおかしければ触らず元のバイト列を返す（保存が止まるほうが実害が大きい）。 */
-  const PNG_PIXELS_PER_METRE = 11811; // 300dpi = 300 / 0.0254 = 11811.02 px/m
+  /* 2026-09-16: dpi は呼び元が決める（台紙系は SHEET_DPI=600 → 23622 px/m・1まい保存は写真の寸法から・
+     それ以外は 300 → 11811 px/m）。canvas に printDpi が付いていればそれを優先する */
+  const pxPerMetre = (dpi) => Math.round(dpi / 0.0254);
+  function printDpiFor(cv) {
+    if (cv && cv.printDpi > 0) return cv.printDpi;
+    if (cv && cv.width === SHEET_W && cv.height === SHEET_H) return SHEET_DPI;
+    return 300;
+  }
   let crc32Table = null;
   function crc32Of(bytes, start, end) {
     if (!crc32Table) {
@@ -9221,8 +9492,9 @@
     for (let i = start; i < end; i++) c = crc32Table[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
     return (c ^ 0xFFFFFFFF) >>> 0;
   }
-  function pngWithPrintDpi(arr) {
+  function pngWithPrintDpi(arr, dpi) {
     try {
+      const ppm = pxPerMetre(dpi || 300);
       const SIG = [137, 80, 78, 71, 13, 10, 26, 10];
       if (arr.length < 33) return arr;
       for (let i = 0; i < 8; i++) if (arr[i] !== SIG[i]) return arr;
@@ -9243,8 +9515,8 @@
       const chunk = new Uint8Array(21); // 長さ4 + 種別4 + データ9 + CRC4
       wr32(chunk, 0, 9);
       chunk[4] = 0x70; chunk[5] = 0x48; chunk[6] = 0x59; chunk[7] = 0x73; // 'pHYs'
-      wr32(chunk, 8, PNG_PIXELS_PER_METRE);
-      wr32(chunk, 12, PNG_PIXELS_PER_METRE);
+      wr32(chunk, 8, ppm);
+      wr32(chunk, 12, ppm);
       chunk[16] = 1; // 単位 = メートル
       wr32(chunk, 17, crc32Of(chunk, 4, 17)); // CRC は種別＋データに掛ける
       if (physAt >= 0) {
@@ -9269,7 +9541,7 @@
       const bin = atob(dataUrl.slice(comma + 1));
       let arr = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      arr = pngWithPrintDpi(arr); // 300dpi の印刷解像度を埋める（失敗しても元のまま返る）
+      arr = pngWithPrintDpi(arr, printDpiFor(cv)); // 印刷解像度（台紙 600dpi・他は寸法から）を埋める（失敗しても元のまま返る）
       return new Blob([arr], { type: 'image/png' });
     } catch (e) {
       return null;
@@ -9614,7 +9886,7 @@
       ctx.letterSpacing = '0px';
     }
 
-    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    const shots = sheetShots(); // フル解像度があればそれ（2026-09-16）
     if (shots.length) {
       const margin = sp(26), gap = sp(10), cols = 4, rows = 4;
       /* 🚨 2026-09-09: 旧版は **幅からしかセルの大きさを決めていなかった**。
@@ -9665,6 +9937,8 @@
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = true;      // フル解像度の写真を 470px のカードへ縮めるので、縮小も最高品質で（2026-09-16）
+    ctx.imageSmoothingQuality = 'high';
     const conf = modeConf();
     const sheet = conf.sheet;
     const cc = state.curtain.color;
@@ -9689,7 +9963,7 @@
     ctx.fillText(`${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`, W / 2, 224);
 
     // 写真: ポラロイド風カードを2x2で交互に傾けて配置
-    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    const shots = sheetShots(); // フル解像度があればそれ（2026-09-16）
     if (shots.length) {
       const pw = 470, ph = 353, padT = 16, padS = 16, padB = 52;
       const cardW = pw + padS * 2, cardH = ph + padT + padB;
@@ -9763,7 +10037,7 @@
       ctx.restore();
     }
 
-    const shots = state.processedShots.length ? state.processedShots : state.shots;
+    const shots = sheetShots(); // フル解像度があればそれ（2026-09-16。faceRect は shot.width を見るので寸法に依らない）
     const idx = (state.photoPick && state.photoPick.length) ? state.photoPick[0] : 0;
     const shot = shots[idx];
     if (!shot) return cv;
@@ -9853,20 +10127,28 @@
      「写真をそのまま持ち帰る」ための機能なので切らない。4:3 のまま 1400×1050 なら
      300dpi（pHYs）で 118.5×88.9mm＝L判の短辺ぴったり・長辺に左右 4mm ずつ白が残るだけで、
      フチなし設定にすれば端をわずかに拡大して収まる。640×480 のままだと L判で 137dpi しか無い。 */
+  /* 2026-09-16 二重解像度: フル解像度の本加工があれば **その寸法そのまま**（1440×1080〜）で出す。
+     無いとき（復帰後・カメラが小さいとき）だけ従来の 1400×1050。
+     pHYs は「短辺＝L判の 89mm」になる dpi を書く（1050px→300dpi・1080px→308dpi・3024px→863dpi） */
   const SINGLE_PHOTO_LONG = 1400;
   function composeSinglePhoto(i) {
     const shots = decoShots();
-    const s = SINGLE_PHOTO_LONG / Math.max(SHOT_W, SHOT_H);
-    const W = Math.round(SHOT_W * s), H = Math.round(SHOT_H * s);
+    const hi = (state.hiProcessedShots || [])[i];
+    const src = (hi && hi.width > 0) ? hi : shots[i];
+    let W, H;
+    if (hi && hi.width > 0) { W = hi.width; H = hi.height; }
+    else { const s0 = SINGLE_PHOTO_LONG / Math.max(SHOT_W, SHOT_H); W = Math.round(SHOT_W * s0); H = Math.round(SHOT_H * s0); }
+    const s = W / SHOT_W;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
+    cv.printDpi = H / (89 / 25.4); // 短辺を L判の 89mm に合わせる（canvasToBlobSync が pHYs に書く）
     const ctx = cv.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
-    if (shots[i]) ctx.drawImage(shots[i], 0, 0, W, H);
-    if (shotDeco[i] && shotDeco[i].objects.length) ctx.drawImage(renderShotDoodle(i), 0, 0, W, H);
+    if (src) ctx.drawImage(src, 0, 0, W, H);
+    if (shotDeco[i] && shotDeco[i].objects.length) ctx.drawImage(renderShotDoodle(i, doodleScaleFor(W)), 0, 0, W, H);
     // 台紙のセルと同じ関数・同じ引数で飾る（別実装にするとシールと1枚保存で見た目がズレる）
     drawCellDecor(ctx, { x: 0, y: 0, w: W, h: H },
       { emoji: state.frame.emoji, isCircle: false, radius: 0, scale: s });
@@ -9952,6 +10234,10 @@
        起動時に取っておいた控えから機械的に戻す。詳しい理由は STATE_DEFAULTS の定義を見ること。
        この1行で shotMode（アップ/全身＝背面カメラ）も chromaOn（うしろの色がえ）も
        写真・盛り・落書きの道具も、**これから足す state も**まとめて初期値へ戻る。 */
+    // フル解像度の絵は数十MB。次の客に持ち越さず、参照を切る前に画素も返す（2026-09-16）
+    abandonHiResPass(); // 走っている本加工があれば捨てる（2026-09-16 レビュー⑥）
+    releaseCanvases(state.hiShots);
+    releaseCanvases(state.hiProcessedShots);
     resetStateForNextGuest();
     /* メイクりれきも1組ぶんで終わりにする（2026-08-23 検見の令和検査③）。
        家で使うアプリなら「前回の再現」で正しいが、無人の文化祭ブースでは
@@ -10076,6 +10362,8 @@
         curShot,
         remaining: state.remaining,
         // 写真はJPEGで持つ（PNGだと4枚で数MBになり sessionStorage を溢れさせる）
+        // 🚨 フル解像度（hiProcessedShots）は入れない（2026-09-16）: sessionStorage は 5MB 前後で、
+        //    1枚でも溢れる。復帰後は hi が無いので台紙は 640 へ落ちる（composers は sheetShots() で自動）
         shots: shots.map(c => c.toDataURL('image/jpeg', 0.82)),
         deco: shotDeco.map(d => ((d && d.objects) || [])),
       };
@@ -10180,6 +10468,7 @@
     if (p.photoFit === 'face' || p.photoFit === 'center' || p.photoFit === 'contain') state.photoFit = p.photoFit;
     state.shots = canvases;
     state.processedShots = canvases.slice();
+    state.hiShots = []; state.hiProcessedShots = []; // 復帰にフル解像度は無い（台紙は 640 へ落ちる・2026-09-16）
     state.faceData = canvases.map(() => null);
     state.skinConf = canvases.map(() => null);
     buildSelectGrids();
@@ -10298,6 +10587,7 @@
          FLASH_EXPOSURE_MS … 点灯から撮るまでの待ち */
     flashLightOn, flashLightOff, flashReset,
     rawShots: () => state.shots.slice(), // 撮れた生の4枚（盛り加工前）。フラッシュの検証用
+    faceData: () => state.faceData.slice(), // 640 と hi の本加工時間を同じ顔で測る用（2026-09-16）
     flashRoute: () => lastFlashRoute,
     flashTimings: () => flashTimings.slice(),
     // 実際に使われる余韻の長さ（モードで変わる。令和380ms／平成210ms・柄本仕様 C-1）
@@ -10358,8 +10648,23 @@
       }
       return done;
     },
-    sheetSize: () => ({ w: SHEET_W, h: SHEET_H, 比: +(SHEET_W / SHEET_H).toFixed(3), 倍率: +SHEET_SCALE.toFixed(4) }),
-    canvasToBlobSync, // L判・300dpi(pHYs) の検証用（2026-09-16）
+    sheetSize: () => ({ w: SHEET_W, h: SHEET_H, 比: +(SHEET_W / SHEET_H).toFixed(3), 倍率: +SHEET_SCALE.toFixed(4), dpi: SHEET_DPI }),
+    canvasToBlobSync, // L判・pHYs の検証用（2026-09-16）
+    printDpiFor,
+    /* 二重解像度の検証用（2026-09-16） */
+    videoSize: () => ({ w: video.videoWidth, h: video.videoHeight }),
+    hiShots: () => state.hiShots.slice(),
+    hiProcessedShots: () => state.hiProcessedShots.slice(),
+    setHiShots: (arr) => { state.hiShots = arr.slice(); },
+    sheetShots,
+    captureHiRes,
+    runHiResPass,
+    hiTimings: () => hiTimings.slice(),
+    renderShotDoodle,
+    doodleScaleFor,
+    HI_MAX_LONG,
+    beautyPxScale: (v) => { if (v !== undefined) BEAUTY_PX_SCALE = v; return BEAUTY_PX_SCALE; },
+    releaseBeautyScratch,
     composeSheet, composeFinal,
     setCurtain: (id) => { state.curtain = modeConf().curtains.find(c => c.id === id) || state.curtain; },
     setFrame: (id) => { state.frame = modeConf().frames.find(f => f.id === id) || state.frame; },
