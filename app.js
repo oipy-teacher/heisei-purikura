@@ -326,13 +326,33 @@
      ⚠️ この2つの数値を入れ替えるだけでは足りない。**layoutCells 側でセルを写真比に
         内接させる**のが対（下の layoutCells を参照）。よこ長にしただけでは
         4分割セルが 411×239（比1.72）になり、今度は**上下**が切れる。 */
-  const SHEET_W = 900;
-  const SHEET_H = 680;
-  const MARGIN = 26;
-  const HEADER_H = 84;
-  const FOOTER_H = 40;
-
   const SHOT_W = 640, SHOT_H = 480;
+
+  /* 🖨 2026-09-16（オーナー指示「L判の写真印刷に最適なサイズに・縦横は自動」）— **台紙をL判300dpiにした。**
+     L判 = 89×127mm。300dpi では 127mm → 1500px・89mm → 1051px（89/25.4×300 = 1051.2）。
+     旧台紙 900×680 は L判に刷ると約180dpi しか無く、比率（1.32）もL判（1.427）と合わないため
+     プリンター側で拡大＋トリミングされて甘くなっていた。
+     比率が紙とぴったり同じなら、Windows/Macの印刷ダイアログも iOS の写真アプリも
+     **紙の向きに自動で回して**フチなしに収める（＝客が縦横を選ぶ必要が無い）。
+
+     向きは写真（SHOT_W×SHOT_H）の向きから決める＝**写真がよこ長なら台紙もよこ長**
+     （2026-09-09 オーナー裁定「横撮りしたら印刷や画像も横のまま」）。この機械の写真は
+     常に 640×480 のよこ長なので、いまは必ず 1500×1051 になる。将来たて撮り（480×640）に
+     したときは何も直さずに 1051×1500 へ切り替わる。名前 SHEET_W/SHEET_H は据え置き
+     （約60箇所の参照がそのまま生きる）。 */
+  const SHEET_L = { long: 1500, short: 1051 };
+  const SHEET_W = SHOT_W >= SHOT_H ? SHEET_L.long : SHEET_L.short;
+  const SHEET_H = SHOT_W >= SHOT_H ? SHEET_L.short : SHEET_L.long;
+  /* 台紙の上に絶対px で描いているもの（見出しの文字サイズ・帯の高さ・枠の太さ・セルの隙間・
+     モチーフの大きさ）は、旧台紙 900×680 の**短辺 680 を基準にした倍率**で全部いっしょに伸ばす
+     （よこ長なら 1051/680 ≒ 1.546）。こうすると見た目の割合は旧台紙と寸分違わず、解像度だけが上がる。
+     ⚠️ 台紙に描く絶対px は必ず sp() を通すこと。生の数字を書くと1500px の紙の上で豆粒になる。 */
+  const SHEET_SCALE = Math.min(SHEET_W, SHEET_H) / 680;
+  const sp = (n) => n * SHEET_SCALE;                        // sheet px（旧台紙の px → 新台紙の px）
+  const sheetFont = (font) => font.replace(/(\d+(?:\.\d+)?)px/, (_, n) => `${Math.round(parseFloat(n) * SHEET_SCALE)}px`);
+  const MARGIN = sp(26);
+  const HEADER_H = sp(84);
+  const FOOTER_H = sp(40);
 
   /* シートレイアウト（分割）。16分割は平成プリの定番！まる系は保護者リクエスト
 
@@ -346,12 +366,13 @@
      4分割(2×2)・16分割(4×4)は正方の並びなので、そのままで最良（61% / 66%）。
      ⚠️ 枚数は変えていない（2枚は2枚・6枚は6枚）。変えたのは「縦に積むか横に並べるか」だけ。 */
   const LAYOUTS = [
-    { id: 'quad',    label: '4分割',     cols: 2, rows: 2, gap: 26, radius: 10 },
-    { id: 'wide2',   label: '2枚ワイド', cols: 2, rows: 1, gap: 26, radius: 12 },
-    { id: 'six',     label: '6分割',     cols: 3, rows: 2, gap: 18, radius: 8 },
-    { id: 'sixteen', label: '16分割',    cols: 4, rows: 4, gap: 12, radius: 6 },
-    { id: 'circle4', label: 'まる4',     cols: 2, rows: 2, gap: 26, radius: 0, shape: 'circle' },
-    { id: 'circleMix', label: 'まるMIX', gap: 20, radius: 0, shape: 'circle',
+    /* gap/radius は旧台紙(900×680)の px を sp() で L判の px に伸ばしたもの（2026-09-16） */
+    { id: 'quad',    label: '4分割',     cols: 2, rows: 2, gap: sp(26), radius: sp(10) },
+    { id: 'wide2',   label: '2枚ワイド', cols: 2, rows: 1, gap: sp(26), radius: sp(12) },
+    { id: 'six',     label: '6分割',     cols: 3, rows: 2, gap: sp(18), radius: sp(8) },
+    { id: 'sixteen', label: '16分割',    cols: 4, rows: 4, gap: sp(12), radius: sp(6) },
+    { id: 'circle4', label: 'まる4',     cols: 2, rows: 2, gap: sp(26), radius: 0, shape: 'circle' },
+    { id: 'circleMix', label: 'まるMIX', gap: sp(20), radius: 0, shape: 'circle',
       /* 大きさ指定の丸型ミックス（大1+中1+小2）。ヘッダー下の描画領域に対する比率。
          🚨 2026-09-09: たて長(680×776)用に決めた比率をよこ長(900×556)へそのまま当てると、
             大セルが 504×267 の極端な横長スロットになり、円が小さくなるうえに散らばりが崩れた。
@@ -1542,6 +1563,9 @@
      カーテン・フレーム等は enterMode が毎回リセットするので触らなくてよい。 */
   $('#btn-back-title').addEventListener('click', () => {
     stopAnnounce(); // コース選択の案内が読み上げ中でも、戻ったら黙る
+    /* 2026-09-16（レビュー③）: shotMode / chromaOn / liveBeautyOn / flashOn / photoFit / layout も
+       戻す。「全身」で戻って平成を選ぶと背面カメラで始まっていた。「もう一回あそぶ」と同じ機械復元 */
+    resetStateForNextGuest();
     state.bgmChoice = 'auto';
     state.heiseiEra = 'standard';
     delete document.body.dataset.mode; // 前回のモード値を残さない（qa-tester検収指摘6）
@@ -3522,10 +3546,16 @@
     const params = y2k
       ? { skin: 12, white: 4, clear: 5, eye: 0, face: 0, cheek: 0, lip: 0, filter: state.beauty.filter }
       : { skin: 25, white: 10, clear: 12, eye: 0, face: 0, cheek: 0, lip: 0, filter: state.beauty.filter };
+    /* 2026-09-16（レビュー⑥）: 加工が例外で落ちても無人ブースを止めない。
+       その1枚だけ無加工で先へ進める（客の写真が消えるより、盛れない方がまし） */
     state.processedShots = state.shots.map((shot, i) => {
-      const out = applyBeauty(shot, null, params, null, i);
-      if (y2k) applyHeiseiY2kTone(out);
-      return out;
+      try {
+        const out = applyBeauty(shot, null, params, null, i);
+        if (y2k) applyHeiseiY2kTone(out);
+        return out;
+      } catch (err) {
+        return shot;
+      }
     });
     composeSheet();
     startDecoScreen();
@@ -5575,8 +5605,14 @@
       localStorage.setItem(MAKEUP_HISTORY_KEY, JSON.stringify(state.beautyShots || [state.beauty]));
     } catch (e) { /* プライベートブラウズ等で保存できない場合は何もしない */ }
     // 各ショットに「その1枚の」パラメータを適用（2026-08-12: 1枚ごとの盛り設定に対応）
-    state.processedShots = state.shots.map((shot, i) =>
-      applyBeauty(shot, state.faceData[i], (state.beautyShots && state.beautyShots[i]) || state.beauty, null, i));
+    // 2026-09-16（レビュー⑥）: 1枚の加工が例外で落ちても、その1枚だけ無加工で先へ進める
+    state.processedShots = state.shots.map((shot, i) => {
+      try {
+        return applyBeauty(shot, state.faceData[i], (state.beautyShots && state.beautyShots[i]) || state.beauty, null, i);
+      } catch (err) {
+        return shot;
+      }
+    });
     composeSheet();
     startDecoScreen();
     beautyFinished = false;
@@ -5704,7 +5740,12 @@
     const isCircle = opt.isCircle;
     const radius = opt.radius || 0;
     const minSide = Math.min(w, h);
-    const lw = Math.max(3, Math.min(9, minSide * 0.024)); // 枠の太さ
+    /* opt.scale（2026-09-16）: 枠の太さ・モチーフの大きさの**上限と下限**を伸ばす倍率。
+       台紙（L判 300dpi）や1まい保存（1400×1050）のような高解像度の出力から呼ぶときに渡す。
+       渡さなければ 1＝従来どおり（撮影画面・落書き画面・たて長コラージュはそのまま）。
+       minSide×比率 の本体はセルの大きさに比例するので、伸ばすのは clamp の 3/9・11/34 だけでよい */
+    const sc = opt.scale || 1;
+    const lw = Math.max(3 * sc, Math.min(9 * sc, minSide * 0.024)); // 枠の太さ
     ctx.save();
     ctx.lineJoin = 'round';
     // ① カラーの太枠（枠の内側に食い込ませて、写真の縁に必ず色が乗るようにする）
@@ -5721,7 +5762,7 @@
     ctx.stroke();
     // ② フレームのモチーフ（写真の四隅に載る＝実機のフレームと同じ載り方）
     if (emoji) {
-      const size = Math.max(11, Math.min(34, minSide * 0.155));
+      const size = Math.max(11 * sc, Math.min(34 * sc, minSide * 0.155));
       ctx.font = `${size}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -5745,6 +5786,10 @@
     const conf = modeConf();
     const sheet = conf.sheet;
     const ctx = sheetCanvas.getContext('2d');
+    /* 640×480 の写真を L判の大きなセルへ拡大するので、補間を最高品質にする（2026-09-16）。
+       既定の bilinear だと拡大で輪郭がぼやける。iPad Safari でも無視されるだけで害は無い */
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
     const cc = state.curtain.color;
 
@@ -5759,7 +5804,7 @@
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, SHEET_W, SHEET_H);
       ctx.fillStyle = cc;
-      ctx.fillRect(0, 0, SHEET_W, HEADER_H - 8);
+      ctx.fillRect(0, 0, SHEET_W, HEADER_H - sp(8));
       ctx.fillRect(0, SHEET_H - FOOTER_H, SHEET_W, FOOTER_H);
     } else {
       const grad = ctx.createLinearGradient(0, 0, 0, SHEET_H);
@@ -5770,23 +5815,23 @@
       /* 令和は「くすみカラー」の上品さが売り（柄本仕様書）。ベタ塗りにはせず、
          ヘッダーの帯とフッターの細線でカラーを効かせる（細ライン3pxだけでは見えなかった） */
       ctx.fillStyle = cc;
-      ctx.fillRect(0, 0, SHEET_W, HEADER_H - 18);
-      ctx.fillRect(0, SHEET_H - FOOTER_H + 6, SHEET_W, 4);
+      ctx.fillRect(0, 0, SHEET_W, HEADER_H - sp(18));
+      ctx.fillRect(0, SHEET_H - FOOTER_H + sp(6), SHEET_W, sp(4));
     }
 
     // タイトル
     ctx.textAlign = 'center';
-    ctx.font = sheet.titleFont;
+    ctx.font = sheetFont(sheet.titleFont); // MODES の px は旧台紙基準。L判の px へ伸ばす
     ctx.save();
     if (sheet.titleGlow) {
       ctx.shadowColor = sheet.titleGlow;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = sp(6);
     }
     /* 見出しの色はカラーの明るさで決める（2026-08-14）。
        ヘッダー帯をカラーでベタ塗りにしたため、「ホワイト」「クリーム」等を選ぶと
        白い題字が完全に消えてしまう。明るい帯のときだけ濃い色に落とす */
     ctx.fillStyle = sheet.titleColor === '#ffffff' ? inkOnColor(cc, sheet.footerColor) : sheet.titleColor;
-    ctx.fillText(sheet.title, SHEET_W / 2, 46);
+    ctx.fillText(sheet.title, SHEET_W / 2, sp(46));
     ctx.restore();
 
     // 写真をレイアウトに合わせて配置（盛り加工済みを優先。セル数が写真より多い場合は繰り返し=16分割の再現）
@@ -5800,7 +5845,7 @@
     const order = (pick && pick.length) ? pick : shots.map((_, idx) => idx);
     const cells = layoutCells(state.layout);
     const radius = state.layout.radius;
-    const pad = Math.min(6, state.layout.gap * 0.3);
+    const pad = Math.min(sp(6), state.layout.gap * 0.3);
     const isCircle = state.layout.shape === 'circle';
     cells.forEach((cell, i) => {
       const shotCanvas = shots[order[i % order.length]];
@@ -5824,11 +5869,11 @@
         ctx.beginPath();
         ctx.arc(cx, cy, rad + pad, 0, Math.PI * 2);
       } else {
-        roundRect(ctx, x - pad, y - pad, cw + pad * 2, chh + pad * 2, radius + 4);
+        roundRect(ctx, x - pad, y - pad, cw + pad * 2, chh + pad * 2, radius + sp(4));
       }
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0,0,0,.22)';
-      ctx.shadowBlur = state.mode === 'reiwa' ? 5 : 8;
+      ctx.shadowBlur = sp(state.mode === 'reiwa' ? 5 : 8);
       ctx.fill();
       ctx.restore();
 
@@ -5853,9 +5898,9 @@
     const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.font = state.mode === 'reiwa' ? 'italic 500 13px Georgia, serif' : '700 14px sans-serif';
+    ctx.font = sheetFont(state.mode === 'reiwa' ? 'italic 500 13px Georgia, serif' : '700 14px sans-serif');
     ctx.fillStyle = state.mode === 'reiwa' ? sheet.footerColor : inkOnColor(cc, sheet.footerColor);
-    ctx.fillText(`${dateStr}　${sheet.footerName}`, SHEET_W / 2, SHEET_H - FOOTER_H / 2 + 5);
+    ctx.fillText(`${dateStr}　${sheet.footerName}`, SHEET_W / 2, SHEET_H - FOOTER_H / 2 + sp(5));
   }
 
   /* 台紙の飾り（カラーの枠＋フレームのモチーフ）だけを描く。
@@ -5870,7 +5915,7 @@
     const radius = state.layout.radius;
     const emoji = state.frame.emoji;
     cells.forEach((cell) => {
-      drawCellDecor(ctx, cell, { emoji, isCircle, radius });
+      drawCellDecor(ctx, cell, { emoji, isCircle, radius, scale: SHEET_SCALE });
     });
     // 台紙の外周にもモチーフを並べる（平成の初期プリ機のフレーム風。「シンプル」はなし）
     ctx.save();
@@ -5884,30 +5929,30 @@
       const left = Math.min(...cells.map(c => c.x));
       const top = Math.min(...cells.map(c => c.y));
       const bottom = Math.max(...cells.map(c => c.y + c.h));
-      ctx.font = '26px sans-serif';
-      const step = 52;
-      const topY = HEADER_H + 8;
-      const botY = SHEET_H - FOOTER_H - 8;
+      ctx.font = sheetFont('26px sans-serif');
+      const step = sp(52);
+      const topY = HEADER_H + sp(8);
+      const botY = SHEET_H - FOOTER_H - sp(8);
       ctx.shadowColor = 'rgba(255,255,255,.9)';
-      ctx.shadowBlur = 6;
-      if (top - HEADER_H >= 20 && SHEET_H - FOOTER_H - bottom >= 20) {
-        for (let x = 26; x <= SHEET_W - 26; x += step) {
+      ctx.shadowBlur = sp(6);
+      if (top - HEADER_H >= sp(20) && SHEET_H - FOOTER_H - bottom >= sp(20)) {
+        for (let x = sp(26); x <= SHEET_W - sp(26); x += step) {
           ctx.fillText(emoji, x, topY);
           ctx.fillText(emoji, x, botY);
         }
       }
-      if (left >= 24) {
+      if (left >= sp(24)) {
         for (let y = topY + step; y < botY; y += step) {
-          ctx.fillText(emoji, 18, y);
-          ctx.fillText(emoji, SHEET_W - 18, y);
+          ctx.fillText(emoji, sp(18), y);
+          ctx.fillText(emoji, SHEET_W - sp(18), y);
         }
       }
     } else if (emoji) {
       // 令和：ヘッダー帯の両端に小さく添える（くすみカラーの上品さを壊さない）
-      ctx.font = '20px sans-serif';
+      ctx.font = sheetFont('20px sans-serif');
       ctx.globalAlpha = 0.9;
-      ctx.fillText(emoji, 34, (HEADER_H - 18) / 2);
-      ctx.fillText(emoji, SHEET_W - 34, (HEADER_H - 18) / 2);
+      ctx.fillText(emoji, sp(34), (HEADER_H - sp(18)) / 2);
+      ctx.fillText(emoji, SHEET_W - sp(34), (HEADER_H - sp(18)) / 2);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -8731,12 +8776,18 @@
     const s = Math.min(cv.width / SHEET_W, cv.height / SHEET_H);
     const dw = SHEET_W * s, dh = SHEET_H * s;
     // 落書き済みなら落書きも載せた姿を見せる（開き直したときは描いた分が入っている）
-    composeFinal();
+    composeFinal({ reuseSheet: true }); // タップ側で composeSheet 済み（2026-09-16）
     ctx.drawImage(finalCanvas, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
   }
 
   function startDecoScreen() {
     showScreen('screen-deco');
+    /* 🚨 2026-09-16（検見の総点検【中止級①】・レビュー①）: 「▶ らくがきスタート」は
+       連打対策（2026-08-23）で押した瞬間に disabled=true にしているが、戻す処理が無く、
+       「もう一回あそぶ」はページを読み直さないので **同じ端末の2組目から押せなかった**。
+       ゲートを出すこの場所で必ず戻す（客ごとに1回）。 */
+    const decoStartBtn = $('#btn-deco-start');
+    if (decoStartBtn) decoStartBtn.disabled = false;
     // 道具箱の「▼ したにも道具がある」帯の状態を、画面に出た時点で必ず取り直す（2026-08-18）
     requestAnimationFrame(() => syncToolbarMore());
     /* 誤操作での離脱対策をこの画面の間だけ入れる（2026-08-14 実機テスト指摘①）:
@@ -9095,8 +9146,18 @@
     });
   }
 
-  function composeFinal() {
+  function composeFinal(opts) {
+    /* 2026-09-16（レビュー②）: 台紙の写真は finishBeauty の時点の faceData で切り出され、
+       落書きは完成時の faceData で drawShotFit を通る。detectFacesForShots は await されず
+       画面を離れた後にも faceData を書くため、会場Wi-Fiが遅いと「写真＝中央切り出し・
+       落書き＝顔寄せ切り出し」で落書きだけ写真からズレた。完成の直前に台紙を組み直して
+       **写真と落書きが必ず同じ faceData を見る**ようにする（processedShots は触らない）。
+       写真えらびの見本（drawPhotoPickPreview）はタップ側が直前に composeSheet 済みなので
+       reuseSheet で二重合成を避ける（1500×1051 の再合成はスマホで体感できる重さ） */
+    if (!(opts && opts.reuseSheet)) composeSheet();
     const ctx = finalCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;      // 落書きレイヤー（640×480）をセルへ拡大するため（2026-09-16）
+    ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, SHEET_W, SHEET_H);
     ctx.drawImage(sheetCanvas, 0, 0);
     composeDoodleOntoSheet(ctx);
@@ -9137,14 +9198,78 @@
      share は NotAllowedError で落ちる（＝また保存できない実機に戻る）。
      そのため Blob は **同期の toDataURL→atob** で作る。toBlob（非同期）は使わない。
      非同期化するくらいなら、多少重くても同期でよい——保存は客が持ち帰る最後の砦。 */
+  /* ---------- PNG に印刷解像度（300dpi）を書き込む（2026-09-16・L判印刷対応） ----------
+     canvas.toDataURL が吐く PNG には解像度の情報（pHYs チャンク）が無い。無いと Mac/Windows の
+     印刷ダイアログや画像ソフトが 72dpi 扱いにして、L判に収めるときに拡大縮小をかけ直す。
+     IHDR の直後に pHYs（11811 px/m ≒ 300dpi・単位=メートル）を差し込むと、
+     1500×1051 が「127×89mm＝L判ぴったり」として扱われる。
+     iOS の写真アプリはこの情報を見ない（比率で紙に合わせる）が、あっても害は無い。
+     🚨 ここは navigator.share の直前に走るので**同期のまま**にする（await 禁止・上の説明のとおり）。
+        何かおかしければ触らず元のバイト列を返す（保存が止まるほうが実害が大きい）。 */
+  const PNG_PIXELS_PER_METRE = 11811; // 300dpi = 300 / 0.0254 = 11811.02 px/m
+  let crc32Table = null;
+  function crc32Of(bytes, start, end) {
+    if (!crc32Table) {
+      crc32Table = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crc32Table[n] = c >>> 0;
+      }
+    }
+    let c = 0xFFFFFFFF;
+    for (let i = start; i < end; i++) c = crc32Table[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function pngWithPrintDpi(arr) {
+    try {
+      const SIG = [137, 80, 78, 71, 13, 10, 26, 10];
+      if (arr.length < 33) return arr;
+      for (let i = 0; i < 8; i++) if (arr[i] !== SIG[i]) return arr;
+      const rd32 = (p) => ((arr[p] << 24) | (arr[p + 1] << 16) | (arr[p + 2] << 8) | arr[p + 3]) >>> 0;
+      const wr32 = (buf, p, v) => { buf[p] = (v >>> 24) & 255; buf[p + 1] = (v >>> 16) & 255; buf[p + 2] = (v >>> 8) & 255; buf[p + 3] = v & 255; };
+      // チャンクを順に歩いて、IHDR の終わりと（あれば）既存の pHYs の位置を探す
+      let p = 8, ihdrEnd = -1, physAt = -1;
+      while (p + 12 <= arr.length) {
+        const len = rd32(p);
+        const type = String.fromCharCode(arr[p + 4], arr[p + 5], arr[p + 6], arr[p + 7]);
+        const next = p + 12 + len;
+        if (type === 'IHDR') ihdrEnd = next;
+        else if (type === 'pHYs') { physAt = p; break; }
+        else if (type === 'IDAT' || type === 'IEND') break;
+        p = next;
+      }
+      if (ihdrEnd < 0) return arr;
+      const chunk = new Uint8Array(21); // 長さ4 + 種別4 + データ9 + CRC4
+      wr32(chunk, 0, 9);
+      chunk[4] = 0x70; chunk[5] = 0x48; chunk[6] = 0x59; chunk[7] = 0x73; // 'pHYs'
+      wr32(chunk, 8, PNG_PIXELS_PER_METRE);
+      wr32(chunk, 12, PNG_PIXELS_PER_METRE);
+      chunk[16] = 1; // 単位 = メートル
+      wr32(chunk, 17, crc32Of(chunk, 4, 17)); // CRC は種別＋データに掛ける
+      if (physAt >= 0) {
+        if (rd32(physAt) !== 9) return arr; // 想定外の pHYs は触らない
+        arr.set(chunk, physAt);
+        return arr;
+      }
+      const out = new Uint8Array(arr.length + chunk.length);
+      out.set(arr.subarray(0, ihdrEnd), 0);
+      out.set(chunk, ihdrEnd);
+      out.set(arr.subarray(ihdrEnd), ihdrEnd + chunk.length);
+      return out;
+    } catch (e) {
+      return arr;
+    }
+  }
   // canvas → Blob を「同期で」作る（await を挟まないための要）
   function canvasToBlobSync(cv) {
     try {
       const dataUrl = cv.toDataURL('image/png');
       const comma = dataUrl.indexOf(',');
       const bin = atob(dataUrl.slice(comma + 1));
-      const arr = new Uint8Array(bin.length);
+      let arr = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      arr = pngWithPrintDpi(arr); // 300dpi の印刷解像度を埋める（失敗しても元のまま返る）
       return new Blob([arr], { type: 'image/png' });
     } catch (e) {
       return null;
@@ -9459,35 +9584,39 @@
     const cv = document.createElement('canvas');
     cv.width = SHEET_W; cv.height = SHEET_H;
     const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const cc = state.curtain.color;
     const line = lumOf(cc) > 205 ? shadeColor(cc, -48) : cc;
     const emoji = state.frame.emoji;
+    /* 台紙が L判 300dpi になった（2026-09-16）。絶対px は本体シールと同じ sp() で伸ばす
+       （伸ばさないと 1500px の紙で見出し 30px・帯 66px が豆粒になる） */
     ctx.fillStyle = shadeColor(cc, 66);
     ctx.fillRect(0, 0, SHEET_W, SHEET_H);
     ctx.fillStyle = cc;
-    ctx.fillRect(0, 0, SHEET_W, 66);
+    ctx.fillRect(0, 0, SHEET_W, sp(66));
     ctx.strokeStyle = line;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(8, 8, SHEET_W - 16, SHEET_H - 16);
+    ctx.lineWidth = sp(3);
+    ctx.strokeRect(sp(8), sp(8), SHEET_W - sp(16), SHEET_H - sp(16));
     ctx.textAlign = 'center';
-    ctx.font = '900 30px -apple-system, sans-serif';
+    ctx.font = sheetFont('900 30px -apple-system, sans-serif');
     ctx.fillStyle = inkOnColor(cc, '#c2185b');
     // 「プリント倶楽部/Print Club」はセガの登録商標のため自前の名称を使う（2026-08-12 era-designer指摘）
     /* 焼き込み文字はやり直しがきかない（客が持ち帰って何年も残る）ので、
        モードで様式を分ける（P-9・2026-08-15 柄本仕様書）。
        令和の客の16分割シールに平成の★装飾が焼かれていた。 */
     if (state.mode === 'heisei') {
-      ctx.fillText(BRAND_H, SHEET_W / 2, 52);
+      ctx.fillText(BRAND_H, SHEET_W / 2, sp(52));
     } else {
-      ctx.font = '500 24px -apple-system, sans-serif';
+      ctx.font = sheetFont('500 24px -apple-system, sans-serif');
       ctx.letterSpacing = '0.22em'; // 非対応ブラウザでは無視されるだけ（見た目が少し詰まる）
-      ctx.fillText(BRAND_R, SHEET_W / 2, 50);
+      ctx.fillText(BRAND_R, SHEET_W / 2, sp(50));
       ctx.letterSpacing = '0px';
     }
 
     const shots = state.processedShots.length ? state.processedShots : state.shots;
     if (shots.length) {
-      const margin = 26, gap = 10, cols = 4, rows = 4;
+      const margin = sp(26), gap = sp(10), cols = 4, rows = 4;
       /* 🚨 2026-09-09: 旧版は **幅からしかセルの大きさを決めていなかった**。
          台紙がよこ長(900×680)になった途端、16枚ぶんの高さが 609px 必要になり、
          使える 564px を 45px はみ出して見出し・日付に重なった
@@ -9495,14 +9624,14 @@
          **幅と高さの両方で決める**（どちらか厳しい方に従う）ようにして、
          今後どんな台紙比になっても破綻しない形にする。 */
       const availW = SHEET_W - margin * 2 - gap * (cols - 1);
-      const availH = (SHEET_H - 70 - 46) - gap * (rows - 1);
+      const availH = (SHEET_H - sp(70) - sp(46)) - gap * (rows - 1);
       const RETRO_R = 24 / 17;                 // 初代のシール比率 横24:縦17
       const cw = Math.min(availW / cols, (availH / rows) * RETRO_R);
       const chh = cw / RETRO_R;
       const gridW = cols * cw + (cols - 1) * gap;
       const gridH = rows * chh + (rows - 1) * gap;
       const xLeft = (SHEET_W - gridW) / 2;
-      const yTop = 70 + ((SHEET_H - 70 - 46) - gridH) / 2;
+      const yTop = sp(70) + ((SHEET_H - sp(70) - sp(46)) - gridH) / 2;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const x = xLeft + c * (cw + gap);
@@ -9517,15 +9646,15 @@
           drawShotFit(ctx, shot, x, y, cw, chh, si, '#ffffff');
           ctx.restore();
           // 1枚ずつにカラーの枠とフレームのモチーフを載せる（本体シールと同じ載り方）
-          drawCellDecor(ctx, { x, y, w: cw, h: chh }, { emoji, isCircle: false, radius: 0 });
+          drawCellDecor(ctx, { x, y, w: cw, h: chh }, { emoji, isCircle: false, radius: 0, scale: SHEET_SCALE });
         }
       }
     }
     const d = new Date();
     ctx.textAlign = 'center';
-    ctx.font = '700 13px sans-serif';
+    ctx.font = sheetFont('700 13px sans-serif');
     ctx.fillStyle = shadeColor(cc, -70);
-    ctx.fillText(`${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}　16pcs sticker`, SHEET_W / 2, SHEET_H - 18);
+    ctx.fillText(`${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}　16pcs sticker`, SHEET_W / 2, SHEET_H - sp(18));
     return cv;
   }
 
@@ -9606,6 +9735,9 @@
     const cv = document.createElement('canvas');
     cv.width = SHEET_W; cv.height = SHEET_H;
     const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // 台紙が L判 300dpi になった（2026-09-16）。絶対px は本体シールと同じ sp() で伸ばす
     /* 台紙の色は選んだシールのカラーから作る（2026-08-14 実機テスト指摘対応）。
        以前は #f6efe6→#eee4d6 の決め打ちで、カラーもフレームも参照していなかった。
        証明写真なので写真そのものにモチーフは載せない（顔の判別を邪魔しない）。
@@ -9617,17 +9749,17 @@
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, SHEET_W, SHEET_H);
     ctx.fillStyle = cc;
-    ctx.fillRect(0, 0, SHEET_W, 66);
+    ctx.fillRect(0, 0, SHEET_W, sp(66));
     ctx.textAlign = 'center';
-    ctx.font = 'italic 600 26px Georgia, serif';
+    ctx.font = sheetFont('italic 600 26px Georgia, serif');
     ctx.fillStyle = inkOnColor(cc, '#6f5f52');
-    ctx.fillText('ID photo — 証明プリ', SHEET_W / 2, 44);
+    ctx.fillText('ID photo — 証明プリ', SHEET_W / 2, sp(44));
     if (state.frame.emoji) {
       ctx.save();
-      ctx.font = '20px sans-serif';
+      ctx.font = sheetFont('20px sans-serif');
       ctx.textBaseline = 'middle';
       ctx.globalAlpha = 0.85;
-      for (let x = 30; x <= SHEET_W - 30; x += 54) ctx.fillText(state.frame.emoji, x, SHEET_H - 52);
+      for (let x = sp(30); x <= SHEET_W - sp(30); x += sp(54)) ctx.fillText(state.frame.emoji, x, SHEET_H - sp(52));
       ctx.restore();
     }
 
@@ -9668,21 +9800,21 @@
        よこ長の紙面では**3つの寸法を横に並べ、各列の中で写真を縦に積む**方が素直で、
        しかも写真を小さくせずに済む（実測: 列並びなら縮尺5.2まで置ける。従来の4.6を維持できる）。
        縮尺は幅・高さの両方から決めるので、今後どんな台紙比でもはみ出さない。 */
-    const COL_GAP = 30, SIDE = 40, LABEL_H = 24, PAD = 5, PH_GAP = 16;
+    const COL_GAP = sp(30), SIDE = sp(40), LABEL_H = sp(24), PAD = sp(5), PH_GAP = sp(16);
     const colW = (SHEET_W - SIDE * 2 - COL_GAP * (SIZES.length - 1)) / SIZES.length;
-    const topY = 86, botY = SHEET_H - 44;
+    const topY = sp(86), botY = SHEET_H - sp(44);
     // 縮尺 mm→px: 列の幅と、いちばん背の高くなる列の高さの、厳しい方に合わせる
     const scaleByW = Math.min(...SIZES.map(sz => (colW - PAD * 2) / sz.w));
     const scaleByH = Math.min(...SIZES.map(sz =>
       ((botY - topY - LABEL_H) - (sz.n * PAD * 2 + (sz.n - 1) * PH_GAP)) / (sz.n * sz.h)));
-    const SCALE = Math.min(4.6, scaleByW, scaleByH); // 4.6 は従来の見た目（これ以上は大きくしない）
+    const SCALE = Math.min(sp(4.6), scaleByW, scaleByH); // 4.6px/mm は従来（900×680）の見た目。L判では sp() ぶん伸ばす
     SIZES.forEach((sz, ci) => {
       const pw = sz.w * SCALE, ph = sz.h * SCALE;
       const colX = SIDE + ci * (colW + COL_GAP);
-      ctx.font = '500 15px "Hiragino Kaku Gothic ProN", sans-serif';
+      ctx.font = sheetFont('500 15px "Hiragino Kaku Gothic ProN", sans-serif');
       ctx.textAlign = 'center';
       ctx.fillStyle = '#8a7568';
-      ctx.fillText(sz.label, colX + colW / 2, topY + 14);
+      ctx.fillText(sz.label, colX + colW / 2, topY + sp(14));
       const stackH = sz.n * (ph + PAD * 2) + (sz.n - 1) * PH_GAP;
       let py = topY + LABEL_H + ((botY - topY - LABEL_H) - stackH) / 2 + PAD;
       const x = colX + (colW - pw) / 2;
@@ -9693,7 +9825,8 @@
         ctx.drawImage(shot, r.x, r.y, r.w, r.h, x, py, pw, ph);
         ctx.save();
         ctx.strokeStyle = '#c9b8a6';
-        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = Math.max(1, Math.round(sp(1)));
+        ctx.setLineDash([sp(5), sp(4)]);
         ctx.strokeRect(x - PAD - 0.5, py - PAD - 0.5, pw + PAD * 2 + 1, ph + PAD * 2 + 1);
         ctx.restore();
         py += ph + PAD * 2 + PH_GAP;
@@ -9701,9 +9834,9 @@
     });
     const d = new Date();
     ctx.textAlign = 'center';
-    ctx.font = 'italic 500 13px Georgia, serif';
+    ctx.font = sheetFont('italic 500 13px Georgia, serif');
     ctx.fillStyle = '#8a7568';
-    ctx.fillText(d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + '　※あそび用のプリだよ（ほんものの証明写真には使えません）', SHEET_W / 2, SHEET_H - 22);
+    ctx.fillText(d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') + '　※あそび用のプリだよ（ほんものの証明写真には使えません）', SHEET_W / 2, SHEET_H - sp(22));
     return cv;
   }
 
@@ -9715,18 +9848,28 @@
        盛り加工後の写真 → その写真に描いた落書き → えらんだフレーム／カラーの飾り
      の順で重ねる。飾りを落書きの **あと** に載せるのは composeFinal と同じ理由
      （写真いっぱいに落書きされると枠が隠れて「フレームが効いていない」に戻るため）。 */
+  /* 出力の大きさ（2026-09-16・L判印刷対応）: 写真そのまま（4:3）を 1400×1050 に拡大して出す。
+     L判（1.427）いっぱいの 1500×1051 に cover で入れると写真の上下が切れる。1まい保存は
+     「写真をそのまま持ち帰る」ための機能なので切らない。4:3 のまま 1400×1050 なら
+     300dpi（pHYs）で 118.5×88.9mm＝L判の短辺ぴったり・長辺に左右 4mm ずつ白が残るだけで、
+     フチなし設定にすれば端をわずかに拡大して収まる。640×480 のままだと L判で 137dpi しか無い。 */
+  const SINGLE_PHOTO_LONG = 1400;
   function composeSinglePhoto(i) {
     const shots = decoShots();
+    const s = SINGLE_PHOTO_LONG / Math.max(SHOT_W, SHOT_H);
+    const W = Math.round(SHOT_W * s), H = Math.round(SHOT_H * s);
     const cv = document.createElement('canvas');
-    cv.width = SHOT_W; cv.height = SHOT_H;
+    cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, SHOT_W, SHOT_H);
-    if (shots[i]) ctx.drawImage(shots[i], 0, 0, SHOT_W, SHOT_H);
-    if (shotDeco[i] && shotDeco[i].objects.length) ctx.drawImage(renderShotDoodle(i), 0, 0);
+    ctx.fillRect(0, 0, W, H);
+    if (shots[i]) ctx.drawImage(shots[i], 0, 0, W, H);
+    if (shotDeco[i] && shotDeco[i].objects.length) ctx.drawImage(renderShotDoodle(i), 0, 0, W, H);
     // 台紙のセルと同じ関数・同じ引数で飾る（別実装にするとシールと1枚保存で見た目がズレる）
-    drawCellDecor(ctx, { x: 0, y: 0, w: SHOT_W, h: SHOT_H },
-      { emoji: state.frame.emoji, isCircle: false, radius: 0 });
+    drawCellDecor(ctx, { x: 0, y: 0, w: W, h: H },
+      { emoji: state.frame.emoji, isCircle: false, radius: 0, scale: s });
     return cv;
   }
 
@@ -9798,6 +9941,7 @@
     if (saveModalObjectUrl) { URL.revokeObjectURL(saveModalObjectUrl); saveModalObjectUrl = null; }
     if (saveToastEl) saveToastEl.classList.add('hidden');
     lastSavedBlob = null;
+    lastSavedName = `${BRAND_SLUG}.png`; // ファイル名も前の客のものを残さない（2026-09-16 レビュー④）
     lastSaveRoute = null;
     if (state.timerId) clearInterval(state.timerId);
     if (state.beautyTimerId) clearInterval(state.beautyTimerId);
@@ -9928,6 +10072,7 @@
         heiseiEra: state.heiseiEra,
         bgmChoice: state.bgmChoice,
         photoPick: state.photoPick,
+        photoFit: state.photoFit, // 「おさまり」も復帰させる（2026-09-16 レビュー⑤）
         curShot,
         remaining: state.remaining,
         // 写真はJPEGで持つ（PNGだと4枚で数MBになり sessionStorage を溢れさせる）
@@ -10032,6 +10177,7 @@
     state.heiseiEra = p.heiseiEra || 'standard';
     state.bgmChoice = p.bgmChoice || 'auto';
     state.photoPick = Array.isArray(p.photoPick) ? p.photoPick : null;
+    if (p.photoFit === 'face' || p.photoFit === 'center' || p.photoFit === 'contain') state.photoFit = p.photoFit;
     state.shots = canvases;
     state.processedShots = canvases.slice();
     state.faceData = canvases.map(() => null);
@@ -10212,7 +10358,11 @@
       }
       return done;
     },
-    sheetSize: () => ({ w: SHEET_W, h: SHEET_H, 比: +(SHEET_W / SHEET_H).toFixed(3) }),
+    sheetSize: () => ({ w: SHEET_W, h: SHEET_H, 比: +(SHEET_W / SHEET_H).toFixed(3), 倍率: +SHEET_SCALE.toFixed(4) }),
+    canvasToBlobSync, // L判・300dpi(pHYs) の検証用（2026-09-16）
+    composeSheet, composeFinal,
+    setCurtain: (id) => { state.curtain = modeConf().curtains.find(c => c.id === id) || state.curtain; },
+    setFrame: (id) => { state.frame = modeConf().frames.find(f => f.id === id) || state.frame; },
     rakurakuPlacedOn: (i) => ((shotDeco[i] && shotDeco[i].objects) || []).filter(o => o && o[RK_MARK]).map(o => JSON.parse(JSON.stringify(o))),
     /* 鏡像の検証用（2026-08-28）。**3つの根拠が同じ答えを出しているか**を外から測る。
        bodyMirror（ライブ映像のCSS）・isMirrored（撮影データとチラ見せ）・activeFacing（実際の向き） */
