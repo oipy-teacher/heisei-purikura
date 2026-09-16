@@ -1987,6 +1987,12 @@
   const segProxy = document.createElement('canvas');
   segProxy.width = SEG_W; segProxy.height = SEG_H;
   const segProxyCtx = segProxy.getContext('2d');
+  /* 2026-09-16 実機指摘「ライブ盛れが重い」対策: 高解像度の video からの読み出し（GPU へのフレーム転送）は
+     1フレームにつき **1回だけ** にする。以前は 推論プロキシ・人物合成・素通し で最大3回 video を読んでいた。
+     まず 640×480 の liveRaw に cover で1回描き、推論プロキシも合成もそこから取る（幾何は drawCover と同一） */
+  const liveRaw = document.createElement('canvas');
+  liveRaw.width = SHOT_W; liveRaw.height = SHOT_H;
+  const liveRawCtx = liveRaw.getContext('2d');
   const segMaskSmall = document.createElement('canvas');
   const segMaskSmallCtx = segMaskSmall.getContext('2d');
   let segEMA = null; // フレーム間の指数移動平均（チラつき防止）
@@ -2142,8 +2148,22 @@
   const livePerf = { ema: 0, detectEvery: 2, eyeOn: true, disabled: false, noted: false };
   let liveReadyNoted = false; // 「準備中→ON」の一言を1セッション1回だけ出す
 
+  /* ===== ライブ盛れ＝美肌だけ（2026-09-16 オーナー裁定「実機に近づけるべし。それで軽くなるなら」） =====
+     柄本の考証: フリュー KATY(2015) のライブビューに乗るのは美肌・小顔まで／Hyper shot(2025) は
+     盛れ感を撮影前に3段階で選ぶ／撮影中に ON/OFF する機種は無い。
+     実機（iPad）の「ライブ盛れが重い」に対し、ライブから **顔ランドマーク依存の処理を全部外す**:
+       デカ目（liveEyeMagnify・たれ目）・小鼻（liveNoseSlim）・小顔（contourBandWarp）・涙袋・チーク・リップ。
+     残すのはセグメンタの肌マスク由来の 美肌・美白・透明感 ＋ 明るさ（bright 0.16）だけ。
+     ライブ用の顔ランドマーカー（faceLandmarkerLive）は **読み込みも detectForVideo も呼ばない**
+     （モデル1本ぶんの読み込み・GPU準備・2フレームに1回の推論が消える）。
+     目・眉・唇の保護穴は、本加工の「顔なし」経路と同じ **色で開ける**（cutHolesByColor）。
+     ただし全面走査には戻さず、肌マスクの外接矩形（liveSkinBox）の中だけを見る。
+     ON/OFF トグルは廃止（令和では常に ON 扱い。livePerf の自動軽量化はそのまま）。
+     false に戻すと 8/28 までのライブ（ランドマーク込み・トグルあり）に戻る。 */
+  const LIVE_BEAUTY_SKIN_ONLY = true;
+
   function liveBeautyWanted() {
-    return state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled;
+    return state.mode === 'reiwa' && (LIVE_BEAUTY_SKIN_ONLY || state.liveBeautyOn) && !livePerf.disabled;
   }
 
   async function initFaceLandmarkerLive() {
@@ -2307,19 +2327,32 @@
   /* ライブ用の肌マスクを全解像度で作り、目・眉・唇の穴を開けて返す（2026-08-28）。
      毎フレーム作り直すのは、liveSkinSmall（セグメンタの出力）に直接穴を開けると
      次のフレームまで穴が残り、顔が動いたときに穴だけ置いていかれるため。 */
-  let liveMaskFull = null, liveMaskFullCtx = null;
+  let liveMaskFull = null, liveMaskFullCtx = null, liveMaskFullAt = -1;
+  /* 美肌だけのライブ（2026-09-16）: 色で開ける穴は getImageData＝GPU→CPU の読み戻しを伴う。
+     毎フレームだと描画パイプラインをその都度止めるので、**2フレームに1回**だけ作り直し、
+     間のフレームは前のマスクを使う（旧ライブの顔検出も detectEvery=2 で同じ間隔だった）。 */
+  const LIVE_MASK_EVERY = 2;
   function buildLiveMaskFull(w, h, eyeS) {
     if (!liveMaskFull) liveMaskFull = document.createElement('canvas');
     if (liveMaskFull.width !== w || liveMaskFull.height !== h) {
       liveMaskFull.width = w; liveMaskFull.height = h;
       liveMaskFullCtx = liveMaskFull.getContext('2d');
+      liveMaskFullAt = -1;
     }
     if (!liveMaskFullCtx) liveMaskFullCtx = liveMaskFull.getContext('2d');
+    if (LIVE_BEAUTY_SKIN_ONLY && liveMaskFullAt >= 0 && liveFrameCount - liveMaskFullAt < LIVE_MASK_EVERY) return liveMaskFull;
+    liveMaskFullAt = liveFrameCount;
     liveMaskFullCtx.globalCompositeOperation = 'source-over';
     liveMaskFullCtx.clearRect(0, 0, w, h);
     liveMaskFullCtx.imageSmoothingEnabled = true;
     liveMaskFullCtx.drawImage(liveSkinSmall, 0, 0, w, h);
-    cutFaceHoles(liveMaskFullCtx, liveFaces, w, h, eyeS);
+    if (liveFaces && liveFaces.length) {
+      cutFaceHoles(liveMaskFullCtx, liveFaces, w, h, eyeS);
+    } else {
+      /* ランドマーク無し（美肌だけのライブ・2026-09-16）: 本加工の「顔なし」経路と同じく色で穴を開ける。
+         肌マスクの外接矩形の中だけを見る（全面走査に戻さない） */
+      cutHolesByColor(liveMaskFullCtx, liveClean, w, h, liveSkinBox(w, h));
+    }
     return liveMaskFull;
   }
 
@@ -2446,6 +2479,8 @@
       }
     }
 
+    /* ---- ここから顔ランドマーク依存（2026-09-16 LIVE_BEAUTY_SKIN_ONLY で丸ごと外す。理由は定数の上） ---- */
+    if (!LIVE_BEAUTY_SKIN_ONLY) {
     // デカ目・小鼻（ライブ近似）＋チーク・リップ（重い端末では eyeOn の自動OFFに連動して両方止まる）
     if (livePerf.eyeOn) liveEyeMagnify(ctx, liveClean, liveFaces, p.eye / 100);
     /* 🚨 たれ目 TYPE02 をライブにも出す（検見 P1-2 の5）。
@@ -2501,6 +2536,8 @@
     // 涙袋（グラデーション1枚なので毎フレームでも軽い。v34 のライブには無かった）
     if ((p.namida || 0) > 0) drawNamida(ctx, liveFaces, w, h, (p.namida || 0) / 100);
     drawMakeup(ctx, liveFaces, w, h, (p.cheek || 0) / 100, (p.lip || 0) / 100, conf, liveMask);
+    }
+    /* ---- ここまで顔ランドマーク依存 ---- */
 
     // 選択中フィルターもライブで反映（合成のみなので軽い）
     const selFilter = conf.filters.find(f => f.id === p.filter);
@@ -2540,10 +2577,12 @@
     const liveBeauty = liveBeautyWanted();
     let maskCv = null;
     liveFrameCount++;
+    // video はここで1回だけ読む（以降はこの 640×480 から。2026-09-16 実機指摘対策）
+    drawCover(liveRawCtx, sourceEl, 0, 0, SHOT_W, SHOT_H);
 
     if ((state.chromaOn || (liveBeauty && segmenterIsMulticlass)) && imageSegmenter) {
-      // 縮小プロキシへ描いてから推論（等倍より数倍高速）。カバークロップでアスペクト比を維持
-      drawCover(segProxyCtx, sourceEl, 0, 0, SEG_W, SEG_H);
+      // 縮小プロキシへ描いてから推論（等倍より数倍高速）。liveRaw は既に 4:3 の cover なのでそのまま縮める
+      segProxyCtx.drawImage(liveRaw, 0, 0, SEG_W, SEG_H);
       const result = await segmentForVideoAsync(segProxy, performance.now());
       // 1回の推論から、人物マスク（くり抜き用）と肌マスク（ライブ盛れ用）を両取りする
       if (liveBeauty) {
@@ -2583,7 +2622,7 @@
       }
       personWorkCtx.globalCompositeOperation = 'source-over';
       personWorkCtx.clearRect(0, 0, SHOT_W, SHOT_H);
-      drawCover(personWorkCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
+      personWorkCtx.drawImage(liveRaw, 0, 0); // liveRaw は cover 済み（顔が縦長にならない）
       personWorkCtx.globalCompositeOperation = 'destination-in';
       personWorkCtx.imageSmoothingEnabled = true;
       personWorkCtx.drawImage(maskCv, 0, 0, SHOT_W, SHOT_H); // 拡大時のバイリニアがフェザーになる
@@ -2592,14 +2631,14 @@
       drawCurtainBg(liveCleanCtx);
       liveCleanCtx.drawImage(personWorkCanvas, 0, 0, SHOT_W, SHOT_H);
     } else {
-      drawCover(liveCleanCtx, sourceEl, 0, 0, SHOT_W, SHOT_H); // 顔が縦長にならないようアスペクト比を維持
+      liveCleanCtx.drawImage(liveRaw, 0, 0); // liveRaw は cover 済み（顔が縦長にならない）
     }
     // 撮影中は常時「肌が少し明るくなる」ライト効果（実機の照明再現）。
     // この明るさは撮影データにも焼き込まれるため、曇らない中間調リフト（白ソフトライト）で行う
     applyToneFx(liveCleanCtx, SHOT_W, SHOT_H, { bright: 0.16 });
 
     // --- ライブ用の顔検出（間引き実行。座標系を合わせるため合成後のフレームに対して行う） ---
-    if (liveBeauty && faceLandmarkerLive && liveFrameCount % livePerf.detectEvery === 0) {
+    if (!LIVE_BEAUTY_SKIN_ONLY && liveBeauty && faceLandmarkerLive && liveFrameCount % livePerf.detectEvery === 0) {
       try {
         const res = faceLandmarkerLive.detectForVideo(liveClean, performance.now());
         liveFaces = (res.faceLandmarks && res.faceLandmarks.length) ? res.faceLandmarks : null;
@@ -2752,9 +2791,19 @@
     const isReiwa = state.mode === 'reiwa';
     liveBeautyPanel.classList.toggle('hidden', !isReiwa);
     if (!isReiwa) return;
-    const on = state.liveBeautyOn && !livePerf.disabled;
+    const on = (LIVE_BEAUTY_SKIN_ONLY || state.liveBeautyOn) && !livePerf.disabled;
+    btnLiveBeauty.hidden = LIVE_BEAUTY_SKIN_ONLY; // トグル廃止（強さは撮る前に3段階で選ぶ・2026-09-16）
+    /* 2026-09-16 オーナー実機指摘「撮影中に切り替えたから重かった」: ON への切り替えはその瞬間に
+       ライブ用の顔検出モデルと切り抜きモデルの読み込み＋GPU準備を走らせる（下の click 参照）。
+       カウントダウン中にやるとコマ落ちする。**撮影が始まったら切り替えを閉じる**（次の組は撮る前にえらぶ） */
+    let locked = false;
+    try { locked = !!shootingInProgress; } catch (e) { locked = false; }
     btnLiveBeauty.textContent = on ? '✨ 撮る前から盛る ON' : '撮る前から盛る OFF';
     btnLiveBeauty.classList.toggle('on', on);
+    btnLiveBeauty.disabled = locked;
+    liveBeautyPanel.classList.toggle('locked', locked);
+    const lockNote = $('#live-lock-note');
+    if (lockNote) lockNote.hidden = !locked;
     livePresetRow.classList.toggle('dimmed', !on);
     // 盛れ感プリセット（無加工風/ナチュ盛れ/プリ盛れ）。選ぶと撮影後の盛り調整の初期値にもなる
     const conf = modeConf();
@@ -2764,7 +2813,9 @@
       const isActive = ['skin', 'white', 'clear', 'eye', 'face', 'nose', 'cheek', 'lip'].every(k => (state.beauty[k] || 0) === (p[k] || 0));
       b.className = 'live-preset-btn' + (isActive ? ' active' : '');
       b.textContent = p.label;
+      b.disabled = locked;
       b.addEventListener('click', () => {
+        if (locked) return;
         state.beauty.skin = p.skin;
         state.beauty.white = p.white;
         state.beauty.clear = p.clear;
@@ -2780,6 +2831,7 @@
   }
 
   btnLiveBeauty.addEventListener('click', () => {
+    if (shootingInProgress) { syncLiveBeautyUI(); return; } // 撮影中は切り替えない（2026-09-16）
     if (livePerf.disabled) {
       // 自動OFFされた端末でオーナーが明示的に押し直したら、もう一度だけ試す
       livePerf.disabled = false;
@@ -2840,6 +2892,7 @@
     shootingInProgress = false;
     btnStartShooting.style.display = 'inline-block';
     syncStartShootingEnabled(); // カメラが出るまでは押せない（2026-08-23・下の定義参照）
+    syncLiveBeautyUI(); // 次の組は撮る前に選べる（2026-09-16）
     $('#btn-back-select').style.display = ''; // 撮影開始前は戻れる
     $('#darkroom').classList.add('hidden'); // 前セッションの現像中表示を消す
     document.querySelector('.camera-stage').classList.remove('developing'); // 右パネルの非表示も解除（保険）
@@ -2857,12 +2910,13 @@
     liveSkinEMA = null;
     liveSkinReady = false;
     liveFrameCount = 0;
+    liveMaskFullAt = -1; // 前セッションの肌マスクを1フレームでも使い回さない（2026-09-16）
     livePerf.ema = 0; // 前セッションの負荷計測はリセット（degrade段階は端末特性なので維持）
     liveReadyNoted = false;
     syncLiveBeautyUI();
     syncFlashUI(); // フラッシュのON/OFFもモードに合わせて出し分ける（2026-08-22）
-    if (state.mode === 'reiwa' && state.liveBeautyOn && !livePerf.disabled) {
-      initFaceLandmarkerLive();
+    if (liveBeautyWanted()) {
+      if (!LIVE_BEAUTY_SKIN_ONLY) initFaceLandmarkerLive(); // 美肌だけのライブに顔ランドマークは要らない（2026-09-16）
       if (!imageSegmenter && !mpGaveUp(segmenterFailedAt) && !segmenterLoading) initSegmenter();
       // 準備中の一言（くり抜きONのときは既存の案内を優先）
       if (!state.chromaOn && !(imageSegmenter && segmenterIsMulticlass)) {
@@ -2968,8 +3022,11 @@
     const other = facing === 'environment' ? 'user' : 'environment';
     const plans = [
       /* 最大画素を頼む（2026-09-16 オーナー指示「カメラの最高画素数で」）。ideal なので失敗はせず、
-         ブラウザが出せる中でいちばん近い（＝いちばん大きい）解像度を選ぶ。届いた寸法は __puriDebug.videoSize() */
-      { video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 3072 } }, audio: false },
+         ブラウザが出せる中でいちばん近い解像度を選ぶ。届いた寸法は __puriDebug.videoSize()
+         🚨 同日の実機指摘「ライブ盛れが重い」: 4096×3072 を頼むと、控える上限（HI_MAX_LONG）より
+         大きなフレームを毎フレーム video→canvas に流し込むぶんだけ損をする。**保持する上限と同じ寸法を頼む**
+         （前面カメラが 1920×1440 までの端末では結果は変わらない） */
+      { video: { facingMode: { ideal: facing }, width: { ideal: HI_MAX_LONG }, height: { ideal: Math.round(HI_MAX_LONG * SHOT_H / SHOT_W) } }, audio: false },
       { video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false },
       { video: { facingMode: { ideal: facing } }, audio: false },
       { video: { facingMode: { ideal: other } }, audio: false },
@@ -3532,6 +3589,7 @@
     poseFreeDone = false; // 令和の「そのままで、いいよ。」は1セッション1回（撮影のたびに戻す）
     shootingInProgress = true;
     syncStartShootingEnabled();
+    syncLiveBeautyUI(); // ライブ盛れの切り替えを閉じる（2026-09-16）
     btnStartShooting.style.display = 'none';
     $('#btn-back-select').style.display = 'none'; // 撮影開始後は実機同様戻れない
     const poseGuideEl = $('#pose-guide');
@@ -4329,11 +4387,18 @@
      ・赤みが強い画素      → 唇
      しきい値は疑似顔での実測で決めた。**顔の肌そのものは落とさない**ことを
      「顔なしのとき 顔肌ΔE が維持される」で確認している。 */
-  function cutHolesByColor(mCtx, srcCanvas, w, h) {
+  /* box（任意・2026-09-16）: {x0,y0,x1,y1} を渡すとその矩形の中だけを見る（ライブ用。省略時は全面＝従来どおり） */
+  function cutHolesByColor(mCtx, srcCanvas, w, h, box) {
     let sd = null, md = null;
+    let bx = 0, by = 0, bw = w, bh = h;
+    if (box) {
+      bx = Math.max(0, Math.floor(box.x0)); by = Math.max(0, Math.floor(box.y0));
+      bw = Math.min(w, Math.ceil(box.x1)) - bx; bh = Math.min(h, Math.ceil(box.y1)) - by;
+      if (bw <= 0 || bh <= 0) return;
+    }
     try {
-      sd = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
-      md = mCtx.getImageData(0, 0, w, h);
+      sd = srcCanvas.getContext('2d', { willReadFrequently: true }).getImageData(bx, by, bw, bh).data;
+      md = mCtx.getImageData(bx, by, bw, bh);
     } catch (e) { return; } // 読めない環境では何もしない（従来どおりに落ちる）
     const m = md.data;
     for (let i = 0; i < m.length; i += 4) {
@@ -4347,7 +4412,7 @@
       // 唇（赤が緑より明確に強く、彩度もある）
       if (r > g + HOLE_LIP_RG && sat > HOLE_LIP_S && v > 0.18) m[i + 3] = 0;
     }
-    mCtx.putImageData(md, 0, 0);
+    mCtx.putImageData(md, bx, by);
   }
 
   /* 穴の縁だけを約2pxぼかすための作業面（2026-08-29・工藤。目視で見つけた）。
@@ -10653,6 +10718,16 @@
     printDpiFor,
     /* 二重解像度の検証用（2026-09-16） */
     videoSize: () => ({ w: video.videoWidth, h: video.videoHeight }),
+    /* ライブ盛れの計測用（2026-09-16）。自動軽量化の状態と、renderLiveBeauty 1回の JS 側所要 */
+    liveProbe: () => ({ ema: +livePerf.ema.toFixed(1), disabled: livePerf.disabled, eyeOn: livePerf.eyeOn, detectEvery: livePerf.detectEvery,
+      landmarkerLive: !!faceLandmarkerLive, skinReady: liveSkinReady, faces: !!(liveFaces && liveFaces.length), wanted: liveBeautyWanted() }),
+    livePerfReset: () => { livePerf.disabled = false; livePerf.eyeOn = true; livePerf.detectEvery = 2; livePerf.ema = 0; },
+    renderLiveBeautyBench: (n) => {
+      const c = document.createElement('canvas'); c.width = SHOT_W; c.height = SHOT_H; const g = c.getContext('2d');
+      const t = [];
+      for (let k = 0; k < (n || 20); k++) { g.drawImage(liveClean, 0, 0); const t0 = performance.now(); renderLiveBeauty(g); g.getImageData(0, 0, 1, 1); t.push(performance.now() - t0); }
+      t.sort((a, b) => a - b); return { n: t.length, median: +t[Math.floor(t.length / 2)].toFixed(1), p90: +t[Math.floor(t.length * 0.9)].toFixed(1) };
+    },
     hiShots: () => state.hiShots.slice(),
     hiProcessedShots: () => state.hiProcessedShots.slice(),
     setHiShots: (arr) => { state.hiShots = arr.slice(); },

@@ -174,9 +174,13 @@
         <p class="cam-caption">のこり <span id="shots-left">4</span> ポーズ！</p>
         <p class="cam-caption small" id="pose-guide">かわいく決めてね💕</p>
         <div id="live-beauty-panel" class="live-beauty-panel hidden">
-          <button id="btn-live-beauty" class="live-toggle on">✨ ライブ盛れ ON</button>
+          <!-- 2026-09-16 オーナー裁定「実機に近づけるべし」: ライブは美肌だけ・ON/OFF トグルは廃止（JS が hidden にする）・
+               強さは撮る前に3段階（Hyper shot 2025 の型）。ボタンは LIVE_BEAUTY_SKIN_ONLY=false で戻せるように残す -->
+          <p class="live-note live-heading" id="live-heading">撮る前の盛れ感（撮ったあとで細かく調整できるよ）</p>
+          <button id="btn-live-beauty" class="live-toggle on" hidden>✨ ライブ盛れ ON</button>
           <div id="live-preset-row" class="live-preset-row"></div>
-          <p class="live-note">くわしい調整と小顔は撮影のあとで！</p>
+          <p class="live-note">画面に乗るのは美肌だけ。小顔・デカ目・チークは 撮ったあとで！</p>
+          <p class="live-note" id="live-lock-note" hidden>撮影中は切りかえられないよ（次のときは撮る前にえらんでね）</p>
         </div>
         <!-- フラッシュ（2026-08-22 モニター要望①「フラッシュがたけるのすごくエモくなると思った」）。
              シャッターの瞬間に画面いっぱいを白く光らせて被写体を照らす（Retina Flash と同じ原理）。

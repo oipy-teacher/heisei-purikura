@@ -673,6 +673,9 @@ body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #e
 
 /* ライブ盛れパネル（令和モードの撮影画面・2026-07-31新設） */
 .live-beauty-panel { margin: 0 0 14px; }
+/* 撮影中はライブ盛れの切り替えを閉じる（2026-09-16 実機指摘: 撮影中の切り替えでモデル読込が走り重かった） */
+.live-beauty-panel.locked .live-toggle,
+.live-beauty-panel.locked .live-preset-btn { opacity: .45; pointer-events: none; }
 .live-toggle {
   display: inline-block;
   padding: 8px 18px;
@@ -713,6 +716,8 @@ body.theme-reiwa .fit-btn.active { border-color: var(--r-accent); background: #e
   color: #7d6b7d;
 }
 .live-note { font-size: 11px; opacity: .7; margin: 6px 0 0; }
+/* 撮る前の盛れ感（3段階）の見出し（2026-09-16・トグル廃止でプリセット行が主役に） */
+.live-note.live-heading { font-size: 12px; font-weight: 700; opacity: .9; margin: 0 0 2px; }
 
 /* フラッシュ（2026-08-22 モニター要望①） */
 .flash-panel { margin: 0 0 14px; }
