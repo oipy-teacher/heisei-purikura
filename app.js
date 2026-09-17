@@ -2590,7 +2590,7 @@
         // 準備が整った最初のフレームで一言（くり抜きONのときは既存の案内を優先）
         if (liveSkinReady && !liveReadyNoted && !state.chromaOn) {
           liveReadyNoted = true;
-          segmenterStatus.textContent = '✨ 撮る前から盛る ON！';
+          segmenterStatus.textContent = '✨ 美肌 じゅんびOK！';
           segmenterStatus.classList.remove('hidden');
           setTimeout(() => segmenterStatus.classList.add('hidden'), 1500);
         }
@@ -2920,7 +2920,7 @@
       if (!imageSegmenter && !mpGaveUp(segmenterFailedAt) && !segmenterLoading) initSegmenter();
       // 準備中の一言（くり抜きONのときは既存の案内を優先）
       if (!state.chromaOn && !(imageSegmenter && segmenterIsMulticlass)) {
-        segmenterStatus.textContent = '✨ 撮る前から盛る 準備中…';
+        segmenterStatus.textContent = '✨ 美肌 じゅんび中…';
         segmenterStatus.classList.remove('hidden');
       }
     }
